@@ -7,7 +7,9 @@ $payload = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $command = [string]$payload.tool_input.command
 if (-not $command) { exit 0 }
 
-$gitPrefix = '\bgit\s+(?:(?:-C|-c)\s+\S+\s+|-\S+\s+)*'
+# Only match git at the start of a shell command segment, so commit messages, PR bodies and
+# heredocs that merely mention "git push ... master" are not treated as commands.
+$gitPrefix = '(?:^|[;&|(\r\n])\s*git\s+(?:(?:-C|-c)\s+\S+\s+|-\S+\s+)*'
 $isCommit = $command -match "${gitPrefix}commit\b"
 $isPush = $command -match "${gitPrefix}push\b"
 if (-not ($isCommit -or $isPush)) { exit 0 }
@@ -15,7 +17,7 @@ if (-not ($isCommit -or $isPush)) { exit 0 }
 $hint = "Start a task branch with 'pwsh -NoProfile -File scripts/git/task-flow.ps1 start <TaskId>' " +
         "(or create a chore/<slug> or docs/<slug> branch for non-task changes) and merge through a pull request."
 $reason = $null
-if ($isPush -and $command -match "${gitPrefix}push\b.*\b(master|main)\b") {
+if ($isPush -and $command -match "${gitPrefix}push\b[^;&|\r\n]*\b(master|main)\b") {
     $reason = "Pushing to '$($Matches[1])' is blocked. $hint"
 }
 else {
