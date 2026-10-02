@@ -34,6 +34,17 @@ Supporting skills: `/speckit-converge` (re-scan the codebase vs. spec/plan/tasks
 
 The `speckit` workflow (`.specify/workflows/speckit/workflow.yml`) chains specify → plan → tasks → implement with **approval gates** after spec and after plan.
 
+## Git workflow: one branch and one pull request per task
+
+Never commit or push directly to `master` (a PreToolUse hook in `.claude/settings.json` denies `git commit`/`git push` on `master`/`main` and any push targeting them). During `/speckit-implement`, handle **every task in `tasks.md` order, one at a time** (tasks marked `[P]` too — each gets its own branch):
+
+1. `pwsh -NoProfile -File scripts/git/task-flow.ps1 start T0xx` — requires a clean tree; updates `master` and creates/switches to `task/T0xx-<slug>`.
+2. Implement the task and mark it `[X]` in `tasks.md` on that branch.
+3. Commit with a message starting with the task ID, e.g. `T012: Declare Application ports`.
+4. `pwsh -NoProfile -File scripts/git/task-flow.ps1 finish T0xx` — pushes, opens a PR titled `T0xx: …` against `master` (pass the PR attribution line via `-ExtraBody`), squash-merges it, deletes the branch and returns to an up-to-date `master`. With `-NoMerge` the PR stays open for review; wait for it to be merged before starting the next task.
+
+If a task fails or its tests don't pass, stop on its branch and report — don't start the next task on top of an unmerged one. Non-task changes (docs, tooling, spec edits) use a `chore/<slug>` or `docs/<slug>` branch and a PR as well. `task-flow.ps1 name T0xx` prints a task's branch name without changing anything.
+
 ## Key conventions and mechanics
 
 - **Feature directories live under `specs/`**, named `NNN-<short-name>` (e.g. `001-user-auth`). Numbering is **sequential** (`feature_numbering: "sequential"` in `.specify/init-options.json`) — the next number is the highest existing prefix + 1.
