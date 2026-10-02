@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "warranty-ai/decision-recommendation/v1",
+  "title": "DecisionRecommendation",
+  "description": "Decision Agent output, 'adjudication' route (FR-020, FR-021). This is a recommendation only: it is validated by the guardrail engine and never executed directly. Range and length limits are enforced by deterministic validation, not relied on in the model-side schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "coverage",
+    "confidence",
+    "risk",
+    "evidenceRefs",
+    "policyRefs",
+    "missingInformation",
+    "reasoningSummary",
+    "claimantExplanation",
+    "manipulationDetected"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["APPROVE", "REJECT", "REQUEST_MORE_INFORMATION", "HUMAN_REVIEW"]
+    },
+    "coverage": { "type": "string", "enum": ["COVERED", "NOT_COVERED", "UNDETERMINED"] },
+    "confidence": {
+      "type": "integer",
+      "description": "0-100. Validated range; values outside make the recommendation invalid."
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "signals"],
+      "properties": {
+        "level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "description", "evidenceRefs"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "SOURCE_INCONSISTENCY",
+                  "SERIAL_MISMATCH_PHOTO",
+                  "DAMAGE_INCONSISTENT_WITH_DESCRIPTION",
+                  "PURCHASE_DATE_ANOMALY",
+                  "MANIPULATION_ATTEMPT",
+                  "OTHER"
+                ]
+              },
+              "description": { "type": "string" },
+              "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "description": "Evidence relied upon; each ref must be an issued 'EV-n'. At least one required (validated, SC-006).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "observation"],
+        "properties": {
+          "ref": { "type": "string" },
+          "observation": { "type": "string" }
+        }
+      }
+    },
+    "policyRefs": {
+      "type": "array",
+      "description": "Policy clauses relied upon; each ref must be an issued 'POL-n' (FR-022). At least one required for APPROVE or REJECT (validated).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "relevance"],
+        "properties": {
+          "ref": { "type": "string" },
+          "relevance": {
+            "type": "string",
+            "enum": ["SUPPORTS_COVERAGE", "SUPPORTS_REJECTION", "DEFINES_PERIOD", "CONTEXT"]
+          }
+        }
+      }
+    },
+    "missingInformation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "reason"],
+        "properties": {
+          "item": {
+            "type": "string",
+            "enum": [
+              "INVOICE",
+              "LEGIBLE_INVOICE",
+              "PHOTO_OF_DAMAGE",
+              "PHOTO_OF_SERIAL_LABEL",
+              "PURCHASE_DATE",
+              "PROBLEM_DETAILS",
+              "OTHER"
+            ]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "reasoningSummary": {
+      "type": "string",
+      "description": "Staff-facing reasoning summary referencing EV-n and POL-n IDs, max 1,500 characters (validated)."
+    },
+    "claimantExplanation": {
+      "type": "string",
+      "description": "Plain-language explanation for the claimant; must not mention risk or fraud signals, max 800 characters (validated)."
+    },
+    "manipulationDetected": { "type": "boolean" }
+  }
+}

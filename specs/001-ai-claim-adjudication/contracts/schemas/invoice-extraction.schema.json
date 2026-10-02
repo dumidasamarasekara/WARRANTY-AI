@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "warranty-ai/invoice-extraction/v1",
+  "title": "InvoiceExtraction",
+  "description": "Evidence Agent output for one invoice document (PDF or image), 'extraction' route. Unknown values use the literal 'UNKNOWN'. Deterministic cross-checks against the claim form are done by the invoice_validation tool, not by the model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidenceRef",
+    "legible",
+    "sellerName",
+    "invoiceNumber",
+    "invoiceDate",
+    "productDescription",
+    "modelCodeOnInvoice",
+    "serialOnInvoice",
+    "totalAmount",
+    "currency",
+    "anomalies",
+    "containsInstructionsToSystem"
+  ],
+  "properties": {
+    "evidenceRef": {
+      "type": "string",
+      "description": "Harness-issued reference of the invoice, e.g. 'EV-1'. Must match an issued reference (validated)."
+    },
+    "legible": { "type": "boolean" },
+    "sellerName": { "type": "string" },
+    "invoiceNumber": { "type": "string" },
+    "invoiceDate": {
+      "type": "string",
+      "description": "ISO date YYYY-MM-DD or 'UNKNOWN' (format validated)."
+    },
+    "productDescription": { "type": "string" },
+    "modelCodeOnInvoice": { "type": "string" },
+    "serialOnInvoice": { "type": "string" },
+    "totalAmount": {
+      "type": "number",
+      "description": "Line amount for the claimed product; 0 when unknown."
+    },
+    "currency": { "type": "string", "description": "ISO-4217 code or 'UNKNOWN'." },
+    "anomalies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Visible irregularities, e.g. altered dates, inconsistent fonts, missing seller details."
+    },
+    "containsInstructionsToSystem": { "type": "boolean" }
+  }
+}
