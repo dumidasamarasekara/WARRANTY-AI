@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "input=$(cat); case \"$input\" in *git*commit*|*git*push*) printf \"%s\" \"$input\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-commit-on-default-branch.ps1\";; esac",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
