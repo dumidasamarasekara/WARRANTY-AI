@@ -84,7 +84,7 @@ public sealed class ClaimEvidence
             ContentType = contentType,
             SizeBytes = sizeBytes,
             Sha256 = sha256,
-            BlobPath = $"claims/{claimId}/{round}/{id}{ExtensionFor(contentType)}",
+            BlobPath = BlobPathFor(claimId, round, id, contentType),
             UploadedAt = uploadedAt,
         };
     }
@@ -107,6 +107,10 @@ public sealed class ClaimEvidence
 
         return sanitized.Length == 0 ? "file" : sanitized;
     }
+
+    /// <summary>Blob path relative to the tenant's container (research R11); known before upload, so the hash can be computed while storing.</summary>
+    public static string BlobPathFor(Guid claimId, int round, Guid evidenceId, string contentType)
+        => $"claims/{claimId}/{round}/{evidenceId}{ExtensionFor(contentType)}";
 
     public static string ExtensionFor(string contentType) => contentType switch
     {

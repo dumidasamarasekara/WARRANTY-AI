@@ -1,11 +1,15 @@
+using Azure.Storage.Blobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure.Persistence;
 using Warranty.Infrastructure.Persistence.Knowledge;
 using Warranty.Infrastructure.Persistence.Repositories;
+using Warranty.Infrastructure.Storage;
 
 namespace Warranty.Infrastructure;
 
@@ -16,6 +20,9 @@ public static class DependencyInjection
 
     public const string KnowledgeDatabase = "knowledge";
 
+    /// <summary>Connection string name of the blob service (Azurite under Aspire).</summary>
+    public const string BlobsConnection = "blobs";
+
     /// <summary>The non-owner role the API and worker connect as; row-level security applies to it (research R8).</summary>
     public const string AppRole = "warranty_app";
 
@@ -25,7 +32,7 @@ public static class DependencyInjection
     /// <summary>
     /// Registers both DbContexts — connecting as <see cref="AppRole"/>, whatever user the configured
     /// connection strings name — with the <see cref="TenantSessionInterceptor"/>, plus the
-    /// repositories and unit of work. Requires a scoped <c>ITenantContext</c> from the host.
+    /// repositories, unit of work and document store. Requires a scoped <c>ITenantContext</c> from the host.
     /// </summary>
     public static IServiceCollection AddWarrantyInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
@@ -48,6 +55,13 @@ public static class DependencyInjection
         services.AddScoped<IAdjudicationRepository, AdjudicationRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IAiOpsRepository, AiOpsRepository>();
+
+        // A host may register its own BlobServiceClient (e.g. the Aspire client integration); otherwise
+        // it is built from the "blobs" connection string on first use.
+        services.TryAddSingleton(_ => new BlobServiceClient(
+            configuration.GetConnectionString(BlobsConnection)
+            ?? throw new InvalidOperationException($"Connection string '{BlobsConnection}' is not configured.")));
+        services.AddScoped<IDocumentStore, BlobDocumentStore>();
         return services;
     }
 
