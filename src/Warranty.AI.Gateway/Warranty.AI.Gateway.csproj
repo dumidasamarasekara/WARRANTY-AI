@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Provider-agnostic AI Gateway; the only project allowed to reference a vendor AI SDK. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.AI.Gateway</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Application\Warranty.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="OllamaSharp" />
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Entities, value objects and claim lifecycle. References nothing (constitution II, VI). -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Domain</RootNamespace>
+  </PropertyGroup>
+
+</Project>

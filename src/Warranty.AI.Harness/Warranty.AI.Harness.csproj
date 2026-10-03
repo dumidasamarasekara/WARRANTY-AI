@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Run lifecycle, agents and tools. Talks to models only through the IAiGateway port. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.AI.Harness</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+    <ProjectReference Include="..\Warranty.Guardrails\Warranty.Guardrails.csproj" />
+  </ItemGroup>
+
+</Project>

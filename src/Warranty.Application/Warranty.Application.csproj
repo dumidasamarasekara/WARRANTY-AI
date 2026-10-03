@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Use cases and ports; the ActionExecutor accepts only guardrail-issued ApprovedActions. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+    <ProjectReference Include="..\Warranty.Guardrails\Warranty.Guardrails.csproj" />
+  </ItemGroup>
+
+</Project>

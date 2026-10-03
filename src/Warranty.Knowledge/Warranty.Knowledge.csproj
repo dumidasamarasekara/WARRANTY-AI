@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tenant-aware RAG: ingestion and filter-first retrieval with namespace enforcement. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Knowledge</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
