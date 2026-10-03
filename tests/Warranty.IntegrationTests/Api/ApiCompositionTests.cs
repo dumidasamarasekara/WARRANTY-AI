@@ -36,12 +36,14 @@ public sealed class ApiCompositionTests : IClassFixture<ApiCompositionTests.ApiF
         problem.GetProperty("correlationId").GetString().ShouldBe(correlationId);
     }
 
-    [Fact]
-    public async Task Health_endpoints_respond_in_development()
+    [Theory]
+    [InlineData("/alive")]
+    [InlineData("/health")]
+    public async Task Health_endpoints_respond_in_development(string path)
     {
         using var client = _factory.CreateClient();
 
-        using var response = await client.GetAsync("/alive", TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
