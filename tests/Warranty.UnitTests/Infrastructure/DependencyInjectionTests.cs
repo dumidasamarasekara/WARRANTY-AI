@@ -6,6 +6,7 @@ using Npgsql;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Jobs;
+using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure;
@@ -63,7 +64,7 @@ public sealed class DependencyInjectionTests
                      typeof(IUnitOfWork), typeof(ITenantRepository), typeof(ICatalogRepository), typeof(IPolicyRepository),
                      typeof(IClaimRepository), typeof(IAdjudicationRepository), typeof(IReviewRepository), typeof(IAiOpsRepository),
                      typeof(IDocumentStore), typeof(IJobQueue), typeof(IDecisionTrailWriter), typeof(ISecurityEventWriter),
-                     typeof(HashChainVerifier), typeof(ICustomerRepository), typeof(IIntegrationRepository),
+                     typeof(HashChainVerifier), typeof(ICustomerRepository), typeof(IIntegrationRepository), typeof(IKnowledgeStore),
                  })
         {
             scope.ServiceProvider.GetRequiredService(port).ShouldNotBeNull(port.Name);
