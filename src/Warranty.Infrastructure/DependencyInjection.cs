@@ -4,8 +4,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using Warranty.Application.Abstractions.Jobs;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Abstractions.Storage;
+using Warranty.Infrastructure.Jobs;
 using Warranty.Infrastructure.Persistence;
 using Warranty.Infrastructure.Persistence.Knowledge;
 using Warranty.Infrastructure.Persistence.Repositories;
@@ -32,7 +34,7 @@ public static class DependencyInjection
     /// <summary>
     /// Registers both DbContexts — connecting as <see cref="AppRole"/>, whatever user the configured
     /// connection strings name — with the <see cref="TenantSessionInterceptor"/>, plus the
-    /// repositories, unit of work and document store. Requires a scoped <c>ITenantContext</c> from the host.
+    /// repositories, unit of work, document store and job queue. Requires a scoped <c>ITenantContext</c> from the host.
     /// </summary>
     public static IServiceCollection AddWarrantyInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
@@ -62,6 +64,9 @@ public static class DependencyInjection
             configuration.GetConnectionString(BlobsConnection)
             ?? throw new InvalidOperationException($"Connection string '{BlobsConnection}' is not configured.")));
         services.AddScoped<IDocumentStore, BlobDocumentStore>();
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<IJobQueue, PostgresJobQueue>();
         return services;
     }
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Warranty.Application.Abstractions;
+using Warranty.Application.Abstractions.Jobs;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure;
@@ -50,6 +51,7 @@ public sealed class DependencyInjectionTests
     {
         var services = new ServiceCollection();
         services.AddScoped<ITenantContext>(_ => new FakeTenantContext(Guid.NewGuid()));
+        services.AddLogging();
         services.AddWarrantyInfrastructure(Configuration());
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
@@ -58,7 +60,7 @@ public sealed class DependencyInjectionTests
                  {
                      typeof(IUnitOfWork), typeof(ITenantRepository), typeof(ICatalogRepository), typeof(IPolicyRepository),
                      typeof(IClaimRepository), typeof(IAdjudicationRepository), typeof(IReviewRepository), typeof(IAiOpsRepository),
-                     typeof(IDocumentStore),
+                     typeof(IDocumentStore), typeof(IJobQueue),
                  })
         {
             scope.ServiceProvider.GetRequiredService(port).ShouldNotBeNull(port.Name);
