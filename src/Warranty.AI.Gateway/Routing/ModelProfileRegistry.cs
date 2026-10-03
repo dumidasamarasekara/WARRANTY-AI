@@ -16,7 +16,8 @@ public sealed record ModelProfile(
     bool SupportsPdf,
     bool SupportsStructuredOutputs,
     bool SupportsEffort,
-    bool AdaptiveThinking)
+    bool AdaptiveThinking,
+    bool SupportsRefusalFallback = false)
 {
     /// <summary>A conservative profile for a model nothing is known about.</summary>
     public static ModelProfile Unknown(string model) => new(model, 200_000, 4_096, false, false, false, false, false);
@@ -34,8 +35,9 @@ public sealed class ModelProfileRegistry
 {
     private static readonly IReadOnlyDictionary<string, ModelProfile> BuiltIn = new Dictionary<string, ModelProfile>(StringComparer.Ordinal)
     {
-        // Thinking cannot be disabled and runs adaptive; effort low…max (default medium, so routes set it).
-        ["claude-opus-5-5"] = new("claude-opus-5-5", 1_000_000, 128_000, true, true, true, true, true),
+        // Thinking cannot be disabled and runs adaptive; effort low…max (default medium, so routes set it);
+        // safety-classifier refusals can be re-served by the server-side fallback.
+        ["claude-opus-5-5"] = new("claude-opus-5-5", 1_000_000, 128_000, true, true, true, true, true, true),
 
         // No effort parameter and no adaptive thinking on Haiku 4.5.
         ["claude-haiku-4-5"] = new("claude-haiku-4-5", 200_000, 64_000, true, true, true, false, false),
@@ -86,5 +88,6 @@ public sealed class ModelProfileRegistry
         SupportsStructuredOutputs = overrides.SupportsStructuredOutputs ?? profile.SupportsStructuredOutputs,
         SupportsEffort = overrides.SupportsEffort ?? profile.SupportsEffort,
         AdaptiveThinking = overrides.AdaptiveThinking ?? profile.AdaptiveThinking,
+        SupportsRefusalFallback = overrides.SupportsRefusalFallback ?? profile.SupportsRefusalFallback,
     };
 }
