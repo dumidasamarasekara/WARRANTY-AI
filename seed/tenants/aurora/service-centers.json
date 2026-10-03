@@ -1,0 +1,14 @@
+[
+  {
+    "id": "11111111-0003-7000-8000-000000000001",
+    "region": "NA",
+    "name": "Aurora Service Center Springfield",
+    "capabilities": ["tablet", "phone", "laptop"]
+  },
+  {
+    "id": "11111111-0003-7000-8000-000000000002",
+    "region": "EU",
+    "name": "Aurora Service Center Amsterdam",
+    "capabilities": ["tablet", "phone", "laptop"]
+  }
+]

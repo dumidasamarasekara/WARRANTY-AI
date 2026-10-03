@@ -1,0 +1,37 @@
+{
+  "$comment": "Seeded history for the duplicate-window scenario (quickstart S18). Dates are never absolute: every *DaysAgo value is a signed day offset from the seeding day (negative = in the past), so the 90-day window holds whenever the PoC is run.",
+  "claims": [
+    {
+      "id": "11111111-0004-7000-8000-000000000001",
+      "reference": "HSTRY00030",
+      "customerEmail": "history.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0013",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The tablet stopped charging and no longer powers on.",
+      "purchasedDaysAgo": -180,
+      "submittedDaysAgo": -34,
+      "finalizedDaysAgo": -30,
+      "outcome": "Approved",
+      "explanation": "Your claim is covered by the manufacturer warranty. A repair has been arranged."
+    },
+    {
+      "id": "11111111-0004-7000-8000-000000000002",
+      "reference": "HSTRY00120",
+      "customerEmail": "history.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0014",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The touch screen does not respond in the lower half of the display.",
+      "purchasedDaysAgo": -300,
+      "submittedDaysAgo": -125,
+      "finalizedDaysAgo": -120,
+      "outcome": "Approved",
+      "explanation": "Your claim is covered by the manufacturer warranty. A repair has been arranged."
+    }
+  ]
+}

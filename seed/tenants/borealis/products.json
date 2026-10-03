@@ -1,0 +1,23 @@
+[
+  {
+    "id": "22222222-0001-7000-8000-000000000001",
+    "modelCode": "BOR-SLATE11",
+    "name": "Borealis Slate 11",
+    "category": "tablet",
+    "claimValue": 480
+  },
+  {
+    "id": "22222222-0001-7000-8000-000000000002",
+    "modelCode": "BOR-HUB2",
+    "name": "Borealis Home Hub 2",
+    "category": "smart-home",
+    "claimValue": 220
+  },
+  {
+    "id": "22222222-0001-7000-8000-000000000003",
+    "modelCode": "BOR-OVEN60",
+    "name": "Borealis Smart Oven 60",
+    "category": "major-appliance",
+    "claimValue": 1650
+  }
+]

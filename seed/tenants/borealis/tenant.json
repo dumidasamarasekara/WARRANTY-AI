@@ -1,0 +1,15 @@
+{
+  "id": "22222222-2222-7222-8222-222222222222",
+  "slug": "borealis",
+  "displayName": "Borealis Devices",
+  "channel": "borealis.localhost",
+  "settings": {
+    "currency": "USD",
+    "autoApprovalLimit": 1000,
+    "minConfidence": 80,
+    "autoApproveEnabled": true,
+    "autoRejectEnabled": true,
+    "alwaysReviewCategories": ["major-appliance"],
+    "riskHighThreshold": 60
+  }
+}
