@@ -2,11 +2,15 @@
   <Folder Name="/src/">
     <Project Path="src/Warranty.AI.Gateway/Warranty.AI.Gateway.csproj" />
     <Project Path="src/Warranty.AI.Harness/Warranty.AI.Harness.csproj" />
+    <Project Path="src/Warranty.Api/Warranty.Api.csproj" />
+    <Project Path="src/Warranty.AppHost/Warranty.AppHost.csproj" />
     <Project Path="src/Warranty.Application/Warranty.Application.csproj" />
     <Project Path="src/Warranty.Domain/Warranty.Domain.csproj" />
     <Project Path="src/Warranty.Guardrails/Warranty.Guardrails.csproj" />
     <Project Path="src/Warranty.Infrastructure/Warranty.Infrastructure.csproj" />
     <Project Path="src/Warranty.Integrations.Simulated/Warranty.Integrations.Simulated.csproj" />
     <Project Path="src/Warranty.Knowledge/Warranty.Knowledge.csproj" />
+    <Project Path="src/Warranty.MigrationService/Warranty.MigrationService.csproj" />
+    <Project Path="src/Warranty.ServiceDefaults/Warranty.ServiceDefaults.csproj" />
   </Folder>
 </Solution>
