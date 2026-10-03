@@ -66,6 +66,25 @@ explainability and auditability."
 - Q: Which earlier claims for the same serial number at the same tenant count as a duplicate
   claim? → A: Another claim for the same serial that is still open, or was approved or rejected
   in the last 90 days; earlier rounds of the same claim never count.
+- Q: Can the system automatically reject a claim on an exclusion when only the AI's photo analysis
+  found the excluded damage? → A: Yes, with a deterministic check: the cited clause must be an
+  exclusion clause of the applicable policy version, the exclusion must be in that version's
+  structured exclusion list, the evidence analysis must report that kind of damage, and all other
+  FR-027 conditions must hold.
+- Q: How closely must the invoice and photos match the claim form before a difference counts as
+  conflicting evidence? → A: Serial number and model code exact after ignoring case, spaces and
+  dashes; purchase date exact; price within 1% or 1 currency unit, whichever is larger; seller
+  names equal after ignoring case, punctuation and legal suffixes.
+- Q: Which customer personal data may be sent to the external AI provider? → A: No direct
+  identifiers: name, email, phone and street address are replaced with placeholders and contact
+  details in free text are masked; product, serial, dates, region, description and evidence files
+  are sent as submitted; the provider must not use the data for training.
+- Q: Can the same staff person submit a claim and then decide it as the reviewer? → A: No. A user
+  may hold several roles, but a reviewer may never decide a claim they submitted; the attempt is
+  refused and recorded as a security event.
+- Q: Who can view the recorded security events, and can they be changed or deleted? → A: They are
+  append-only and never changed or deleted; auditors can view their own tenant's security events
+  in the app; events not attributable to a tenant are visible only to platform operators.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -75,10 +94,12 @@ explainability and auditability."
   submission channel.
 - **Claims Agent** — a staff member acting for a tenant who submits a claim on a customer's behalf.
 - **Claims Reviewer** — a staff member authorized for a tenant who decides escalated claims.
-- **Auditor** — a staff member authorized for a tenant who inspects decision trails (read-only).
+- **Auditor** — a staff member authorized for a tenant who inspects decision trails and the
+  tenant's security events (read-only).
 - **Tenant** — an independent manufacturer whose warranty program is administered on the platform.
 
-Every staff user (claims agent, reviewer, auditor) belongs to exactly one tenant.
+Every staff user (claims agent, reviewer, auditor) belongs to exactly one tenant. A staff user may
+hold more than one role, but a reviewer may never decide a claim they submitted themselves.
 
 ### User Story 1 - Automated adjudication of a clear-cut claim (Priority: P1)
 
@@ -326,6 +347,8 @@ happened.
   requests") instead of a third request.
 - **Submitter supplements a claim that has already been finalized**: not permitted on the same
   claim; finalized outcomes change only through a recorded human decision.
+- **Staff user with both agent and reviewer roles tries to decide a claim they submitted**:
+  refused; another reviewer of the tenant must decide it; recorded as a security event.
 - **Reviewer or agent attempts cross-tenant access**: denied without revealing whether the target
   exists; recorded as a security event.
 - **Claimant enters a valid claim reference with a non-matching email/phone**, or a reference from
@@ -359,6 +382,11 @@ happened.
   that claim, its own tenant's data, and platform-owned general knowledge (warranty terminology,
   generic fraud patterns, operating procedures) that contains no tenant or customer data.
   Platform-owned knowledge MUST NOT be cited as policy grounds for a decision.
+- **FR-006a**: Before any data is sent to an external AI provider, the customer's name, email
+  address, phone number and street address MUST be replaced with placeholders, and email
+  addresses and phone numbers found in free text MUST be masked. Product, serial number, dates,
+  region, the problem description and the evidence files MAY be sent as submitted. The AI
+  provider MUST NOT use submitted data to train models.
 
 #### Claim intake, extraction and validation
 
@@ -401,7 +429,11 @@ happened.
   damage, assess whether it is consistent with the problem description, and compare visible
   identifiers with the claimed product and serial number.
 - **FR-016**: System MUST cross-check consistency of product, serial number, purchase date, price
-  and seller across the claim form, invoice and photos.
+  and seller across the claim form, invoice and photos. A difference counts as conflicting evidence
+  only when: serial number or model code differ after ignoring case, spaces and dashes; the
+  purchase dates differ; the price differs by more than 1% or 1 currency unit, whichever is
+  larger; or the seller names differ after ignoring case, punctuation and legal suffixes (e.g.,
+  Inc., Ltd., GmbH).
 - **FR-017**: System MUST assess risk as low, medium or high and list the specific risk signals
   found, covering at minimum: inconsistencies between sources; product/serial not in the tenant's
   catalog; a duplicate claim, meaning another claim for the same serial number within the tenant
@@ -452,8 +484,10 @@ happened.
   no risk signal of any kind is present (FR-017); claim value is at or below the tenant's
   auto-approval limit; the product category is not one the tenant always routes to a human; the
   tenant has automatic rejection enabled; the rejection is grounded in at least one cited policy
-  clause (e.g., an exclusion or an expired coverage period); and, where an expired coverage period
-  is the ground, the independent check confirms it.
+  clause (e.g., an exclusion or an expired coverage period); where an expired coverage period is
+  the ground, the independent check confirms it; and, where an exclusion is the ground, the cited
+  clause is an exclusion clause of the applicable policy version, that exclusion is listed in the
+  version's structured terms, and the evidence analysis reports the excluded kind of damage.
 - **FR-028**: A claim MUST be routed to human review when any of the following holds: claim value
   above the tenant's auto-approval limit; confidence below the tenant's minimum; a product category
   the tenant always routes to a human; risk medium or high; conflicting evidence; disagreement
@@ -480,7 +514,8 @@ happened.
   escalated claim, regardless of the AI recommendation (thereby accepting or overriding it). When a
   reviewer requests more information, the supplemented claim MUST be fully re-evaluated and then
   returned to the review queue with the reason "returned after reviewer information request"; it
-  MUST NOT be finalized automatically.
+  MUST NOT be finalized automatically. A reviewer MUST NOT decide a claim they submitted
+  themselves; such an attempt MUST be refused and recorded as a security event.
 - **FR-035**: Reviewers MUST provide a written justification when their decision differs from a
   valid AI recommendation of APPROVE or REJECT, and whenever they reject a claim. When the AI
   produced no valid recommendation, or recommended HUMAN_REVIEW or REQUEST_MORE_INFORMATION, the
@@ -518,6 +553,12 @@ happened.
   tokens consumed), and the AI model/provider used.
 - **FR-041**: Authorized reviewers and auditors MUST be able to view the full decision trail of any
   claim of their tenant in chronological order.
+- **FR-041a**: Security events MUST be append-only and MUST NOT be modifiable or deletable.
+  Auditors MUST be able to view their own tenant's security events (time, kind, acting user or
+  channel, and the target as the actor supplied it) in reverse chronological order. Event details
+  shown to a tenant MUST NOT reveal another tenant's data, including whether a target exists.
+  Events that cannot be attributed to a tenant (e.g., an unknown claimant channel) are visible
+  only to platform operators.
 
 #### Model independence
 
@@ -547,7 +588,7 @@ happened.
 | Human-in-the-loop             | FR-028, FR-032 – FR-036; US3           |
 | Guardrails                    | FR-019, FR-024 – FR-031; US4           |
 | Explainability                | FR-013, FR-021, FR-022, FR-037         |
-| Auditability                  | FR-030, FR-038 – FR-041; US6           |
+| Auditability                  | FR-030, FR-038 – FR-041a; US6          |
 
 ### Key Entities
 
@@ -578,7 +619,11 @@ happened.
   justification, claimant-facing explanation (for approve/reject) and timestamp.
 - **Decision Trail Entry**: An immutable, timestamped record of one step in a claim's lifecycle,
   including AI processing step traces.
-- **User**: A claims agent, reviewer or auditor, with a role; belongs to exactly one tenant.
+- **Security Event**: An immutable record of a denied or suspicious access attempt (cross-tenant
+  access, failed claimant access, refused self-review, out-of-scope retrieval or tool use), owned
+  by the tenant it can be attributed to.
+- **User**: A staff member with one or more roles (claims agent, reviewer, auditor); belongs to
+  exactly one tenant.
 
 ## Success Criteria *(mandatory)*
 

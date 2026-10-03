@@ -84,7 +84,7 @@ Configuration (`appsettings.json` → `AiGateway`), never hard-coded in agents:
       "adjudication":     { "Provider": "anthropic", "Model": "claude-opus-5-5",  "Effort": "high",   "MaxTokens": 16000, "TimeoutSeconds": 120 },
       "embedding":        { "Provider": "ollama",    "Model": "nomic-embed-text", "Dimensions": 768 }
     },
-    "Anthropic": { "RefusalFallback": "default", "MaxRetries": 2 },
+    "Anthropic": { "RefusalFallback": "default", "MaxRetries": 2, "NoTraining": true },
     "RateLimits": { "PerTenantRequestsPerMinute": 60 },
     "Pricing": {
       "claude-opus-5-5":  { "InputPerMTok": 4.00, "OutputPerMTok": 20.00, "CacheReadPerMTok": 0.20 },
@@ -138,7 +138,13 @@ public interface IPiiRedactor { RedactionResult Redact(string text); } // emails
 ```
 
 Applied to every `TextPart`/`UntrustedTextPart` before sending and before logging. Customer
-identity fields are never placed in prompts by the context builder (`[CUSTOMER]` placeholder).
+identity fields (name, email, phone, street address) are never placed in prompts by the context
+builder (`[CUSTOMER]`, `[EMAIL]`, `[PHONE]`, `[ADDRESS]` placeholders) — spec FR-006a, research
+R28. Evidence files are sent as submitted.
+
+Provider data use: every chat provider entry declares `"NoTraining": true` (e.g.
+`"Anthropic": { "NoTraining": true, ... }`); at startup the gateway refuses to register a route
+whose provider lacks it.
 
 ## Usage, logging and cost
 

@@ -29,7 +29,12 @@ The 2026-10-03 clarifications are designed in research R23–R25: any risk signa
 approval and rejection; a claim a reviewer sent back for information always returns to a reviewer;
 at most two automatic information requests per claim; reviewers write the claimant-facing
 explanation separately from their internal justification; a duplicate claim is another claim for
-the same serial that is open or was finalized in the last 90 days.
+the same serial that is open or was finalized in the last 90 days. The second round of
+clarifications is designed in R26–R30: exclusion-based automatic rejections are confirmed against
+structured exclusion codes and photo damage types; fixed evidence-matching tolerances; no customer
+identifiers in prompts and no-training providers only; no reviewer may decide a claim they
+submitted; append-only security events that tenant auditors can view without learning anything
+about other tenants.
 
 ## Technical Context
 
@@ -65,7 +70,7 @@ network, notifications are simulated); synthetic data only; LLM never authorizes
 action; tenant isolation must not rely on the LLM; business code must not reference a vendor AI SDK
 
 **Scale/Scope**: 2 seeded tenants (architecture supports N); tens to hundreds of claims per
-tenant; ~8 SPA screens; 4 agents + 1 risk capability; 10 tools (8 business tools + 2 knowledge
+tenant; ~9 SPA screens; 4 agents + 1 risk capability; 10 tools (8 business tools + 2 knowledge
 search tools); ~15 REST endpoints
 
 ## Constitution Check
@@ -74,10 +79,10 @@ search tools); ~15 REST endpoints
 
 | # | Principle | How this plan complies | Pre-research | Post-design |
 |---|-----------|------------------------|:------------:|:-----------:|
-| I | Security-First: Tenant Isolation | Tenant from trusted context only (R9); EF query filters + PostgreSQL RLS with non-owner role (R8); per-namespace knowledge partitions + RLS + post-retrieval assertion (R6, R7); per-tenant blob containers with API-mediated access (R11); duplicate/reuse checks scoped to tenant; prompt cache prefix holds no tenant data (R16); cross-tenant access → 404 + security event | PASS | PASS |
-| II | AI Does Not Directly Control Critical Operations | Fixed, code-defined workflow (R2); LLM agents hold read-only tools only; guardrail engine has no AI dependency and is the only issuer of `ApprovedAction`; `ActionExecutor` accepts only `ApprovedAction` (R13); architecture tests enforce it | PASS | PASS |
+| I | Security-First: Tenant Isolation | Tenant from trusted context only (R9); EF query filters + PostgreSQL RLS with non-owner role (R8); per-namespace knowledge partitions + RLS + post-retrieval assertion (R6, R7); per-tenant blob containers with API-mediated access (R11); duplicate/reuse checks scoped to tenant; prompt cache prefix holds no tenant data (R16); cross-tenant access → 404 + a tenant-visible `ACCESS_DENIED` indistinguishable from an unknown ID, plus an operator-only cross-tenant event (R30); no customer identifiers in prompts, no-training providers only (R28) | PASS | PASS |
+| II | AI Does Not Directly Control Critical Operations | Fixed, code-defined workflow (R2); LLM agents hold read-only tools only; guardrail engine has no AI dependency and is the only issuer of `ApprovedAction`; `ActionExecutor` accepts only `ApprovedAction` (R13); architecture tests enforce it; exclusion-based automatic rejections need a structured exclusion code matched by photo evidence (R26) | PASS | PASS |
 | III | Explainable Decisions | Structured recommendation with evidence refs, policy refs (clause key + version + effective dates), confidence, reasoning summary (contracts/schemas); harness-issued reference IDs make citations verifiable (R7); persisted with the run, not reconstructed; every final outcome has a claimant-facing explanation — the AI's for automatic decisions, the reviewer's own for human decisions, screened for risk/fraud disclosure (R25) | PASS | PASS |
-| IV | Human-in-the-Loop | Escalation rules evaluated deterministically (R13); any risk signal blocks automatic approval and rejection (R23); claims a reviewer sent back always return to a reviewer, and a third automatic information request escalates instead (R24); review queue, reviewer decision with mandatory justification on override/reject; AI recommendation retained unchanged; human decision written to the decision trail | PASS | PASS |
+| IV | Human-in-the-Loop | Escalation rules evaluated deterministically (R13); any risk signal blocks automatic approval and rejection (R23); claims a reviewer sent back always return to a reviewer, and a third automatic information request escalates instead (R24); review queue, reviewer decision with mandatory justification on override/reject; no reviewer may decide a claim they submitted (R29); AI recommendation retained unchanged; human decision written to the decision trail | PASS | PASS |
 | V | Tenant-Aware by Design | `ITenantContext` established in middleware/worker scope before any business code; propagated to data (RLS session variable), retrieval (namespace), tools (injected, no tenant parameter) and traces | PASS | PASS |
 | VI | Model Independence | `IAiGateway` port; task-based routing in configuration; Anthropic SDK referenced only by `Warranty.AI.Gateway` (architecture test); embeddings via a second provider; replay provider for tests | PASS | PASS |
 | VII | Observable AI | OpenTelemetry with GenAI attributes + persisted model calls, tool calls, RAG queries, guardrail results, human overrides, costs; decision trace UI (R16) | PASS | PASS |
@@ -204,7 +209,7 @@ The SPA implements the **WarrantyOS design system** (Claude Design prototype in
   with mono IDs and timestamps. This puts Principles III and IV on screen.
 - **Screens**: staff shell with a read-only tenant banner (no tenant switcher), claims list, claim
   workspace (case file · AI decision · evidence · decision trace), human review queue with the
-  override/justification dialog, policy versions, and the tenant-branded claimant portal (submit,
+  override/justification dialog, policy versions, security events (auditors), and the tenant-branded claimant portal (submit,
   access, status, supplement). Prototype screens without a requirement here (dashboard, AI
   operations, knowledge base, administration, partner, mobile, demo) are out of scope.
 
@@ -212,10 +217,10 @@ The SPA implements the **WarrantyOS design system** (Claude Design prototype in
 
 | Layer | What | How |
 |-------|------|-----|
-| Unit | Guardrail rules (every FR-026/027/028 condition and boundary, e.g., value = limit, one signal → not `Low`, request count 2 vs 3, returned-from-review), risk level derivation, duplicate window (89/90/91 days), claimant-text screen, coverage-window arithmetic, claim state machine, reference-ID mapping, redaction, injection detector, tool permission checks | xUnit v3, no I/O |
+| Unit | Guardrail rules (every FR-026/027/028 condition and boundary, e.g., value = limit, one signal → not `Low`, request count 2 vs 3, returned-from-review), risk level derivation, duplicate window (89/90/91 days), claimant-text screen, evidence match rules (tolerance boundaries, seller suffixes), exclusion evidence map, prompt privacy (no customer identifiers in rendered prompts), coverage-window arithmetic, claim state machine, reference-ID mapping, redaction, injection detector, tool permission checks | xUnit v3, no I/O |
 | Architecture | Dependency rules: Domain/Guardrails free of AI and infrastructure; only Gateway references `Anthropic`; Integrations only via ports | NetArchTest |
 | Integration | RLS and query filters (including raw-SQL probes as another tenant), knowledge retrieval filters and version selection, blob isolation, job queue, API endpoints with test auth | Testcontainers (Postgres+pgvector, Azurite), WebApplicationFactory |
-| Scenario (deterministic AI) | The FR-043 scenarios end to end (auto-approve, auto-reject, request info, high value, suspicious, override, same claim/different tenant, cross-tenant denial) plus policy-version, AI-failure, reviewer-return, request-limit, duplicate-window and single-signal scenarios (quickstart S1–S19) | Replay model provider + recorded responses |
+| Scenario (deterministic AI) | The FR-043 scenarios end to end (auto-approve, auto-reject, request info, high value, suspicious, override, same claim/different tenant, cross-tenant denial) plus policy-version, AI-failure, reviewer-return, request-limit, duplicate-window, single-signal, self-review, security-event, exclusion-grounding and matching-tolerance scenarios (quickstart S1–S23) | Replay model provider + recorded responses |
 | Evaluation | Golden dataset metrics (R19) | `tests/Warranty.Evaluation` (`--replay` in CI, `--live` opt-in) |
 | Frontend | Forms, review decision rules (justification required on override/reject; claimant message required on approve/reject and pre-filled only when matching the AI), trace rendering, claimant access flow; UI kit behaviour (status mappings, confidence meter semantics, dialog focus handling) | Vitest + RTL + MSW |
 | Smoke | Whole AppHost boots and one claim completes | Aspire testing builder (manual / nightly) |
@@ -239,6 +244,8 @@ The SPA implements the **WarrantyOS design system** (Claude Design prototype in
 | Model-reported confidence used as-is | Calibration layer fed by evaluation results |
 | Fixed signal severities; fixed limits (2 automatic information requests, 90-day duplicate window) | Tenant settings for the limits; `IRiskAssessor` weights from configuration |
 | Term-list claimant-text screen (`ClaimantTextScreen`) | Classifier-based disclosure detection behind the same interface |
+| Operator view of tenant-less and cross-tenant security events via the database / telemetry only | Platform operator console with its own role and audit |
+| Fixed exclusion ↔ photo damage-type map; `UNAUTHORIZED_REPAIR` always reviewed | Per-tenant evidence rules; tamper-detection evidence type |
 | Disk-level encryption only; Azurite unencrypted | Managed storage encryption, column-level encryption for PII |
 | Single region, single language (English) | Localization of claimant explanations, multi-region data residency |
 | Tenant marker colours mapped from the display name in the SPA (`tenantTheme.ts`) | Branding fields in tenant settings, served by `/api/public/tenant` and `/api/me` |

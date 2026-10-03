@@ -282,6 +282,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ReviewDecision' }
         '400': { $ref: '#/components/responses/ValidationProblem' }
+        '403':
+          description: >
+            The reviewer submitted this claim and may not decide it (separation of duties); a
+            SELF_REVIEW_REFUSED security event is recorded and nothing changes.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '412': { $ref: '#/components/responses/Problem' }
@@ -300,6 +307,32 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DecisionTrace' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/security-events:
+    get:
+      tags: [Audit]
+      summary: Security events of the caller's tenant, newest first (FR-041a)
+      description: >
+        Role auditor. Returns only events attributed to the caller's tenant; never returns event
+        details or source IP addresses, and never reveals whether a target belongs to another
+        tenant (cross-tenant attempts appear as ACCESS_DENIED, identical to unknown IDs).
+      parameters:
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/SecurityEventKind' }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Page of security events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecurityEventPage' }
+        '403': { $ref: '#/components/responses/Problem' }
 
   /api/policies:
     get:
@@ -385,6 +418,32 @@ components:
     AiDecision:
       type: string
       enum: [APPROVE, REJECT, REQUEST_MORE_INFORMATION, HUMAN_REVIEW]
+
+    SecurityEventKind:
+      type: string
+      description: Tenant-visible kinds only; operator-only kinds (CROSS_TENANT_ACCESS_DENIED, UNKNOWN_CHANNEL) are never returned
+      enum: [ACCESS_DENIED, CLAIMANT_ACCESS_FAILED, RETRIEVAL_SCOPE_VIOLATION, TOOL_SCOPE_VIOLATION, SELF_REVIEW_REFUSED]
+
+    SecurityEvent:
+      type: object
+      required: [id, occurredAt, kind, actor]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        kind: { $ref: '#/components/schemas/SecurityEventKind' }
+        actor: { type: string, description: Staff display name, "claimant channel", or "adjudication-service" }
+        target: { type: string, description: The resource identifier as the actor supplied it }
+
+    SecurityEventPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SecurityEvent' }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
 
     PublicTenantInfo:
       type: object
@@ -740,6 +799,9 @@ components:
         confidence: { type: integer }
         riskLevel: { type: string, enum: [Low, Medium, High] }
         escalatedAt: { type: string, format: date-time }
+        submittedByMe:
+          type: boolean
+          description: The caller submitted this claim and may not decide it (separation of duties)
         escalationReasons:
           type: array
           description: Readable labels of the guardrail reason codes (data-model.md), e.g. "returned after reviewer information request"

@@ -59,7 +59,8 @@ indexes global and tenant knowledge into their namespace partitions.
 | Aspire dashboard | Traces, logs, metrics, resource health |
 
 Staff test users (synthetic, in `infra/keycloak/warranty-realm.json`): `agent.aurora`,
-`reviewer.aurora`, `auditor.aurora`, `agent.borealis`, `reviewer.borealis`, `auditor.borealis`.
+`reviewer.aurora`, `auditor.aurora`, `agent.borealis`, `reviewer.borealis`, `auditor.borealis`,
+and `agent-reviewer.aurora` (agent + reviewer roles, for the separation-of-duties check).
 
 ## 4. Validation scenarios
 
@@ -80,7 +81,7 @@ scenario test suite (section 5) using recorded AI responses. "Claim date" is the
 | S9 | US2 | Aurora battery failure, purchased **2026-03-01** (policy v1: battery 6 months) | **Rejected** citing v1's battery clause (`effective 2025-01-01–2026-06-30`); v2 clauses are not retrieved even though they are newer |
 | S10 | US4 | AI unavailable (replay fixture returns errors, or invalid API key) | **Under Review**, reason "AI analysis could not be completed"; claimant sees "Under Review" |
 | S11 | US3 | Reviewer rejects S5 (AI recommended APPROVE) | Justification **and** claimant explanation required by UI and API (an explanation mentioning "fraud" or a `POL-n` ID → `400`); claim **Rejected** by Reviewer; AI recommendation unchanged; trail entry `ReviewerDecided` with reviewer identity; the claimant status page shows the reviewer's claimant explanation, never the justification |
-| S12 | US2 | Logged in as `reviewer.aurora`, request a Borealis claim ID via `GET /api/claims/{id}` | `404`; security event `CROSS_TENANT_ACCESS_DENIED`; no Borealis data in the response |
+| S12 | US2 | Logged in as `reviewer.aurora`, request a Borealis claim ID via `GET /api/claims/{id}`, then a random unknown ID | Both `404` with identical bodies; each writes an Aurora `ACCESS_DENIED` event that looks the same; only the Borealis ID also writes an operator-only `CROSS_TENANT_ACCESS_DENIED` (`tenant_id` NULL); no Borealis data in any response |
 | S13 | US3 | Borealis `BOR-OVEN60` (major appliance, value 1,650) | **Under Review**, reasons: always-review category + value above limit |
 | S14 | US6 | Open the trace of S1, S2 and S11 as `auditor.aurora` | Chronological entries with model, prompt version, tokens, cost, tool calls, RAG filters and clause keys; `hashChainValid: true` |
 | S15 | FR-037a | Claimant access with the right reference but wrong email | Generic `401`; `CLAIMANT_ACCESS_FAILED` security event; 6th attempt within 15 minutes → `429` |
@@ -88,6 +89,10 @@ scenario test suite (section 5) using recorded AI responses. "Claim date" is the
 | S17 | US5 / FR-010 | Aurora claim with an illegible invoice; supplement an illegible invoice twice | Rounds 1 and 2 → **Pending Information** (`autoInfoRequestCount` 1, then 2); round 3 → **Under Review** with reason "information still incomplete after 2 requests"; guardrail `AUTO_INFO_REQUESTS_WITHIN_LIMIT` failed |
 | S18 | US4 / FR-017 | S1-like claim for a serial with an earlier claim (a) finalized 30 days ago, (b) finalized 120 days ago | (a) **Under Review**, `DUPLICATE_SERIAL_CLAIM`, risk Medium; (b) **Approved** — no duplicate signal |
 | S19 | US4 / FR-026 | S1-like claim where the only signal is AI-reported `DAMAGE_INCONSISTENT_WITH_DESCRIPTION` and the AI still recommends APPROVE with confidence 95 | **Under Review**, risk Medium (score 25); guardrail `RISK_LOW` failed. A variant whose photos show neither product nor damage → **Pending Information** asking for a photo of the damage, no risk signal |
+| S20 | US3 / FR-034 | `agent-reviewer.aurora` submits an `AUR-BOOK15` claim (escalates on value), then tries to decide it | Queue card marked "You submitted this claim", actions disabled; API decision → `403`, `SELF_REVIEW_REFUSED` event, claim still **Under Review**; `reviewer.aurora` can decide it |
+| S21 | US6 / FR-041a | After S12, S15 and S20, open **Security events** as `auditor.aurora`, then as `auditor.borealis` | Aurora sees `ACCESS_DENIED` (S12, both IDs alike), `CLAIMANT_ACCESS_FAILED` (S15), `SELF_REVIEW_REFUSED` (S20) — no details, no IPs, nothing about Borealis; Borealis sees none of them; `agent.aurora` gets `403` |
+| S22 | US4 / FR-027 | Aurora claim with photos showing only a cracked screen where the AI recommends REJECT citing the **liquid**-damage exclusion; compare S4-aurora (cracked screen, accidental-damage exclusion) | S22 → **Under Review**, `GROUNDED_IN_CLAUSE` failed (no photo damage type maps to `LIQUID_DAMAGE`); S4-aurora still **Rejected** automatically |
+| S23 | US4 / FR-016 | S1-like claim whose invoice shows seller "AURORA STORE, Inc." and price 449.50 against a claimed 450.00 at "Aurora Store"; a variant with price 460.00 | First → **Approved**, all consistency checks match; variant → **Under Review**, `SOURCE_INCONSISTENCY` on price |
 
 SC-007 (auditor explains a decision from the trace) and SC-008 (reviewer decides an escalated
 claim) are checked by a timed walkthrough in the final validation task (T116), each with a
@@ -113,12 +118,13 @@ curl -k -H "Host: aurora.localhost" https://localhost:7443/api/public/tenant
 dotnet test tests/Warranty.UnitTests          # guardrail rules, coverage math, state machine,
                                               # redaction, injection detector, architecture rules
 dotnet test tests/Warranty.IntegrationTests   # Testcontainers: RLS, retrieval/versioning,
-                                              # isolation suite, API, replay scenarios S1–S19
+                                              # isolation suite, API, replay scenarios S1–S23
 npm --prefix src/web test                     # Vitest + RTL + MSW
 ```
 
 Expected: all green with no network access to AI providers (replay provider). The isolation suite
-must report zero cross-tenant rows/chunks/blobs (SC-003).
+must report zero cross-tenant rows/chunks/blobs (SC-003), and the prompt-privacy test must find no
+customer name, email, phone or street address in any rendered prompt (FR-006a).
 
 ## 6. AI evaluation (separate from production)
 

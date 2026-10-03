@@ -163,6 +163,7 @@ Customers are matched by (tenant, normalized email) at submission or created.
 | policy_version_id | uuid | FK |
 | clause_key | text | stable key, unique per version (e.g., `AUR-WP-3.2`) |
 | clause_type | enum `Coverage`, `Period`, `Exclusion`, `ServiceRule`, `Definition` | |
+| exclusion_code | text | required iff `clause_type = Exclusion`; one of `ACCIDENTAL_DAMAGE`, `LIQUID_DAMAGE`, `COSMETIC_DAMAGE`, `UNAUTHORIZED_REPAIR`; must appear in the version's `terms.exclusions` (validated on seed, R26) |
 | title | text | |
 | text | text | clause wording (source of truth; also indexed in knowledge DB) |
 
@@ -300,7 +301,9 @@ FR-009 check (`REQUIRED_FIELDS`, `PHOTO_PRESENT`, `INVOICE_PRESENT`, `INVOICE_LE
 `id`, `tenant_id`, `run_id`, `evidence_id`, `kind` (`InvoiceExtraction`, `PhotoAnalysis`),
 `result` jsonb (per invoice/photo schema; photo results include `confidence`), `consistency` jsonb — deterministic cross-checks
 `{field, claimValue, evidenceValue, match}` for product, serial, purchase date, price, seller
-(FR-016).
+(FR-016), computed by `EvidenceMatchRules` (R27): serial/model exact after removing case, spaces
+and `-_.`; date exact; price within max(1%, 1.00); seller equal after removing case, punctuation
+and legal suffixes; a field absent from the invoice is not a mismatch.
 
 ### `adjudication.retrieved_policy_refs`
 
@@ -343,7 +346,9 @@ Level rule (FR-017, R23), computed over the union of deterministic and AI-report
 Fixed severities: `MANIPULATION_ATTEMPT`, `EVIDENCE_REUSED`, `SERIAL_MISMATCH_PHOTO` → `High`;
 `DUPLICATE_SERIAL_CLAIM`, `PRODUCT_NOT_IN_CATALOG`, `SOURCE_INCONSISTENCY`,
 `PURCHASE_DATE_ANOMALY` → `Medium`; AI-only signals → `Medium`. A code raised by both sources is
-counted once, with the deterministic severity. Photos that do not show the product or the damage
+counted once, with the deterministic severity. A purchase-date mismatch between invoice and claim
+raises only `PURCHASE_DATE_ANOMALY`; `SOURCE_INCONSISTENCY` covers serial, model, price and seller
+mismatches, so one fact is never scored twice. Photos that do not show the product or the damage
 are missing information (`PHOTO_OF_DAMAGE`, `PHOTO_OF_SERIAL_LABEL`), not a signal.
 
 `DUPLICATE_SERIAL_CLAIM` (R25): another claim of the tenant with the same normalized serial that
@@ -386,6 +391,9 @@ Check codes: `SCHEMA_VALID`, `REFERENCES_VALID`, `REQUIRED_INFO_COMPLETE`, `PROD
 `claims.reviewer_info_requested`; `AUTO_INFO_REQUESTS_WITHIN_LIMIT` fails when a
 `RequestInformation` disposition would be issued with `auto_info_request_count ≥ 2` (R24);
 `CLAIMANT_TEXT_SAFE` fails when the AI's claimant explanation contains disclosure terms (R25).
+`GROUNDED_IN_CLAUSE` for a `REJECT` needs a cited `Period` clause confirmed by the coverage window,
+or a cited `Exclusion` clause of the applicable version whose `exclusion_code` is in
+`terms.exclusions` and is matched by a photo damage type via `ExclusionEvidenceMap` (R26).
 
 Escalation reason codes (`reasons`, shown to reviewers with a readable label): `VALUE_ABOVE_LIMIT`,
 `CONFIDENCE_BELOW_MIN`, `ALWAYS_REVIEW_CATEGORY`, `RISK_MEDIUM`, `RISK_HIGH`, `EVIDENCE_CONFLICT`,
@@ -437,10 +445,21 @@ App role has `INSERT, SELECT` only; trigger rejects `UPDATE`/`DELETE`.
 
 ### `audit.security_events`
 
-`id`, `tenant_id` (nullable when tenant could not be resolved), `occurred_at`, `kind`
-(`CROSS_TENANT_ACCESS_DENIED`, `CLAIMANT_ACCESS_FAILED`, `RETRIEVAL_SCOPE_VIOLATION`,
-`TOOL_SCOPE_VIOLATION`, `UNKNOWN_CHANNEL`), `actor`, `target`, `source_ip`, `details` jsonb.
-Append-only like the trail.
+`id`, `tenant_id` (nullable — `NULL` rows are operator-only), `occurred_at`, `kind`
+(`ACCESS_DENIED`, `CROSS_TENANT_ACCESS_DENIED`, `CLAIMANT_ACCESS_FAILED`,
+`RETRIEVAL_SCOPE_VIOLATION`, `TOOL_SCOPE_VIOLATION`, `SELF_REVIEW_REFUSED`, `UNKNOWN_CHANNEL`),
+`actor`, `target`, `source_ip`, `details` jsonb. Append-only like the trail (FR-041a).
+
+Attribution (R30): staff denials, claimant access failures, scope violations and refused
+self-reviews belong to the tenant they happened in; `UNKNOWN_CHANNEL` has `tenant_id = NULL`. A
+staff lookup of an ID not visible in the actor's tenant writes a tenant-visible `ACCESS_DENIED`
+(identical whether the ID does not exist or belongs to another tenant) and, only in the
+cross-tenant case, an operator-only `CROSS_TENANT_ACCESS_DENIED` with `tenant_id = NULL`. RLS
+rejects `NULL`-tenant inserts from `warranty_app`, so operator-only rows (incl. `UNKNOWN_CHANNEL`)
+are written through the `SECURITY DEFINER` function `audit.record_operator_event(kind, actor,
+target, details)` (EXECUTE only; it cannot read rows). Auditors
+read their tenant's rows through `GET /api/security-events`, which never returns `details` or
+`source_ip`.
 
 ## Domain: aiops (AI execution records)
 
@@ -535,4 +554,6 @@ list, general operating procedures.
 ### Staff users (synthetic, Keycloak realm)
 
 `agent.aurora`, `reviewer.aurora`, `auditor.aurora`, `agent.borealis`, `reviewer.borealis`,
-`auditor.borealis` — development-only passwords in the realm file.
+`auditor.borealis` (one role each) and `agent-reviewer.aurora` (`claims-agent` +
+`claims-reviewer`, for the separation-of-duties check, R29) — development-only passwords in the
+realm file.
