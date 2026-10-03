@@ -26,8 +26,8 @@ pip-log.txt
 # Virtual environments
 .venv/
 venv/
-env/
-ENV/
+/env/
+/ENV/
 .virtualenv/
 
 # Testing / coverage
@@ -43,6 +43,21 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# ---- .NET ----
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.trx
+*.coverage
+
+# ---- Build / tool output ----
+artifacts/
+src/web/dist/
 
 # ---- Node ----
 node_modules/
@@ -61,8 +76,8 @@ coverage/
 *.onnx
 *.gguf
 *.safetensors
-models/
-checkpoints/
+/models/
+/checkpoints/
 data/raw/
 data/interim/
 *.sqlite
