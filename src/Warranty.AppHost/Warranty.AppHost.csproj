@@ -12,6 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Azure.Storage" />
+    <PackageReference Include="Aspire.Hosting.Keycloak" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Warranty.Api\Warranty.Api.csproj" />
     <ProjectReference Include="..\Warranty.MigrationService\Warranty.MigrationService.csproj" />
   </ItemGroup>
