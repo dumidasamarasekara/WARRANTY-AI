@@ -93,6 +93,12 @@ public sealed class AnthropicProviderOptions
     public const string DefaultRefusalFallback = "default";
 
     /// <summary>
+    /// The API key, set by the AppHost from its <c>anthropic-api-key</c> parameter; when empty the SDK
+    /// reads <c>ANTHROPIC_API_KEY</c>. Replay runs need no key.
+    /// </summary>
+    public string? ApiKey { get; set; }
+
+    /// <summary>
     /// <c>default</c> lets the API re-serve a safety-classifier refusal on a fallback model chosen by
     /// refusal category; empty or <c>none</c> turns the fallback off. Sent only to models whose
     /// profile supports it.

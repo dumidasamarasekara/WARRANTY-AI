@@ -14,6 +14,9 @@ public sealed class HashEmbeddingGenerator(int dimensions = HashEmbeddingGenerat
 {
     public const int DefaultDimensions = 768;
 
+    /// <summary>The embedding route provider name that selects this generator, e.g. in replay tests without Ollama.</summary>
+    public const string ProviderName = "hash";
+
     public const string ModelId = "hash-embedding";
 
     public int Dimensions { get; } = dimensions > 0 ? dimensions : throw new ArgumentOutOfRangeException(nameof(dimensions));
