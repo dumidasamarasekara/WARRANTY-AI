@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Jobs;
+using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure.Audit;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IAiOpsRepository, AiOpsRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
+        services.AddScoped<IKnowledgeStore, KnowledgeStore>();
 
         // A host may register its own BlobServiceClient (e.g. the Aspire client integration); otherwise
         // it is built from the "blobs" connection string on first use.
