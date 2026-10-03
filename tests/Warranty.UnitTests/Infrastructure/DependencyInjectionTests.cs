@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure;
 using Warranty.Infrastructure.Persistence;
 using Warranty.Infrastructure.Persistence.Knowledge;
@@ -21,6 +22,7 @@ public sealed class DependencyInjectionTests
             ["ConnectionStrings:warranty"] = warranty,
             ["ConnectionStrings:knowledge"] = OwnerConnection.Replace("warranty", "knowledge", StringComparison.Ordinal),
             [DependencyInjection.AppRolePasswordKey] = password,
+            ["ConnectionStrings:blobs"] = "UseDevelopmentStorage=true",
         }).Build();
 
     [Fact]
@@ -56,6 +58,7 @@ public sealed class DependencyInjectionTests
                  {
                      typeof(IUnitOfWork), typeof(ITenantRepository), typeof(ICatalogRepository), typeof(IPolicyRepository),
                      typeof(IClaimRepository), typeof(IAdjudicationRepository), typeof(IReviewRepository), typeof(IAiOpsRepository),
+                     typeof(IDocumentStore),
                  })
         {
             scope.ServiceProvider.GetRequiredService(port).ShouldNotBeNull(port.Name);
