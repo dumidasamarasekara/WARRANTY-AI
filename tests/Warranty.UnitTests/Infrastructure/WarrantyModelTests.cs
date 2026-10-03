@@ -130,6 +130,18 @@ public sealed class WarrantyModelTests
         sql.ShouldContain("NOBYPASSRLS");
     }
 
+    [Fact]
+    public void The_job_queue_script_grants_warranty_app_only_the_security_definer_dequeue_function()
+    {
+        var sql = SqlScripts.Load(SqlDatabase.Warranty).Where(s => s.Name == "004_job_queue.sql").ShouldHaveSingleItem().Sql;
+
+        sql.ShouldContain("SECURITY DEFINER");
+        sql.ShouldContain("FOR UPDATE SKIP LOCKED");
+        sql.ShouldContain("RETURNS TABLE (job_id uuid, tenant_id uuid, claim_id uuid, round integer, correlation_id text)");
+        sql.ShouldContain("REVOKE ALL ON FUNCTION claims.dequeue_claim_job(text, integer) FROM PUBLIC");
+        sql.ShouldContain("GRANT EXECUTE ON FUNCTION claims.dequeue_claim_job(text, integer) TO warranty_app");
+    }
+
     [Theory]
     [InlineData("ProblemDescription", "problem_description")]
     [InlineData("TenantId", "tenant_id")]
