@@ -66,6 +66,7 @@ public sealed class ApiCompositionTests : IClassFixture<ApiCompositionTests.ApiF
             builder.UseSetting("ConnectionStrings:knowledge", "Host=127.0.0.1;Port=1;Database=knowledge;Username=owner;Password=x");
             builder.UseSetting("ConnectionStrings:blobs", "UseDevelopmentStorage=true");
             builder.UseSetting("Database:AppRolePassword", "test-only");
+            builder.UseSetting("ClaimJobWorker:Enabled", "false");
 
             builder.UseDefaultServiceProvider(options =>
             {
