@@ -106,12 +106,21 @@ terms:
   componentCoverageMonths: { battery: 12 }
   accidentalDamage: { covered: false, windowMonths: 0, maxIncidents: 0 }
   exclusions: [ACCIDENTAL_DAMAGE, LIQUID_DAMAGE, COSMETIC_DAMAGE, UNAUTHORIZED_REPAIR]
+clauses:
+  AUR-WP-1:   { type: Coverage }
+  AUR-WP-2.1: { type: Period }
+  AUR-WP-3.2: { type: Exclusion, exclusionCode: ACCIDENTAL_DAMAGE }
 ---
 ## AUR-WP-1 Coverage
 ...
 ## AUR-WP-3.2 Exclusions — accidental damage
 ...
 ```
+
+- `clauses` declares every heading's clause type; an `Exclusion` clause must name an
+  `exclusionCode` that is listed in `terms.exclusions`, otherwise ingestion fails (research R26).
+  The clause type and exclusion code are stored on `policy.policy_clauses` and copied to the chunk
+  metadata.
 
 - Steps: validate front matter (namespace must equal `tenant-{slug}` of the tenant being seeded,
   or `global`) → upsert `policy.*` rows and structured `terms` → split at `##` clause headings

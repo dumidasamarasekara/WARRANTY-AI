@@ -1,6 +1,6 @@
 # Research & Decisions: AI-Powered Warranty Claim Adjudication PoC
 
-**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 (R23–R25 added 2026-10-03) | **Plan**: [plan.md](./plan.md)
+**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 (R23–R30 added 2026-10-03) | **Plan**: [plan.md](./plan.md)
 
 This document resolves every open technical question for the plan. Each entry records the
 decision, why it was chosen, and the alternatives considered. Technology constraints given by the
@@ -213,7 +213,8 @@ treated as fixed inputs; the research below chooses *within* them.
 
 - **Decision**: **Keycloak** (container, Aspire Keycloak hosting integration, realm imported from
   `infra/keycloak/warranty-realm.json`). One realm; staff users carry a `tenant_id` attribute
-  mapped into tokens and realm roles `claims-agent`, `claims-reviewer`, `auditor`. The SPA uses
+  mapped into tokens and one or more realm roles `claims-agent`, `claims-reviewer`, `auditor`
+  (separation of duties: R29). The SPA uses
   Authorization Code + PKCE; the API validates JWT bearer tokens.
 - Claimants have no accounts (spec). After matching **claim reference + submitted email/phone**
   (FR-037a) on the tenant's channel, the API issues a **claim-scoped access token** (signed by the
@@ -299,6 +300,8 @@ treated as fixed inputs; the research below chooses *within* them.
   country are kept. A regex-based redactor additionally scrubs emails and phone numbers found in
   free text before it leaves the system. Prompts and responses are logged **after** redaction.
   Photos are not redacted in the PoC (documented simplification). All PoC data is synthetic.
+  Since 2026-10-03 this is a spec requirement (FR-006a); the checked guarantees and the provider
+  no-training condition are in R28.
 - **Alternatives considered**: An NER-based PII service (e.g., Presidio) — a later extension behind
   the same `IPiiRedactor` port.
 
@@ -404,7 +407,8 @@ treated as fixed inputs; the research below chooses *within* them.
     `SOURCE_INCONSISTENCY`, `PURCHASE_DATE_ANOMALY` → Medium. AI-sourced signals
     (`DAMAGE_INCONSISTENT_WITH_DESCRIPTION`, `OTHER`, and AI-reported duplicates of the codes
     above) → Medium unless the same code was also raised deterministically (then the
-    deterministic severity applies, counted once).
+    deterministic severity applies, counted once). A purchase-date mismatch raises only
+    `PURCHASE_DATE_ANOMALY`, never also `SOURCE_INCONSISTENCY`, so one fact is scored once.
   - The guardrail check `RISK_LOW` passes only when the signal list is empty, so FR-026 and
     FR-027 apply the same condition.
   - Photos that do not show the product or the damage are **not** a signal: the Evidence Agent
@@ -468,6 +472,94 @@ treated as fixed inputs; the research below chooses *within* them.
 - **Alternatives considered**: Reusing the AI explanation when the reviewer agrees (the AI text
   may have been written expecting escalation); showing the justification (leaks internal
   reasoning); any prior claim as a duplicate (escalates every genuine repeat failure).
+
+## R26. Deterministic grounding of exclusion-based rejections (clarification 2026-10-03, FR-027)
+
+- **Decision**: Every `Exclusion` clause carries an `exclusion_code` (`ACCIDENTAL_DAMAGE`,
+  `LIQUID_DAMAGE`, `COSMETIC_DAMAGE`, `UNAUTHORIZED_REPAIR`) from its source front matter; seeding
+  rejects an exclusion clause whose code is not in its version's `terms.exclusions`. The guardrail
+  check `GROUNDED_IN_CLAUSE` passes an AI `REJECT` only when at least one cited `SUPPORTS_REJECTION`
+  reference is either (a) a `Period` clause and the deterministic coverage window confirms expiry,
+  or (b) an `Exclusion` clause of the applicable version whose `exclusion_code` is in that version's
+  `terms.exclusions` **and** at least one photo analysis reports a damage type that maps to that
+  code. Fixed mapping (`ExclusionEvidenceMap` in `Warranty.Guardrails`): `CRACKED_SCREEN`,
+  `DENTS_OR_IMPACT` → `ACCIDENTAL_DAMAGE`; `LIQUID_INDICATORS`, `CORROSION` → `LIQUID_DAMAGE`;
+  `COSMETIC_WEAR` → `COSMETIC_DAMAGE`. `UNAUTHORIZED_REPAIR` has no photo evidence type, so a
+  rejection on that ground always goes to a reviewer. Tenant B's accidental-damage allowance is
+  coverage, not an exclusion: `AccidentalDamageRule` decides it, and an accidental claim beyond the
+  allowance is rejected only through a cited clause that the rule confirms.
+- **Rationale**: The AI can neither invent an exclusion the tenant does not have nor apply one
+  without evidence; the check reads only structured terms and schema-constrained photo output.
+- **Alternatives considered**: Human review for every exclusion (loses the automated tenant
+  comparison in US2); free-text matching of clause wording (not deterministic).
+
+## R27. Evidence matching tolerances (clarification 2026-10-03, FR-016)
+
+- **Decision**: One pure class, `EvidenceMatchRules` in `Warranty.Guardrails`, used by the
+  `invoice_validation` tool, the serial-in-photo comparison and the guardrail conflict checks:
+  - serial and model code: upper-case, remove spaces, `-`, `_`, `.`; exact match
+  - purchase date: exact calendar date (the extraction schema already returns ISO dates)
+  - price: `|invoice − claim| ≤ max(1% of claim price, 1.00)` in the claim currency
+  - seller: lower-case, strip punctuation, collapse spaces, drop trailing legal suffixes (`inc`,
+    `incorporated`, `ltd`, `limited`, `llc`, `gmbh`, `ag`, `sa`, `bv`, `plc`, `co`, `corp`,
+    `corporation`); exact match
+  - a field the invoice does not show (`null` in the extraction) is not a conflict; a missing
+    invoice field the claim needs is missing information instead.
+- **Rationale**: Identifiers and dates are what fraud alters; price and seller vary honestly.
+  Centralizing the rules keeps the tool, the risk signal and the guardrail consistent.
+- **Alternatives considered**: Fuzzy string similarity for sellers (non-obvious thresholds, harder
+  to explain to reviewers).
+
+## R28. Personal data sent to the AI provider (clarification 2026-10-03, FR-006a)
+
+- **Decision**: R15 becomes a requirement: the context builder never places customer name, email,
+  phone or street address in a prompt (placeholders `[CUSTOMER]`, `[EMAIL]`, `[PHONE]`,
+  `[ADDRESS]`), and `IPiiRedactor` masks emails and phone numbers in all free text before sending
+  and logging. Evidence files are sent as submitted (synthetic in the PoC; image redaction stays a
+  documented extension). Every chat provider in `AiGateway` configuration must declare
+  `"NoTraining": true`; the gateway refuses to start a route whose provider does not, and the
+  Anthropic provider is configured with an API key under commercial terms (API inputs are not used
+  for model training by default). A unit test asserts that a rendered prompt for a seeded claim
+  contains none of the customer's identifiers.
+- **Rationale**: Turns an implementation habit into a checked guarantee and records the provider
+  data-use condition explicitly.
+- **Alternatives considered**: Sending extracted invoice fields only (loses invoice analysis);
+  no restriction (contradicts FR-006a).
+
+## R29. Separation of duties (clarification 2026-10-03, Actors, FR-034)
+
+- **Decision**: Staff users may hold several realm roles. `RecordReviewDecision` refuses a decision
+  when `claims.submitted_by` equals the reviewer's `sub`: `403` ProblemDetails "You submitted this
+  claim; another reviewer must decide it", a `SELF_REVIEW_REFUSED` security event, no state change.
+  The review queue still lists such claims for that user, marked "You submitted this claim", with
+  the decision actions disabled. Claimant-channel submissions (`submitted_by = claimant`) never
+  match. The Keycloak realm adds `agent-reviewer.aurora` (roles `claims-agent` + `claims-reviewer`)
+  to exercise the rule.
+- **Rationale**: A single deterministic check closes the self-approval gap while allowing
+  realistic multi-role accounts.
+- **Alternatives considered**: One role per user (hides the problem rather than enforcing it).
+
+## R30. Security events: attribution and auditor access (clarification 2026-10-03, FR-041a)
+
+- **Decision**: `audit.security_events` stays append-only (INSERT/SELECT grants + trigger) and
+  RLS-scoped by `tenant_id`; rows with `tenant_id = NULL` are invisible to the application role
+  and readable only by platform operators (owner connection, database or telemetry). Attribution:
+  staff denials → the actor's tenant; claimant access failures → the channel's tenant; retrieval
+  and tool scope violations → the run's tenant; refused self-review → the tenant; unknown claimant
+  channel → `NULL`. To satisfy "never reveal whether a target exists", a staff lookup of a claim or
+  evidence ID that is not visible in the actor's tenant writes the **same** tenant-visible event
+  (`ACCESS_DENIED`, target = the ID as supplied) whether the ID does not exist or belongs to another
+  tenant; when it belongs to another tenant, an additional operator-only event
+  (`CROSS_TENANT_ACCESS_DENIED`, `tenant_id = NULL`, both tenants in `details`) is written through
+  the `SECURITY DEFINER` function `audit.record_operator_event` (RLS blocks the application role
+  from inserting tenant-less rows directly). New
+  endpoint `GET /api/security-events` (role `auditor`, paged, newest first) returns `occurredAt`,
+  `kind`, `actor` (staff display name, or "claimant channel"), `target` and never `details` or the
+  source IP; a staff page "Security events" lists them.
+- **Rationale**: Auditors see their own staff's denied attempts and claimant access failures
+  without learning anything about other tenants; operators keep the full picture.
+- **Alternatives considered**: One tenant-visible cross-tenant event (reveals that the target
+  exists elsewhere); operator-only events (contradicts FR-041a).
 
 ---
 

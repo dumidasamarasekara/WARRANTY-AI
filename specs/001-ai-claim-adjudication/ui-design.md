@@ -246,7 +246,8 @@ and tokens; no UI library (research R20). Built in T117 before any page.
 - **Sidebar**: 240 px; brand mark (28 px `--color-chrome` tile with "W" in Fraunces) + "WarrantyOS";
   items with a 2-letter tile and label: **Claims** (CL, all staff), **Review queue** (HR,
   `claims-reviewer` only, with a count badge from `GET /api/review-queue`), **Policies** (WP, all
-  staff). The current item uses `--color-primary-soft` with a primary tile. Collapses to a 64 px
+  staff), **Security events** (SE, `auditor` only, §6.7). Users with several roles see the union
+  of their items. The current item uses `--color-primary-soft` with a primary tile. Collapses to a 64 px
   rail below 1280 px or via the "Collapse" button at the bottom.
 - **Tenant strip**: 3 px bar in the tenant marker colour at the top of the content column.
 - **Header** (56 px, white): breadcrumbs left; right: read-only tenant chip (marker dot + tenant
@@ -334,7 +335,9 @@ latency, cost, status, attempt), tool calls (tool, allowed, latency, summary) an
   *tenant*".
 - Left (300 px): queue cards oldest first — reference (mono, human ink), product, claim value ·
   escalation reasons, "Escalated *n* ago"; selected card in the `human` tone. `EmptyState` "No
-  claims waiting for review".
+  claims waiting for review". A card with `submittedByMe` shows a `system` badge "You submitted
+  this claim"; its workspace shows the info alert "Another reviewer must decide this claim" and
+  the decision actions are disabled (a 403 from the API shows the same message).
 - Right workspace:
   - `DispositionBanner` (human): "Human review required", the reasons, and "You are the control
     point — the AI recommendation below is advisory."
@@ -406,6 +409,17 @@ latency, cost, status, attempt), tool calls (tool, allowed, latency, summary) an
   "The service centre will contact you". Never shows risk, fraud or internal reasoning (FR-037).
 - **Staff new claim** (`/staff/claims/new`, T072): the same `ClaimForm` in the staff shell, titled
   "New claim" with "Submitted on behalf of a customer · Agent portal".
+
+### 6.7 Security events — `/staff/security-events` (auditor only)
+
+- Page title "Security events — *tenant*", subtitle "Denied or suspicious access attempts in your
+  organisation. Entries cannot be changed or deleted."
+- `DataTable` from `GET /api/security-events`, newest first: time (mono, `--color-system` ink),
+  kind as a badge (`ACCESS_DENIED` "Access denied" `warn`; `CLAIMANT_ACCESS_FAILED` "Claimant
+  access failed" `warn`; `SELF_REVIEW_REFUSED` "Self-review refused" `human`;
+  `RETRIEVAL_SCOPE_VIOLATION` / `TOOL_SCOPE_VIOLATION` "AI scope violation" `err`), actor, target
+  (mono). A kind filter `Select`; `Pagination`. `EmptyState` "No security events recorded".
+- No row details or IP addresses are shown; nothing indicates whether a target exists elsewhere.
 
 ## 7. Responsive and accessibility rules
 
