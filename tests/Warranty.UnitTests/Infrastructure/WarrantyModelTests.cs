@@ -123,7 +123,7 @@ public sealed class WarrantyModelTests
     [Fact]
     public void The_roles_and_rls_script_is_embedded_and_isolates_tenant_owned_tables()
     {
-        var sql = SqlScripts.Load().Where(s => s.Name == "001_roles_and_rls.sql").ShouldHaveSingleItem().Sql;
+        var sql = SqlScripts.Load(SqlDatabase.Warranty).Where(s => s.Name == "001_roles_and_rls.sql").ShouldHaveSingleItem().Sql;
 
         sql.ShouldContain("FORCE ROW LEVEL SECURITY");
         sql.ShouldContain("current_setting(''app.tenant_id'', true)");

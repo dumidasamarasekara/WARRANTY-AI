@@ -1,3 +1,4 @@
+-- database: warranty
 -- 001_roles_and_rls.sql — application role, grants and row-level security for database `warranty`.
 --
 -- Applied by the migration service as the database owner after the EF Core migrations, on every
