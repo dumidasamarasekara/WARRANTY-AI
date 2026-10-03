@@ -15,6 +15,8 @@ public sealed class AiGatewayOptions
     /// <summary>Task routes by name: <c>extraction</c>, <c>vision</c>, <c>policy-reasoning</c>, <c>adjudication</c>, <c>embedding</c>.</summary>
     public Dictionary<string, RouteOptions> Routes { get; set; } = new(StringComparer.Ordinal);
 
+    public AnthropicProviderOptions Anthropic { get; set; } = new();
+
     public RateLimitOptions RateLimits { get; set; } = new();
 
     /// <summary>Price per million tokens by model.</summary>
@@ -79,4 +81,25 @@ public sealed class ModelProfileOptions
     public bool? SupportsEffort { get; set; }
 
     public bool? AdaptiveThinking { get; set; }
+
+    public bool? SupportsRefusalFallback { get; set; }
+}
+
+/// <summary>The <c>AiGateway:Anthropic</c> provider section (contracts/ai-gateway.md).</summary>
+public sealed class AnthropicProviderOptions
+{
+    public const string DefaultRefusalFallback = "default";
+
+    /// <summary>
+    /// <c>default</c> lets the API re-serve a safety-classifier refusal on a fallback model chosen by
+    /// refusal category; empty or <c>none</c> turns the fallback off. Sent only to models whose
+    /// profile supports it.
+    /// </summary>
+    public string? RefusalFallback { get; set; } = DefaultRefusalFallback;
+
+    /// <summary>SDK retries for 408/409/429/5xx and connection errors.</summary>
+    public int MaxRetries { get; set; } = 2;
+
+    /// <summary>The provider does not train on API inputs (FR-006a); routes to a provider without it are refused.</summary>
+    public bool NoTraining { get; set; }
 }
