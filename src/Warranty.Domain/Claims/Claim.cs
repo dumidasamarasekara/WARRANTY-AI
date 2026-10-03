@@ -19,7 +19,7 @@ public sealed class Claim
 
     public const int MaxDescriptionLength = 4000;
 
-    private List<RequestedItem> _requestedItems = [];
+    private IReadOnlyList<RequestedItem> _requestedItems = [];
 
     private Claim()
     {
