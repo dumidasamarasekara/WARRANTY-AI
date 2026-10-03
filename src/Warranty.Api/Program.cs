@@ -6,6 +6,7 @@ using Warranty.Api.Endpoints;
 using Warranty.Api.Http;
 using Warranty.Api.RateLimiting;
 using Warranty.Api.Tenancy;
+using Warranty.Api.Workers;
 using Warranty.Application;
 using Warranty.Guardrails;
 using Warranty.Infrastructure;
@@ -34,6 +35,8 @@ builder.Services
     .AddWarrantyAiHarness()
     .AddWarrantyGuardrails()
     .AddWarrantyApplication();
+
+builder.Services.AddClaimJobWorker(builder.Configuration);
 
 var app = builder.Build();
 
