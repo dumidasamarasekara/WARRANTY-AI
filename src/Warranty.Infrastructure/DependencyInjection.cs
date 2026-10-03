@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.AddScoped<IAdjudicationRepository, AdjudicationRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IAiOpsRepository, AiOpsRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IIntegrationRepository, IntegrationRepository>();
 
         // A host may register its own BlobServiceClient (e.g. the Aspire client integration); otherwise
         // it is built from the "blobs" connection string on first use.

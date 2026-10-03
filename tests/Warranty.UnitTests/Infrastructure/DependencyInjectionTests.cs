@@ -63,7 +63,7 @@ public sealed class DependencyInjectionTests
                      typeof(IUnitOfWork), typeof(ITenantRepository), typeof(ICatalogRepository), typeof(IPolicyRepository),
                      typeof(IClaimRepository), typeof(IAdjudicationRepository), typeof(IReviewRepository), typeof(IAiOpsRepository),
                      typeof(IDocumentStore), typeof(IJobQueue), typeof(IDecisionTrailWriter), typeof(ISecurityEventWriter),
-                     typeof(HashChainVerifier),
+                     typeof(HashChainVerifier), typeof(ICustomerRepository), typeof(IIntegrationRepository),
                  })
         {
             scope.ServiceProvider.GetRequiredService(port).ShouldNotBeNull(port.Name);

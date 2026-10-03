@@ -3,6 +3,9 @@ using Warranty.Domain.Adjudication;
 using Warranty.Domain.AiOps;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
+using Warranty.Domain.Common;
+using Warranty.Domain.Crm;
+using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
 using Warranty.Domain.Tenancy;
@@ -134,6 +137,27 @@ public interface IAiOpsRepository
     void AddRagQuery(RagQuery query);
 
     Task<AiOpsRecords> GetForRunAsync(Guid runId, CancellationToken ct);
+}
+
+/// <summary>Customer master data of the current tenant, stored for the simulated CRM.</summary>
+public interface ICustomerRepository
+{
+    /// <summary>Finds by normalized email, including customers added but not yet saved in this unit of work.</summary>
+    Task<Customer?> FindByEmailAsync(string normalizedEmail, CancellationToken ct);
+
+    Task<Customer?> GetAsync(Guid customerId, CancellationToken ct);
+
+    void Add(Customer customer);
+}
+
+/// <summary>Rows of the simulated service network and outboxes (<c>integration.*</c>) of the current tenant.</summary>
+public interface IIntegrationRepository
+{
+    Task<IReadOnlyList<ServiceCenter>> GetServiceCentersAsync(Region region, CancellationToken ct);
+
+    void AddRepairRequest(RepairRequest request);
+
+    void AddNotification(Notification notification);
 }
 
 public sealed record AiOpsRecords(IReadOnlyList<ModelCall> ModelCalls, IReadOnlyList<ToolCall> ToolCalls, IReadOnlyList<RagQuery> RagQueries);
