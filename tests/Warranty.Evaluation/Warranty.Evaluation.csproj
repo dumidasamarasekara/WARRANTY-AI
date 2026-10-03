@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Golden-dataset evaluation runner, separate from production; never referenced by src/. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Evaluation</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Warranty.Domain\Warranty.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Guardrails\Warranty.Guardrails.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.AI.Harness\Warranty.AI.Harness.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.AI.Gateway\Warranty.AI.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Knowledge\Warranty.Knowledge.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -13,4 +13,12 @@
     <Project Path="src/Warranty.MigrationService/Warranty.MigrationService.csproj" />
     <Project Path="src/Warranty.ServiceDefaults/Warranty.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Warranty.Evaluation/Warranty.Evaluation.csproj" />
+    <Project Path="tests/Warranty.IntegrationTests/Warranty.IntegrationTests.csproj" />
+    <Project Path="tests/Warranty.UnitTests/Warranty.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Warranty.EvidenceGenerator/Warranty.EvidenceGenerator.csproj" />
+  </Folder>
 </Solution>
