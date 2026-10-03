@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Pgvector;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Knowledge;
+using Warranty.Domain.Common;
+using Warranty.Domain.Policies;
 using Warranty.Infrastructure.Persistence.Knowledge;
 using Warranty.Infrastructure.Persistence.Sql;
 
@@ -59,6 +62,57 @@ public sealed class KnowledgeModelTests
         using var context = CreateContext(new FakeTenantContext(null));
 
         context.Documents.ToQueryString().ShouldNotContain("tenant-");
+    }
+
+    [Fact]
+    public void Retrieval_applies_every_hard_filter_in_sql_before_cosine_ranking()
+    {
+        var tenant = new FakeTenantContext(Aurora);
+        using var context = CreateContext(tenant);
+        var store = new KnowledgeStore(context, tenant);
+        var filter = new KnowledgeFilter(
+            ["tenant-aurora"],
+            [DocumentType.WarrantyPolicy],
+            new PolicyApplicability("tablet", "AUR-TAB10", Region.EU, new DateOnly(2026, 3, 1)),
+            [DocumentClassification.Public, DocumentClassification.Internal],
+            ["adjudication-service"],
+            [Guid.NewGuid()],
+            [ClauseType.Period, ClauseType.Exclusion]);
+
+        var sql = store.ChunksQuery(filter, new Vector(new float[KnowledgeDbContext.EmbeddingDimensions]), 8).ToQueryString();
+
+        sql.ShouldContain("k.namespace = ANY (@namespaces)");
+        sql.ShouldContain("k.classification = ANY (@classifications)");
+        sql.ShouldContain("k.allowed_roles && @roles");
+        sql.ShouldContain("k.document_type = ANY (@types)");
+        sql.ShouldContain("k.product_category IS NULL OR k.product_category = @category");
+        sql.ShouldContain("k.product_model IS NULL OR k.product_model = @model");
+        sql.ShouldContain("cardinality(k.regions) = 0 OR @region = ANY (k.regions)");
+        sql.ShouldContain("k.effective_from <= @purchaseDate");
+        sql.ShouldContain("k.effective_to >= @purchaseDate");
+        sql.ShouldContain("k.document_id = ANY (@ids)");
+        sql.ShouldContain("k.clause_type = ANY (@clauseTypeValues)");
+        sql.ShouldContain("ORDER BY k.embedding <=> @embedding");
+        sql.ShouldContain("LIMIT @p");
+        sql.IndexOf("WHERE", StringComparison.Ordinal).ShouldBeLessThan(sql.IndexOf("ORDER BY", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Unknown_category_model_and_region_match_only_documents_for_all()
+    {
+        var tenant = new FakeTenantContext(Aurora);
+        using var context = CreateContext(tenant);
+        var store = new KnowledgeStore(context, tenant);
+        var filter = new KnowledgeFilter(
+            ["global"], null, new PolicyApplicability(null, null, null, null), [DocumentClassification.Public], ["adjudication-service"]);
+
+        var sql = store.DocumentsQuery(filter).ToQueryString();
+
+        sql.ShouldContain("SELECT DISTINCT");
+        sql.ShouldContain("cardinality(k.regions) = 0");
+        sql.ShouldNotContain("ANY (k.regions)");
+        sql.ShouldNotContain("effective_from");
+        sql.ShouldNotContain("document_type = ANY");
     }
 
     [Fact]

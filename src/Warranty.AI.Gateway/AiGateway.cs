@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using Warranty.AI.Gateway.Prompts;
 using Warranty.AI.Gateway.Providers;
 using Warranty.AI.Gateway.RateLimiting;
-using Warranty.AI.Gateway.Redaction;
 using Warranty.AI.Gateway.Routing;
 using Warranty.AI.Gateway.Usage;
 using Warranty.Application.Abstractions;

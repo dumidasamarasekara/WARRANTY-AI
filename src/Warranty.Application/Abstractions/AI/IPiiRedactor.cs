@@ -1,4 +1,4 @@
-namespace Warranty.AI.Gateway.Redaction;
+namespace Warranty.Application.Abstractions.AI;
 
 /// <summary>The redacted text and how many values were replaced.</summary>
 public sealed record RedactionResult(string Text, int Replacements);

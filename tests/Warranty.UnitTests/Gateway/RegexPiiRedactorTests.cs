@@ -1,4 +1,5 @@
 using Warranty.AI.Gateway.Redaction;
+using Warranty.Application.Abstractions.AI;
 
 namespace Warranty.UnitTests.Gateway;
 
