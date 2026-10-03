@@ -4,10 +4,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Warranty.Application.Abstractions;
+using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Jobs;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Abstractions.Storage;
 using Warranty.Infrastructure;
+using Warranty.Infrastructure.Audit;
 using Warranty.Infrastructure.Persistence;
 using Warranty.Infrastructure.Persistence.Knowledge;
 
@@ -60,7 +62,8 @@ public sealed class DependencyInjectionTests
                  {
                      typeof(IUnitOfWork), typeof(ITenantRepository), typeof(ICatalogRepository), typeof(IPolicyRepository),
                      typeof(IClaimRepository), typeof(IAdjudicationRepository), typeof(IReviewRepository), typeof(IAiOpsRepository),
-                     typeof(IDocumentStore), typeof(IJobQueue),
+                     typeof(IDocumentStore), typeof(IJobQueue), typeof(IDecisionTrailWriter), typeof(ISecurityEventWriter),
+                     typeof(HashChainVerifier),
                  })
         {
             scope.ServiceProvider.GetRequiredService(port).ShouldNotBeNull(port.Name);
