@@ -60,7 +60,9 @@ indexes global and tenant knowledge into their namespace partitions.
 
 Staff test users (synthetic, in `infra/keycloak/warranty-realm.json`): `agent.aurora`,
 `reviewer.aurora`, `auditor.aurora`, `agent.borealis`, `reviewer.borealis`, `auditor.borealis`,
-and `agent-reviewer.aurora` (agent + reviewer roles, for the separation-of-duties check).
+and `agent-reviewer.aurora` (agent + reviewer roles, for the separation-of-duties check). All use
+the development-only password `Warranty-dev-1!` (local runs only; never reuse it elsewhere). A
+user's `tenant_id` is an admin-only Keycloak attribute — users cannot see or change it.
 
 ## 4. Validation scenarios
 
