@@ -1,9 +1,12 @@
+using Warranty.MigrationService.Seeding;
+
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddMigrationService();
 
 using var host = builder.Build();
+await host.RunAsync();
 
-// Migration, roles/RLS, seeding and knowledge indexing are added in T038; until then the service
-// starts and exits successfully so the AppHost can depend on its completion.
-return 0;
+// MigrationWorker sets 0 only when every step succeeded; the AppHost waits for that before starting the API.
+return Environment.ExitCode;

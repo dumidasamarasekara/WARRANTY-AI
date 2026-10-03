@@ -18,6 +18,19 @@ using Warranty.Infrastructure.Storage;
 
 namespace Warranty.Infrastructure;
 
+/// <summary>The PostgreSQL login the DbContexts connect with.</summary>
+public enum DatabaseLogin
+{
+    /// <summary><see cref="DependencyInjection.AppRole"/>, subject to row-level security (API and worker).</summary>
+    App,
+
+    /// <summary>
+    /// The login of the configured connection strings, i.e. the database owner. Only the migration
+    /// service connects this way, to migrate, seed and index knowledge (research R8).
+    /// </summary>
+    Owner,
+}
+
 public static class DependencyInjection
 {
     /// <summary>Connection string names (Aspire database resources).</summary>
@@ -36,13 +49,15 @@ public static class DependencyInjection
 
     /// <summary>
     /// Registers both DbContexts — connecting as <see cref="AppRole"/>, whatever user the configured
-    /// connection strings name — with the <see cref="TenantSessionInterceptor"/>, plus the
-    /// repositories, unit of work, document store, job queue and audit writers. Requires a scoped <c>ITenantContext</c> from the host.
+    /// connection strings name, unless <paramref name="login"/> is <see cref="DatabaseLogin.Owner"/> —
+    /// with the <see cref="TenantSessionInterceptor"/>, plus the repositories, unit of work, document
+    /// store, job queue and audit writers. Requires a scoped <c>ITenantContext</c> from the host.
     /// </summary>
-    public static IServiceCollection AddWarrantyInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddWarrantyInfrastructure(
+        this IServiceCollection services, IConfiguration configuration, DatabaseLogin login = DatabaseLogin.App)
     {
-        var warranty = AppConnectionString(configuration, WarrantyDatabase);
-        var knowledge = AppConnectionString(configuration, KnowledgeDatabase);
+        var warranty = login == DatabaseLogin.Owner ? OwnerConnectionString(configuration, WarrantyDatabase) : AppConnectionString(configuration, WarrantyDatabase);
+        var knowledge = login == DatabaseLogin.Owner ? OwnerConnectionString(configuration, KnowledgeDatabase) : AppConnectionString(configuration, KnowledgeDatabase);
 
         services.AddScoped<TenantSessionInterceptor>();
         services.AddDbContext<WarrantyDbContext>((sp, options) => options
@@ -84,12 +99,7 @@ public static class DependencyInjection
     /// <summary>The named connection string with its credentials replaced by <see cref="AppRole"/>'s.</summary>
     internal static string AppConnectionString(IConfiguration configuration, string name)
     {
-        var connectionString = configuration.GetConnectionString(name);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException($"Connection string '{name}' is not configured.");
-        }
-
+        var connectionString = OwnerConnectionString(configuration, name);
         var password = configuration[AppRolePasswordKey];
         if (string.IsNullOrEmpty(password))
         {
@@ -97,5 +107,14 @@ public static class DependencyInjection
         }
 
         return new NpgsqlConnectionStringBuilder(connectionString) { Username = AppRole, Password = password }.ConnectionString;
+    }
+
+    /// <summary>The named connection string as configured (the owner login under Aspire).</summary>
+    internal static string OwnerConnectionString(IConfiguration configuration, string name)
+    {
+        var connectionString = configuration.GetConnectionString(name);
+        return string.IsNullOrWhiteSpace(connectionString)
+            ? throw new InvalidOperationException($"Connection string '{name}' is not configured.")
+            : connectionString;
     }
 }
