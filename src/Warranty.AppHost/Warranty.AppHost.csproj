@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+
+  <!-- .NET Aspire orchestration of the whole PoC on Podman (resources wired in T039). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Warranty.AppHost</RootNamespace>
+    <UserSecretsId>warranty-ai-apphost-6f1c2a9e</UserSecretsId>
+    <!-- Orchestration (DCP, dashboard) comes from NuGet packages so `dotnet run` works without the
+         Aspire CLI; see https://aspire.dev/diagnostics/aspire010/. -->
+    <AspireUseCliBundle>false</AspireUseCliBundle>
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Api\Warranty.Api.csproj" />
+    <ProjectReference Include="..\Warranty.MigrationService\Warranty.MigrationService.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- REST API, tenant resolution and the in-process claim job worker; the composition root. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.ServiceDefaults\Warranty.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+    <ProjectReference Include="..\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\Warranty.Guardrails\Warranty.Guardrails.csproj" />
+    <ProjectReference Include="..\Warranty.AI.Harness\Warranty.AI.Harness.csproj" />
+    <ProjectReference Include="..\Warranty.AI.Gateway\Warranty.AI.Gateway.csproj" />
+    <ProjectReference Include="..\Warranty.Knowledge\Warranty.Knowledge.csproj" />
+    <ProjectReference Include="..\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
+    <ProjectReference Include="..\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!-- One-shot worker: migrate, create roles/RLS, seed tenants and index knowledge, then exit. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.MigrationService</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.ServiceDefaults\Warranty.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
+    <ProjectReference Include="..\Warranty.Knowledge\Warranty.Knowledge.csproj" />
+    <ProjectReference Include="..\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+    <ProjectReference Include="..\Warranty.AI.Gateway\Warranty.AI.Gateway.csproj" />
+  </ItemGroup>
+
+</Project>
