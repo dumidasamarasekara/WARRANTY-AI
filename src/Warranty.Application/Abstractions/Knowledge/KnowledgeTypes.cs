@@ -39,7 +39,16 @@ public enum RetrievalOutcome
     Ok,
     NoApplicablePolicy,
     AmbiguousPolicyVersion,
+
+    /// <summary>
+    /// The post-retrieval assertion found a chunk outside the allowed namespaces or tenant; the result
+    /// is empty, a <c>RETRIEVAL_SCOPE_VIOLATION</c> security event is recorded and the run goes to human review.
+    /// </summary>
+    ScopeViolation,
 }
+
+/// <summary>Who retrieves, for the <c>aiops.rag_queries</c> row and the embedding call; never used for scoping.</summary>
+public sealed record RetrievalAttribution(string Agent, Guid? RunId = null, Guid? ClaimId = null);
 
 /// <summary>Version-correct policy retrieval for a claim (filter first, rank second).</summary>
 public sealed record PolicyRetrievalQuery(
@@ -48,9 +57,14 @@ public sealed record PolicyRetrievalQuery(
     string? ProductModel,
     Region Region,
     DateOnly PurchaseDate,
-    int TopK = 8);
+    int TopK = 8,
+    RetrievalAttribution? Attribution = null);
 
-/// <summary>Product, region and purchase-date filters for a policy search.</summary>
+/// <summary>
+/// Product, region and purchase-date filters for a policy search. A document applies when its
+/// category, model and regions are "all" or match; a null category, model or region here matches only
+/// documents that apply to all of them. A null purchase date does not filter by effective dates.
+/// </summary>
 public sealed record PolicyApplicability(string? ProductCategory, string? ProductModel, Region? Region, DateOnly? PurchaseDate);
 
 public sealed record KnowledgeSearchQuery(
@@ -58,7 +72,8 @@ public sealed record KnowledgeSearchQuery(
     KnowledgeScope Scope,
     IReadOnlyList<DocumentType>? DocumentTypes,
     PolicyApplicability? Applicability,
-    int TopK = 5);
+    int TopK = 5,
+    RetrievalAttribution? Attribution = null);
 
 /// <summary>
 /// A retrieved chunk. Beyond the contract snippet, policy chunks also carry their version, clause

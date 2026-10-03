@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Warranty.Application.Abstractions.AI;
 using Warranty.Application.Abstractions.Knowledge;
 
 namespace Warranty.AI.Gateway.Redaction;

@@ -295,6 +295,13 @@ public sealed class KnowledgeIngestionTests
                 id, document.Namespace, document.SourceRef, document.Checksum, document.EmbeddingModel, document.EmbeddingDim, chunks.Count);
             return Task.FromResult(id);
         }
+
+        public Task<IReadOnlyList<KnowledgeDocumentMatch>> FindDocumentsAsync(KnowledgeFilter filter, CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<RetrievedChunk>> SearchChunksAsync(
+            KnowledgeFilter filter, ReadOnlyMemory<float> embedding, int topK, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakePolicies : IPolicyRepository

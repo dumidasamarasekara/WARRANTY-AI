@@ -19,7 +19,39 @@ public interface IKnowledgeStore
     /// replacing the chunks of an earlier index of the same source. Returns the document ID.
     /// </summary>
     Task<Guid> SaveDocumentAsync(KnowledgeDocumentDraft document, IReadOnlyList<KnowledgeChunkDraft> chunks, CancellationToken ct);
+
+    /// <summary>The distinct documents with at least one chunk that passes the hard filters.</summary>
+    Task<IReadOnlyList<KnowledgeDocumentMatch>> FindDocumentsAsync(KnowledgeFilter filter, CancellationToken ct);
+
+    /// <summary>
+    /// The <paramref name="topK"/> chunks that pass the hard filters, ranked by cosine similarity to
+    /// <paramref name="embedding"/> (filter first, rank second — research R7). Score = 1 − cosine distance.
+    /// </summary>
+    Task<IReadOnlyList<RetrievedChunk>> SearchChunksAsync(KnowledgeFilter filter, ReadOnlyMemory<float> embedding, int topK, CancellationToken ct);
 }
+
+/// <summary>
+/// Hard metadata filters, applied in the store's query before any similarity ranking
+/// (contracts/rag.md rule 2). Built by the retriever from the tenant context, never from model output.
+/// </summary>
+/// <param name="Namespaces">Namespaces to read; the store's own namespace isolation still applies.</param>
+/// <param name="DocumentTypes">Allowed document types; null for any.</param>
+/// <param name="Applicability">Product, region and purchase-date filters; null for none (see <see cref="PolicyApplicability"/>).</param>
+/// <param name="Classifications">Classifications the principal may read.</param>
+/// <param name="Roles">Principal roles; a chunk matches when its <c>allowed_roles</c> overlap them.</param>
+/// <param name="DocumentIds">Restricts to these documents (e.g. the selected policy version); null for any.</param>
+/// <param name="ClauseTypes">Restricts to these clause types; null for any.</param>
+public sealed record KnowledgeFilter(
+    IReadOnlyList<string> Namespaces,
+    IReadOnlyList<DocumentType>? DocumentTypes,
+    PolicyApplicability? Applicability,
+    IReadOnlyList<DocumentClassification> Classifications,
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<Guid>? DocumentIds = null,
+    IReadOnlyList<ClauseType>? ClauseTypes = null);
+
+/// <summary>A document that passed the hard filters; policy documents carry their policy version.</summary>
+public sealed record KnowledgeDocumentMatch(Guid DocumentId, string Namespace, string Title, int Version, Guid? PolicyVersionId);
 
 /// <summary>What re-ingestion needs to know about an indexed document.</summary>
 public sealed record StoredKnowledgeDocument(
