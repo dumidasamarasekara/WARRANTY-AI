@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet build *)",
+      "PowerShell(dotnet test *)",
+      "PowerShell(git *)",
+      "PowerShell(pwsh -NoProfile -File scripts/git/task-flow.ps1 *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(git *)",
+      "Bash(pwsh -NoProfile -File scripts/git/task-flow.ps1 *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
