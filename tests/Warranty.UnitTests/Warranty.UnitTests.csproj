@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Api\Warranty.Api.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.MigrationService\Warranty.MigrationService.csproj" />
   </ItemGroup>
 
   <ItemGroup>
