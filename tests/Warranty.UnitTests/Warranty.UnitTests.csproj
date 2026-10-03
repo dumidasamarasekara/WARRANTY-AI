@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Fast, I/O-free tests: guardrail rules, domain state machine, harness helpers, architecture. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.UnitTests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Warranty.Domain\Warranty.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Guardrails\Warranty.Guardrails.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.AI.Harness\Warranty.AI.Harness.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.AI.Gateway\Warranty.AI.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Knowledge\Warranty.Knowledge.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Shouldly" />
+  </ItemGroup>
+
+</Project>
