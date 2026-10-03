@@ -5,7 +5,7 @@ namespace Warranty.Domain.Adjudication;
 /// <summary>One harness run for one claim submission round (unique per claim and round).</summary>
 public sealed class AdjudicationRun
 {
-    private Dictionary<string, Guid> _referenceMap = [];
+    private IReadOnlyDictionary<string, Guid> _referenceMap = new Dictionary<string, Guid>();
 
     private AdjudicationRun()
     {
