@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="Anthropic" />
     <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="OllamaSharp" />
     <PackageReference Include="SkiaSharp" />
   </ItemGroup>

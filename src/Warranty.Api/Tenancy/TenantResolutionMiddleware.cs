@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Warranty.Api.Http;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Domain.Common;
 
@@ -81,7 +81,7 @@ internal sealed class TenantResolutionMiddleware(RequestDelegate next, ILogger<T
             principalId = $"claimant:{claim}";
         }
 
-        tenantContext.Resolve(tenant, principalId, ClaimantPrincipal, [], CorrelationId(context));
+        tenantContext.Resolve(tenant, principalId, ClaimantPrincipal, [], CorrelationId.Of(context));
         return true;
     }
 
@@ -104,7 +104,7 @@ internal sealed class TenantResolutionMiddleware(RequestDelegate next, ILogger<T
             .SelectMany(identity => identity.FindAll(identity.RoleClaimType))
             .Concat(user.FindAll(ClaimTypes.Role))
             .Select(claim => claim.Value);
-        tenantContext.Resolve(tenant, subject, name, roles, CorrelationId(context));
+        tenantContext.Resolve(tenant, subject, name, roles, CorrelationId.Of(context));
         return true;
     }
 
@@ -130,9 +130,6 @@ internal sealed class TenantResolutionMiddleware(RequestDelegate next, ILogger<T
         var values = principal.FindAll(TrustedClaimTypes.TenantId).Select(c => c.Value).Distinct(StringComparer.Ordinal).ToList();
         return values.Count == 1 && Guid.TryParse(values[0], out var id) && id != Guid.Empty ? id : null;
     }
-
-    private static string CorrelationId(HttpContext context)
-        => Activity.Current is { } activity ? activity.TraceId.ToHexString() : context.TraceIdentifier;
 
     private static object RequestDetails(HttpContext context)
         => new { method = context.Request.Method, path = context.Request.Path.Value };
