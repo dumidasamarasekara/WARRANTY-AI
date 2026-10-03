@@ -357,8 +357,18 @@ treated as fixed inputs; the research below chooses *within* them.
   from `contracts/rest-api.openapi.yaml` with `openapi-typescript` + `openapi-fetch`. One SPA with
   two areas: the tenant-branded **claimant portal** (host-resolved tenant) and the **staff
   workspace** (claims, review queue, decision trace). Plain CSS modules; no component library.
+- **Visual design (added 2026-10-03)**: the SPA implements the **WarrantyOS design system** from
+  the Claude Design prototype in [design/](./design/), specified for this feature in
+  [ui-design.md](./ui-design.md): design tokens as CSS custom properties, a small in-repo component
+  kit under `src/web/src/shared/ui/`, and an AI / human / system visual language (violet dashed =
+  AI recommends, blue solid = a person decides, grey = the system executes) that makes Principles
+  III and IV visible. Fonts (Fraunces, Inter, JetBrains Mono) are self-hosted through `@fontsource`
+  packages. Prototype screens without a requirement in this feature (dashboard, AI operations,
+  knowledge base, administration, partner, mobile) are excluded.
 - **Alternatives considered**: Two separate SPAs (more setup for little gain in a PoC); a UI
-  component library (adds weight; the PoC UI is small).
+  component library (adds weight; the PoC UI is small); Tailwind for the design tokens (a second
+  styling system next to CSS modules for no gain at this size); Google Fonts CDN (third-party
+  requests from a local PoC, fails offline).
 
 ## R21. Rate limiting
 
@@ -385,4 +395,5 @@ All Technical Context items in `plan.md` are resolved; no `NEEDS CLARIFICATION` 
 Items to verify against live documentation during implementation (not blockers): exact Aspire
 integration package names for Keycloak, Ollama and Vite hosting; the C# binding for the
 `fallbacks: "default"` request field; per-model structured-output support (read from the Models
-API at startup, R4).
+API at startup, R4); the exact `@fontsource` package names for Fraunces (with its optical-size
+axis, if offered), Inter and JetBrains Mono (R20).

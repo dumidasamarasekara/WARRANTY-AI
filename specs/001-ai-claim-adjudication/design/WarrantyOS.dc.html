@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#FAFAF8;color:#1C1F1C;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#1F6F4A;text-decoration:none}a:hover{color:#175A3B;text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+@media(max-width:1100px){[data-hn]{display:none!important}}
+@media(max-width:1000px){[data-st="1"]{grid-template-columns:minmax(0,1fr)!important}[data-st="2"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+button{white-space:nowrap}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #1F6F4A;outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#CDCAC0;border-radius:6px;border:2px solid #FAFAF8}
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;min-width:0">
+  <div style="background:#1C1F1C;color:#fff;display:flex;align-items:center;gap:20px;padding:0 16px;height:40px;flex:none">
+    <div style="font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;letter-spacing:.01em;white-space:nowrap">WarrantyOS <span data-hn="1" style="font:400 12px Inter;color:#B9BCB4;margin-left:6px">design system &amp; reference UI</span></div>
+    <div style="display:flex;gap:2px;overflow:auto">
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="7"><button onClick="{{ g.onClick }}" style="{{ g.style }}">{{ g.label }}</button></sc-for>
+    </div>
+  </div>
+  <div style="background:#F2F1ED;border-bottom:1px solid #E3E1DA;display:flex;gap:6px;padding:6px 16px;flex:none;overflow:auto">
+    <sc-for list="{{ subs }}" as="s" hint-placeholder-count="6"><button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
+  </div>
+
+  <div style="flex:1;min-height:0;position:relative;display:flex">
+
+  <!-- ============ CONSOLE SHELL ============ -->
+  <sc-if value="{{ is.console }}" hint-placeholder-val="{{ true }}">
+  <aside style="{{ sidebarStyle }}">
+    <div style="padding:16px 16px 12px;display:flex;align-items:center;gap:10px;height:56px">
+      <div style="width:28px;height:28px;border-radius:6px;background:#1C1F1C;color:#fff;display:grid;place-items:center;font:600 13px Fraunces,serif;flex:none">W</div>
+      <sc-if value="{{ expanded }}"><div style="font-family:Fraunces,Georgia,serif;font-weight:600;font-size:18px">WarrantyOS</div></sc-if>
+    </div>
+    <nav style="padding:4px 8px;display:flex;flex-direction:column;gap:2px;flex:1;overflow:auto" aria-label="Primary">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="11">
+        <button onClick="{{ n.onClick }}" title="{{ n.label }}" style="{{ n.style }}">
+          <span style="{{ n.iniStyle }}">{{ n.ini }}</span>
+          <sc-if value="{{ expanded }}"><span style="flex:1;text-align:left">{{ n.label }}</span></sc-if>
+          <sc-if value="{{ n.showCount }}"><span style="{{ n.countStyle }}">{{ n.count }}</span></sc-if>
+        </button>
+      </sc-for>
+    </nav>
+    <div style="padding:8px;border-top:1px solid #E3E1DA">
+      <button onClick="{{ toggleSide }}" aria-label="Toggle sidebar" style="width:100%;height:32px;border:1px solid #E3E1DA;background:#fff;border-radius:6px;color:#5F635C;font:500 12px Inter">{{ collapseLabel }}</button>
+    </div>
+  </aside>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="{{ tenantStrip }}"></div>
+    <header style="height:56px;flex:none;background:#fff;border-bottom:1px solid #E3E1DA;display:flex;align-items:center;gap:12px;padding:0 24px;position:relative;white-space:nowrap">
+      <div style="font:400 13px Inter;color:#5F635C;display:flex;gap:8px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto">
+        <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="2"><span style="{{ c.style }}">{{ c.t }}</span><span style="color:#CDCAC0">{{ c.sep }}</span></sc-for>
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{ openCmd }}" style="display:flex;align-items:center;gap:10px;height:34px;flex:0 1 260px;min-width:44px;overflow:hidden;white-space:nowrap;padding:0 10px;border:1px solid #E3E1DA;border-radius:6px;background:#FAFAF8;color:#8B8F87;font:400 13px Inter"><span data-hn="1" style="overflow:hidden;text-overflow:ellipsis">Search claims, policies, customers</span><span style="margin-left:auto;font:500 11px 'JetBrains Mono',monospace;border:1px solid #E3E1DA;border-radius:4px;padding:1px 5px;background:#fff;white-space:nowrap">⌘K</span></button>
+      <button onClick="{{ toggleTenantMenu }}" aria-label="Switch tenant" style="display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid #E3E1DA;border-radius:6px;background:#fff;font:500 13px Inter;color:#1C1F1C"><span style="{{ tenantDot }}"></span>{{ T.name }}<span style="color:#8B8F87;font-size:11px">▾</span></button>
+      <button onClick="{{ toggleNotif }}" aria-label="Notifications" style="position:relative;height:34px;width:34px;border:1px solid #E3E1DA;border-radius:6px;background:#fff;font-size:14px;color:#5F635C">◔<span style="position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:#A03428;color:#fff;font:600 10px/16px Inter;text-align:center">4</span></button>
+      <button onClick="{{ toggleUser }}" aria-label="User menu" style="display:flex;align-items:center;gap:8px;height:34px;padding:0 8px 0 4px;border:1px solid #E3E1DA;border-radius:17px;background:#fff;font:500 13px Inter"><span style="width:26px;height:26px;border-radius:50%;background:#E8EFF6;color:#244B73;display:grid;place-items:center;font:600 11px Inter">RF</span><span data-hn="1">R. Fernando</span></button>
+
+      <sc-if value="{{ menuTenant }}"><div style="position:absolute;right:210px;top:52px;width:320px;background:#fff;border:1px solid #E3E1DA;border-radius:8px;box-shadow:0 4px 12px rgba(28,31,28,.12);z-index:30;padding:8px">
+        <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;padding:8px">Switch tenant · Platform administrator</div>
+        <sc-for list="{{ tenantOpts }}" as="o" hint-placeholder-count="2"><button onClick="{{ o.onClick }}" style="{{ o.style }}"><span style="{{ o.dot }}"></span><span style="flex:1;text-align:left"><b style="font-weight:600">{{ o.name }}</b><br><span style="color:#5F635C;font-size:12px">{{ o.meta }}</span></span><span style="color:#1F6F4A;font-size:12px">{{ o.cur }}</span></button></sc-for>
+        <div style="font:400 12px/16px Inter;color:#5F635C;padding:8px;border-top:1px solid #E3E1DA;margin-top:4px">Switching reloads data, knowledge base and AI configuration for the selected tenant. Every switch is audit-logged.</div>
+      </div></sc-if>
+      <sc-if value="{{ menuNotif }}"><div style="position:absolute;right:70px;top:52px;width:360px;background:#fff;border:1px solid #E3E1DA;border-radius:8px;box-shadow:0 4px 12px rgba(28,31,28,.12);z-index:30">
+        <div style="padding:12px 16px;border-bottom:1px solid #E3E1DA;font:600 14px Inter">Notifications</div>
+        <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4"><div style="padding:12px 16px;border-bottom:1px solid #F2F1ED;display:flex;gap:10px"><span style="{{ n.style }}">{{ n.tag }}</span><div style="font:400 13px/18px Inter">{{ n.text }}<div style="color:#8B8F87;font-size:12px;margin-top:2px">{{ n.when }}</div></div></div></sc-for>
+      </div></sc-if>
+      <sc-if value="{{ menuUser }}"><div style="position:absolute;right:24px;top:52px;width:260px;background:#fff;border:1px solid #E3E1DA;border-radius:8px;box-shadow:0 4px 12px rgba(28,31,28,.12);z-index:30;padding:8px;font:400 13px Inter">
+        <div style="padding:8px"><b style="font-weight:600">Ruwan Fernando</b><br><span style="color:#5F635C">Supervisor · {{ T.name }}</span></div>
+        <div style="padding:8px;border-top:1px solid #E3E1DA;color:#5F635C;line-height:20px">Role: Supervisor<br>Approval limit: LKR 500,000<br>PII visibility: masked by default</div>
+        <div style="padding:8px;border-top:1px solid #E3E1DA;display:flex;flex-direction:column;gap:2px"><span>Profile &amp; preferences</span><span>Security keys</span><span>Sign out</span></div>
+      </div></sc-if>
+    </header>
+    <div style="height:32px;flex:none;background:#F2F1ED;border-bottom:1px solid #E3E1DA;display:flex;align-items:center;gap:20px;padding:0 24px;font:400 12px Inter;color:#43473F;white-space:nowrap;overflow:hidden">
+      <span><span style="color:#5F635C">Tenant</span> <b style="font-weight:600">{{ T.name }}</b></span>
+      <span><span style="color:#5F635C">Environment</span> <b style="font-weight:600">Production</b></span>
+      <span><span style="color:#5F635C">Region</span> <b style="font-weight:600">Sri Lanka</b></span>
+      <span data-hn="1" style="margin-left:auto;color:#5F635C">Data isolated to this tenant · PII masked</span>
+    </div>
+    <main style="flex:1;overflow:auto;padding:24px 32px 48px;position:relative;min-width:0" id="main">
+    <div style="max-width:1440px;margin:0 auto">
+
+    <!-- DASHBOARD -->
+    <sc-if value="{{ is.dashboard }}">
+      <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:24px">
+        <div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">Operations · Today, 02 Oct 2026</div>
+        <h1 style="margin:4px 0 0;font:600 32px/40px Fraunces,Georgia,serif">Operations dashboard</h1></div>
+        <div style="flex:1"></div>
+        <button style="height:36px;padding:0 14px;border:1px solid #CDCAC0;background:#fff;border-radius:8px;font:500 14px Inter">Export</button>
+        <button onClick="{{ go.review }}" style="height:36px;padding:0 14px;border:0;background:#1F6F4A;color:#fff;border-radius:8px;font:500 14px Inter">Open review queue</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+        <span style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">Claim workflow</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+          <sc-for list="{{ flow }}" as="f" hint-placeholder-count="10"><span style="{{ f.style }}">{{ f.t }}</span></sc-for>
+        </div>
+        <span style="font:400 12px Inter;color:#5F635C;white-space:nowrap">violet = AI · blue = human · grey = system</span>
+      </div>
+      <div data-st="2" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="8">
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;box-shadow:0 1px 2px rgba(28,31,28,.05)">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">{{ k.l }}</div>
+            <div style="font:600 32px/40px Inter;font-variant-numeric:tabular-nums;margin-top:8px">{{ k.v }}</div>
+            <div style="font:400 13px Inter;color:#5F635C;margin-top:4px">{{ k.d }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px">
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;box-shadow:0 1px 2px rgba(28,31,28,.05)">
+          <div style="padding:16px 20px;border-bottom:1px solid #E3E1DA;display:flex;align-items:center"><h2 style="margin:0;font:600 20px/28px Fraunces,Georgia,serif">Needs a human</h2><span style="margin-left:auto;font:400 13px Inter;color:#5F635C">Sorted by SLA</span></div>
+          <sc-for list="{{ attention }}" as="a" hint-placeholder-count="4">
+            <button onClick="{{ go.review }}" style="width:100%;text-align:left;border:0;border-bottom:1px solid #F2F1ED;background:#fff;padding:14px 20px;display:grid;grid-template-columns:130px minmax(0,1fr) 100px 90px;gap:12px;align-items:center;font:400 14px Inter">
+              <span style="font:500 12px 'JetBrains Mono',monospace;color:#43473F">{{ a.id }}</span>
+              <span><b style="font-weight:500">{{ a.title }}</b><br><span style="color:#5F635C;font-size:12px">{{ a.why }}</span></span>
+              <span style="font-variant-numeric:tabular-nums;text-align:right">{{ a.val }}</span>
+              <span style="{{ a.slaStyle }}">{{ a.sla }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;box-shadow:0 1px 2px rgba(28,31,28,.05)">
+          <h2 style="margin:0 0 4px;font:600 20px/28px Fraunces,Georgia,serif">Who decided</h2>
+          <div style="font:400 13px Inter;color:#5F635C;margin-bottom:16px">Claims closed today, by decision-maker</div>
+          <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:16px"><div style="width:68%;background:#5F635C"></div><div style="width:21%;background:#6B4E8C"></div><div style="width:11%;background:#2F5D8C"></div></div>
+          <sc-for list="{{ decided }}" as="d" hint-placeholder-count="3"><div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #F2F1ED;font:400 14px Inter"><span style="{{ d.dot }}"></span><span style="flex:1">{{ d.l }}</span><b style="font-weight:600;font-variant-numeric:tabular-nums">{{ d.v }}</b></div></sc-for>
+          <div style="font:400 12px/18px Inter;color:#5F635C;margin-top:12px">System = auto-executed after AI recommendation within tenant limits. Violet = AI recommendation executed after guardrails. Blue = decided by a person.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- CLAIMS LIST -->
+    <sc-if value="{{ is.claims }}">
+      <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:16px">
+        <div><h1 style="margin:0;font:600 32px/40px Fraunces,Georgia,serif">Claims</h1><div style="font:400 14px Inter;color:#5F635C;margin-top:2px">{{ claimCount }} claims · {{ T.name }}</div></div>
+        <div style="flex:1"></div>
+        <button style="height:36px;padding:0 14px;border:1px solid #CDCAC0;background:#fff;border-radius:8px;font:500 14px Inter">Export</button>
+        <button style="height:36px;padding:0 14px;border:0;background:#1F6F4A;color:#fff;border-radius:8px;font:500 14px Inter">New claim</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="8"><button style="{{ f.style }}"><span style="color:#5F635C">{{ f.k }}</span> {{ f.v }} <span style="color:#8B8F87">▾</span></button></sc-for>
+      </div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:auto;box-shadow:0 1px 2px rgba(28,31,28,.05)">
+        <div style="min-width:1480px">
+        <div style="{{ rowHead }}">
+          <span>Claim</span><span>Customer</span><span>Product</span><span>Tenant</span><span>Type</span><span style="text-align:right">Value</span><span>Status</span><span>Risk</span><span>AI confidence</span><span>AI decision</span><span>Assigned</span><span>Created</span><span>SLA</span>
+        </div>
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+          <div onClick="{{ r.onClick }}" style="{{ rowStyle }}">
+            <span style="font:500 12px 'JetBrains Mono',monospace;color:#1F6F4A">{{ r.id }}</span>
+            <span>{{ r.cust }}</span><span>{{ r.prod }}</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="{{ r.tdot }}"></span>{{ r.tn }}</span>
+            <span style="color:#43473F">{{ r.type }}</span>
+            <span style="text-align:right;font-variant-numeric:tabular-nums">{{ r.val }}</span>
+            <span><span style="{{ r.stS }}">{{ r.st }}</span></span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="{{ r.rdot }}"></span>{{ r.risk }}</span>
+            <span style="display:flex;align-items:center;gap:8px"><span style="width:56px;height:6px;border-radius:3px;background:#F0EBF5;overflow:hidden"><span style="{{ r.cbar }}"></span></span><span style="font-variant-numeric:tabular-nums;font-size:13px">{{ r.conf }}</span></span>
+            <span><span style="{{ r.dS }}">{{ r.dec }}</span></span>
+            <span style="color:#43473F">{{ r.who }}</span><span style="color:#5F635C">{{ r.date }}</span><span style="{{ r.slaS }}">{{ r.sla }}</span>
+          </div>
+        </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;padding:12px 16px;font:400 13px Inter;color:#5F635C;border-top:1px solid #E3E1DA"><span>Showing 1–{{ claimCount }} of {{ claimCount }}</span><span style="margin-left:auto;display:flex;gap:6px"><button style="height:28px;padding:0 10px;border:1px solid #E3E1DA;border-radius:6px;background:#fff;color:#8B8F87" disabled>Previous</button><button style="height:28px;padding:0 10px;border:1px solid #E3E1DA;border-radius:6px;background:#fff;color:#8B8F87" disabled>Next</button></span></div>
+      </div>
+    </sc-if>
+
+        <!-- CLAIM FAMILY -->
+    <sc-if value="{{ fam }}">
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;box-shadow:0 1px 2px rgba(28,31,28,.05);margin-bottom:16px">
+        <div style="padding:16px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <div><div style="font:500 12px 'JetBrains Mono',monospace;color:#5F635C">{{ c.id }}</div><div style="font:600 24px/32px Fraunces,Georgia,serif">{{ c.prod }}</div></div>
+          <span style="{{ statB }}">{{ c.status }}</span>
+          <div style="display:flex;gap:28px;margin-left:auto;font:400 13px Inter;flex-wrap:wrap">
+            <div><div style="color:#5F635C;font-size:12px">Claim value</div><b style="font:600 16px Inter;font-variant-numeric:tabular-nums">{{ c.value }}</b></div>
+            <div><div style="color:#5F635C;font-size:12px">Customer</div><b style="font:500 14px Inter">{{ c.cust }}</b></div>
+            <div><div style="color:#5F635C;font-size:12px">Priority</div><b style="font:500 14px Inter">Normal</b></div>
+            <div><div style="color:#5F635C;font-size:12px">Risk</div><span style="{{ riskB }}">{{ c.risk }} · {{ c.riskScore }}</span></div>
+          </div>
+        </div>
+        <div style="padding:10px 20px;border-top:1px solid #F2F1ED;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <sc-for list="{{ pipe }}" as="p" hint-placeholder-count="10"><span style="{{ p.style }}">{{ p.t }}</span></sc-for>
+        </div>
+        <div style="padding:0 20px;border-top:1px solid #E3E1DA;display:flex">
+          <sc-for list="{{ ctabs }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.l }}</button></sc-for>
+        </div>
+      </div>
+
+      <!-- CASE FILE -->
+      <sc-if value="{{ is.claim }}">
+      <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start">
+        <div style="display:grid;gap:16px">
+          <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+            <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Customer</div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;font:400 14px Inter"><span style="color:#5F635C">Name</span><span>{{ c.cust }}</span><span style="color:#5F635C">Email</span><span>{{ c.email }}</span><span style="color:#5F635C">Phone</span><span>{{ c.phone }}</span><span style="color:#5F635C">History</span><span>No prior claims</span></div>
+              <div style="font:400 12px Inter;color:#5F635C;margin-top:12px">PII masked. Reveal requires justification and is audit-logged.</div></div>
+            <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Product &amp; purchase</div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;font:400 14px Inter"><span style="color:#5F635C">Product</span><span>{{ c.prod }}</span><span style="color:#5F635C">Serial</span><span style="font:500 13px 'JetBrains Mono',monospace">{{ c.serial }}</span><span style="color:#5F635C">Purchased</span><span>{{ c.purchase }}</span><span style="color:#5F635C">Price</span><span>{{ c.price }}</span></div></div>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Warranty &amp; claim</div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;font:400 14px Inter"><span style="color:#5F635C">Warranty ends</span><span>{{ c.wend }}</span><span style="color:#5F635C">Claim date</span><span>{{ c.cdate }}</span><span style="color:#5F635C">Type</span><span>{{ c.type }}</span><span style="color:#5F635C">Description</span><span style="line-height:22px">“{{ c.desc }}”</span></div>
+            <div style="font:400 12px Inter;color:#5F635C;margin-top:12px">Customer-written text · original evidence</div></div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="display:flex;align-items:center;margin-bottom:12px"><div style="font:600 16px Inter">Uploaded evidence</div><button onClick="{{ go.evidence }}" style="margin-left:auto;border:0;background:none;color:#1F6F4A;font:500 13px Inter">Open viewer →</button></div>
+            <div data-st="2" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+              <sc-for list="{{ evItems }}" as="e" hint-placeholder-count="4"><div style="border:1px solid #E3E1DA;border-radius:8px;overflow:hidden"><div style="height:90px;background:repeating-linear-gradient(135deg,#F2F1ED 0 8px,#FAFAF8 8px 16px);display:grid;place-items:center;font:400 11px 'JetBrains Mono',monospace;color:#8B8F87">{{ e.kind }}</div><div style="padding:8px 10px;font:400 12px/16px Inter"><b style="font-weight:500">{{ e.name }}</b><br><span style="color:#5F635C">{{ e.sub }}</span></div></div></sc-for>
+            </div></div>
+        </div>
+        <div style="display:grid;gap:16px;position:sticky;top:0">
+          <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;overflow:hidden">
+            <div style="background:#F0EBF5;padding:10px 16px;display:flex;align-items:center;gap:8px;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#563B75"><span style="background:#6B4E8C;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">AI</span>Recommendation · not final</div>
+            <div style="padding:16px 20px">
+              <div style="{{ recBig }}">{{ c.rec }}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+                <div><div style="font:400 12px Inter;color:#5F635C">Confidence</div><div style="font:600 20px Inter;font-variant-numeric:tabular-nums">{{ c.conf }}%</div><div style="height:8px;border-radius:4px;background:#F0EBF5;margin-top:4px"><div style="{{ confW }}"></div></div></div>
+                <div><div style="font:400 12px Inter;color:#5F635C">Risk</div><div style="font:600 20px Inter">{{ c.risk }}</div><div style="height:8px;border-radius:4px;background:#F2F1ED;margin-top:4px"><div style="{{ riskW }}"></div></div></div>
+              </div>
+              <div style="font:400 13px Inter;margin-top:12px;color:#43473F">Policy match: <b style="font-weight:600">{{ c.match }}</b> · {{ c.pol }}</div>
+              <div style="margin-top:12px;display:grid;gap:8px">
+                <sc-for list="{{ whyRows }}" as="w" hint-placeholder-count="4"><div style="display:flex;gap:10px;font:400 13px/20px Inter"><span style="{{ w.ms }}">{{ w.m }}</span>{{ w.t }}</div></sc-for>
+              </div>
+            </div>
+            <div style="{{ bannerStyle }};border-radius:0;border-width:1px 0 0 0">{{ c.banner }}</div>
+          </div>
+          <button onClick="{{ go.decision }}" style="height:40px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Open AI decision workspace</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- AI DECISION WORKSPACE -->
+      <sc-if value="{{ is.decision }}">
+      <div style="{{ bannerStyle }};margin-bottom:16px"><span style="{{ bannerTagS }}">{{ bannerTag }}</span><span>{{ c.banner }}</span></div>
+      <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start">
+        <div style="display:grid;gap:16px">
+          <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;overflow:hidden">
+            <div style="background:#F0EBF5;padding:10px 20px;display:flex;align-items:center;gap:8px;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#563B75"><span style="background:#6B4E8C;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">AI</span>AI decision<span style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400">Decision Agent · decision-model 2026.09</span></div>
+            <div style="padding:20px;display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:20px;align-items:end">
+              <div><div style="font:400 12px Inter;color:#5F635C">Recommendation</div><div style="{{ recBig }}">{{ c.rec }}</div></div>
+              <div><div style="font:400 12px Inter;color:#5F635C">Confidence</div><div style="font:600 24px Inter;font-variant-numeric:tabular-nums">{{ c.conf }}%</div><div style="height:8px;border-radius:4px;background:#F0EBF5;margin-top:4px"><div style="{{ confW }}"></div></div></div>
+              <div><div style="font:400 12px Inter;color:#5F635C">Risk</div><div style="font:600 24px Inter">{{ c.risk }}</div><div style="height:8px;border-radius:4px;background:#F2F1ED;margin-top:4px"><div style="{{ riskW }}"></div></div></div>
+              <div><div style="font:400 12px Inter;color:#5F635C">Policy match</div><div style="font:600 24px Inter">{{ c.match }}</div></div>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Why — decision factors</div>
+            <div style="display:grid;gap:12px">
+              <sc-for list="{{ whyRows }}" as="w" hint-placeholder-count="4"><div style="display:flex;gap:12px;font:400 14px/22px Inter;align-items:flex-start"><span style="{{ w.ms }}">{{ w.m }}</span>{{ w.t }}</div></sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Evidence references</div>
+            <sc-for list="{{ finds }}" as="f" hint-placeholder-count="3"><div style="display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid #F2F1ED;font:400 14px Inter"><span style="{{ f.style }};width:84px;justify-content:center">{{ f.tag }}</span><span style="flex:1">{{ f.t }}</span><button onClick="{{ go.evidence }}" style="border:1px solid #E3E1DA;background:#fff;border-radius:4px;padding:2px 8px;font:500 12px 'JetBrains Mono',monospace;color:#1F6F4A">{{ f.ref }}</button></div></sc-for>
+          </div>
+        </div>
+        <div style="display:grid;gap:16px">
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Policy evidence</div>
+            <div style="border:1px solid #D9CDE6;background:#F0EBF5;border-radius:6px;padding:12px;font:400 13px/20px Inter"><b style="font-weight:600">{{ c.pol }}</b><div style="color:#43473F;margin-top:4px">Retrieved from tenant knowledge base · relevance 0.94 · applicable to claim date 02 Oct 2026</div>
+            <div style="margin-top:8px;display:flex;gap:6px"><span style="{{ polChip }}">Effective 01 Jul 2026</span><span style="{{ polChip }}">{{ T.name }} only</span></div></div>
+            <button onClick="{{ go.policy }}" style="margin-top:12px;border:0;background:none;color:#1F6F4A;font:500 13px Inter;padding:0">View policy versions →</button>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Action</div>
+            <div style="font:500 15px/22px Inter;margin-bottom:12px">{{ c.action }}</div>
+            <sc-if value="{{ c.human }}" hint-placeholder-val="{{ false }}"><button onClick="{{ go.review }}" style="width:100%;height:40px;border:0;border-radius:8px;background:#2F5D8C;color:#fff;font:500 14px Inter">Open in Human Review</button></sc-if>
+            <sc-if value="{{ notHuman }}"><div style="display:flex;gap:8px;align-items:center;font:400 13px Inter;color:#43473F"><span style="{{ sysB }}">SYSTEM</span>Executed after guardrails passed · 02 Oct 2026 09:41</div></sc-if>
+          </div>
+          <div style="background:#FAFAF8;border:1px solid #E3E1DA;border-radius:8px;padding:16px;font:400 13px/20px Inter;color:#43473F">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Model information</div>
+            <div style="display:grid;grid-template-columns:100px 1fr;gap:4px"><span style="color:#5F635C">Model</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">decision-model-2026.09</span><span style="color:#5F635C">Provider</span><span>Approved · LK-region endpoint</span><span style="color:#5F635C">Prompt</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">decide.v14 · temp 0.0</span><span style="color:#5F635C">Data use</span><span>No training on tenant data</span></div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- EVIDENCE VIEWER -->
+      <sc-if value="{{ is.evidence }}">
+      <div data-st="1" style="display:grid;grid-template-columns:260px minmax(0,1fr) 340px;gap:16px;align-items:start">
+        <div style="display:grid;gap:8px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">Submitted evidence</div>
+          <sc-for list="{{ evItems }}" as="e" hint-placeholder-count="4"><button onClick="{{ e.onClick }}" style="{{ e.style }}"><span style="{{ e.dot }}"></span><span><b style="font-weight:500">{{ e.name }}</b><br><span style="color:#5F635C;font-size:12px">{{ e.kind }} · {{ e.sub }}</span></span></button></sc-for>
+        </div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:hidden">
+          <div style="padding:10px 16px;border-bottom:1px solid #E3E1DA;display:flex;gap:8px;align-items:center;font:400 13px Inter"><span style="{{ sysB }}">ORIGINAL</span>Unaltered upload · hash verified<span style="margin-left:auto;display:flex;gap:6px"><span style="{{ aiB }}">AI-extracted overlay</span><span style="{{ aiB }}">Annotations 3</span></span></div>
+          <div style="height:440px;position:relative;background:repeating-linear-gradient(135deg,#F2F1ED 0 12px,#FAFAF8 12px 24px);display:grid;place-items:center;font:400 12px 'JetBrains Mono',monospace;color:#8B8F87">[ document / photo preview ]
+            <div style="position:absolute;left:12%;top:14%;width:34%;height:9%;border:2px dashed #6B4E8C;background:rgba(107,78,140,.08)"><span style="position:absolute;top:-10px;left:-10px;background:#6B4E8C;color:#fff;border-radius:50%;width:20px;height:20px;font:600 11px/20px Inter;text-align:center">1</span></div>
+            <div style="position:absolute;left:12%;top:30%;width:42%;height:7%;border:2px dashed #6B4E8C;background:rgba(107,78,140,.08)"><span style="position:absolute;top:-10px;left:-10px;background:#6B4E8C;color:#fff;border-radius:50%;width:20px;height:20px;font:600 11px/20px Inter;text-align:center">2</span></div>
+            <div style="position:absolute;right:14%;bottom:18%;width:22%;height:16%;border:2px solid #A03428;background:rgba(160,52,40,.08)"><span style="position:absolute;top:-10px;left:-10px;background:#A03428;color:#fff;border-radius:50%;width:20px;height:20px;font:600 11px/20px Inter;text-align:center">3</span></div>
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid #E3E1DA;font:400 12px Inter;color:#5F635C;display:flex;gap:16px"><span>Dashed violet = AI-detected region</span><span>Solid red = conflicts with other evidence</span></div>
+        </div>
+        <div style="display:grid;gap:16px">
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span style="{{ aiB }}">AI-EXTRACTED</span><span style="font:400 12px Inter;color:#5F635C">OCR · verify before relying</span></div>
+            <sc-for list="{{ ocr }}" as="o" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:90px 1fr 40px;gap:8px;padding:6px 0;border-top:1px solid #F2F1ED;font:400 13px Inter"><span style="color:#5F635C">{{ o.f }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ o.v }}</span><span style="color:#563B75;font-size:12px;text-align:right">{{ o.c }}</span></div></sc-for></div>
+          <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;padding:16px"><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span style="{{ aiB }}">AI INTERPRETATION</span></div>
+            <sc-for list="{{ finds }}" as="f" hint-placeholder-count="3"><div style="padding:8px 0;border-top:1px solid #F0EBF5;font:400 13px/18px Inter"><span style="{{ f.style }}">{{ f.tag }}</span><div style="margin-top:4px">{{ f.t }}</div></div></sc-for></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- DECISION TRACE -->
+      <sc-if value="{{ is.trace }}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div><div style="font:600 20px/28px Fraunces,Georgia,serif">AI execution timeline</div><div style="font:400 13px Inter;color:#5F635C">Trace <span style="font-family:'JetBrains Mono',monospace">TRC-{{ c.serial }}</span> · every stage is recorded and immutable</div></div>
+        <button onClick="{{ techToggle }}" style="margin-left:auto;height:32px;padding:0 12px;border:1px solid #CDCAC0;border-radius:6px;background:#fff;font:500 13px Inter">View: {{ techLabel }}</button>
+      </div>
+      <div style="display:grid;gap:0">
+        <sc-for list="{{ stRows }}" as="r" hint-placeholder-count="8">
+          <div style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px">
+            <div style="display:flex;flex-direction:column;align-items:center"><span style="{{ r.dot }}"></span><span style="flex:1;width:2px;background:#E3E1DA;margin:2px 0"></span></div>
+            <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:14px 16px;margin-bottom:12px;display:grid;grid-template-columns:200px minmax(0,1fr) 110px;gap:16px;align-items:start">
+              <div><div style="font:600 14px Inter">{{ r.n }}. {{ r.name }}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><span style="{{ r.aS }}">{{ r.actor }}</span><span style="{{ r.sS }}">{{ r.sT }}</span></div></div>
+              <div style="font:400 14px/20px Inter">{{ r.res }}
+                <sc-if value="{{ r.hasRetry }}"><div style="margin-top:6px;font-size:12px;color:#7A520C">↻ {{ r.retry }}</div></sc-if>
+                <sc-if value="{{ techOn }}"><div style="margin-top:8px;padding:8px;background:#FAFAF8;border:1px solid #E3E1DA;border-radius:6px;font:400 12px/18px 'JetBrains Mono',monospace;color:#43473F">tools: {{ r.tools }}<br>knowledge: {{ r.know }}</div></sc-if></div>
+              <div style="text-align:right;font:500 13px 'JetBrains Mono',monospace;color:#5F635C">{{ r.dur }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+    </sc-if>
+
+    <!-- HUMAN REVIEW -->
+    <sc-if value="{{ is.review }}">
+      <div style="display:flex;align-items:flex-end;margin-bottom:16px"><div><h1 style="margin:0;font:600 32px/40px Fraunces,Georgia,serif">Human review</h1><div style="font:400 14px Inter;color:#5F635C;margin-top:2px">Cases AI could not safely decide on its own · {{ T.name }}</div></div></div>
+      <div data-st="1" style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start">
+        <div style="display:grid;gap:8px">
+          <sc-for list="{{ qRows }}" as="x" hint-placeholder-count="3"><button onClick="{{ x.onClick }}" style="{{ x.style }}"><span style="font:500 12px 'JetBrains Mono',monospace;color:#244B73">{{ x.id }}</span><br><b style="font-weight:500">{{ x.prod }}</b><br><span style="color:#5F635C">{{ x.val }} · {{ x.why }}</span><br><span style="color:#7A520C;font-size:12px">SLA {{ x.sla }}</span></button></sc-for>
+        </div>
+        <div style="display:grid;gap:16px">
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:16px 20px;border-radius:8px;border:1px solid #C5D6E8;background:#E8EFF6;color:#244B73">
+            <span style="{{ huB }}">HUMAN</span>
+            <div style="flex:1"><div style="font:600 16px Inter">Human review required</div>
+              <div style="font:400 13px/20px Inter;margin-top:4px">Reason: <b style="font-weight:600">{{ rvReasons }}</b>. You are the control point — the AI recommendation below is advisory.</div></div>
+            <div style="font:500 13px Inter;white-space:nowrap">SLA {{ rv.sla }}</div>
+          </div>
+          <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+            <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;padding:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="{{ aiB }}">AI RECOMMENDATION</span></div>
+              <div style="font:600 28px/36px Fraunces,Georgia,serif;color:#563B75">{{ qi.rec }}</div><div style="font:400 13px Inter;color:#5F635C">Confidence {{ qi.conf }}% · {{ qi.pol }}</div></div>
+            <div style="background:#fff;border:1px solid #C5D6E8;border-radius:8px;padding:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="{{ huB }}">YOUR DECISION</span></div>
+              <sc-if value="{{ notOvd }}"><div style="font:600 28px/36px Fraunces,Georgia,serif;color:#8B8F87">Pending</div><div style="font:400 13px Inter;color:#5F635C">Approve, reject, request information or override.</div></sc-if>
+              <sc-if value="{{ ovd }}"><div style="font:600 28px/36px Fraunces,Georgia,serif;color:#244B73">{{ oppRec }}</div><div style="font:400 13px Inter;color:#244B73">Overrides AI · reason recorded · AUD-77120</div></sc-if></div>
+          </div>
+          <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+            <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Risk signals &amp; evidence</div>
+              <sc-for list="{{ rvSig }}" as="s" hint-placeholder-count="3"><div style="padding:8px 0;border-top:1px solid #F2F1ED;font:400 13px/18px Inter">{{ s.t }}</div></sc-for></div>
+            <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Decision history</div>
+              <div style="font:400 13px/20px Inter;display:grid;gap:8px"><div><span style="{{ aiB }}">AI</span> Recommended {{ qi.rec }} · {{ qi.conf }}%</div><div><span style="{{ sysB }}">SYSTEM</span> Guardrails blocked auto-action → escalated</div><sc-if value="{{ ovd }}"><div><span style="{{ huB }}">HUMAN</span> R. Fernando overrode AI → {{ oppRec }}</div></sc-if></div></div>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button onClick="{{ okAct }}" style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Approve</button>
+            <button style="height:36px;padding:0 16px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;color:#A03428;font:500 14px Inter">Reject</button>
+            <button style="height:36px;padding:0 16px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Request more information</button>
+            <span style="flex:1"></span>
+            <button onClick="{{ openOv }}" style="height:36px;padding:0 16px;border:1px solid #2F5D8C;border-radius:8px;background:#E8EFF6;color:#244B73;font:500 14px Inter">Override AI recommendation…</button>
+          </div>
+        </div>
+      </div>
+      <sc-if value="{{ ovOpen }}"><div onClick="{{ closeOv }}" style="position:fixed;inset:0;background:rgba(28,31,28,.4);z-index:60;display:grid;place-items:center">
+        <div onClick="{{ stop }}" style="width:520px;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(28,31,28,.25);padding:24px">
+          <div style="font:600 20px/28px Fraunces,Georgia,serif">Override AI recommendation</div>
+          <div style="font:400 14px/20px Inter;color:#43473F;margin:8px 0 16px">AI recommends <b>{{ qi.rec }}</b>. You are choosing <b>{{ oppRec }}</b>. This is recorded as a human decision with your reason, linked to the decision trace.</div>
+          <label style="font:500 13px Inter">Reason (required, min. 20 characters)</label>
+          <textarea value="{{ ovReason }}" onInput="{{ setOv }}" rows="4" placeholder="e.g. Technician report confirms factory seal defect — §6.4 exception applies." style="width:100%;margin-top:6px;border:1px solid #CDCAC0;border-radius:4px;padding:10px;font:400 14px Inter;resize:vertical"></textarea>
+          <div style="font:400 12px Inter;color:#5F635C;margin-top:8px">Recorded: who, when, tenant, claim, AI output, policy version, your reason.</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px"><button onClick="{{ closeOv }}" style="height:36px;padding:0 14px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Cancel</button><button onClick="{{ confirmOv }}" style="{{ ovBtn }}">Confirm override</button></div>
+        </div></div></sc-if>
+    </sc-if>
+
+    <sc-if value="{{ toastOn }}"><div onClick="{{ hideToast }}" style="position:fixed;right:24px;bottom:24px;background:#1C1F1C;color:#fff;border-radius:8px;padding:12px 16px;font:400 14px Inter;z-index:70;box-shadow:0 4px 12px rgba(28,31,28,.3)">{{ toast }}</div></sc-if>
+        <!-- KNOWLEDGE BASE -->
+    <sc-if value="{{ is.kb }}">
+      <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:16px"><div><h1 style="margin:0;font:600 32px/40px Fraunces,Georgia,serif">Knowledge base</h1><div style="font:400 14px Inter;color:#5F635C;margin-top:2px">Authorised, versioned knowledge for {{ T.name }} only. Agents cannot retrieve outside this tenant.</div></div><span style="flex:1"></span><button style="height:36px;padding:0 14px;border:0;background:#1F6F4A;color:#fff;border-radius:8px;font:500 14px Inter">Upload document</button></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><span style="{{ chipOn }}">All</span><span style="{{ chipOff }}">Warranty policies</span><span style="{{ chipOff }}">Product manuals</span><span style="{{ chipOff }}">Exclusions</span><span style="{{ chipOff }}">Repair &amp; replacement</span><span style="{{ chipOff }}">Regional</span><span style="{{ chipOff }}">Pricing</span></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:auto;margin-bottom:16px"><div style="min-width:1150px">
+        <div style="{{ docHead }}"><span>Document</span><span>Type</span><span>Product</span><span>Region</span><span>Ver.</span><span>Effective</span><span>Expiry</span><span>Status</span><span>Access</span></div>
+        <sc-for list="{{ docs }}" as="d" hint-placeholder-count="5"><div style="{{ docRow }}"><span><b style="font-weight:500">{{ d.n }}</b><br><span style="color:#5F635C;font-size:12px">Tenant: {{ d.tn }}</span></span><span>{{ d.t }}</span><span>{{ d.p }}</span><span>{{ d.r }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ d.v }}</span><span>{{ d.e }}</span><span>{{ d.x }}</span><span><span style="{{ d.stS }}">{{ d.st }}</span></span><span style="color:#43473F">{{ d.a }}</span></div></sc-for>
+      </div></div>
+      <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;overflow:hidden">
+        <div style="background:#F0EBF5;padding:10px 20px;display:flex;gap:8px;align-items:center;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#563B75"><span style="background:#6B4E8C;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">AI</span>Retrieval inspector</div>
+        <div style="padding:16px 20px"><div style="font:400 13px Inter;color:#5F635C">Query used by Policy Retrieval agent</div>
+          <div style="font:500 16px Inter;margin:4px 0 12px">“Is accidental water damage covered for this product?”</div>
+          <sc-for list="{{ ret }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:minmax(0,1fr) 100px 110px 190px;gap:16px;align-items:center;padding:10px 0;border-top:1px solid #F0EBF5;font:400 13px Inter"><b style="font-weight:500">{{ r.t }}</b><span style="color:#5F635C">{{ r.k }}</span><span style="display:flex;gap:6px;align-items:center"><span style="width:50px;height:6px;border-radius:3px;background:#F0EBF5;overflow:hidden"><span style="{{ r.w }}"></span></span>{{ r.rel }}</span><span style="color:#5F635C">{{ r.eff }} · {{ T.name }}</span></div></sc-for>
+          <div style="font:400 12px Inter;color:#5F635C;margin-top:8px">Only documents effective on the claim date and visible to this tenant are eligible.</div></div>
+      </div>
+    </sc-if>
+
+    <!-- POLICY VERSIONS -->
+    <sc-if value="{{ is.policy }}">
+      <h1 style="margin:0;font:600 32px/40px Fraunces,Georgia,serif">Product Warranty — {{ T.name }}</h1>
+      <div style="font:400 14px Inter;color:#5F635C;margin:2px 0 16px">The AI applies the version in force on the claim date, never the latest by default.</div>
+      <div data-st="1" style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start">
+        <div style="display:grid;gap:8px"><sc-for list="{{ pvs }}" as="p" hint-placeholder-count="3"><button onClick="{{ p.onClick }}" style="{{ p.style }}"><span style="display:flex;justify-content:space-between"><b style="font:600 15px Inter">Policy {{ p.l }}</b><span style="{{ p.stS }}">{{ p.st }}</span></span><span style="color:#5F635C">{{ p.d }}</span></button></sc-for></div>
+        <div style="display:grid;gap:16px">
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Applicability timeline</div>
+            <div style="position:relative;height:56px;background:#FAFAF8;border:1px solid #E3E1DA;border-radius:6px;display:flex;overflow:hidden"><div style="flex:6;background:#F2F1ED;padding:8px 12px;font:500 12px Inter;color:#43473F">v1.0 · Jan – Jun 2026<br><span style="font-weight:400;color:#5F635C">claims dated here use v1.0</span></div><div style="flex:6;background:#E6F1EA;border-left:2px solid #1F6F4A;padding:8px 12px;font:500 12px Inter;color:#175A3B">v2.1 · from 01 Jul 2026<br><span style="font-weight:400">claims dated here use v2.1</span></div><div style="flex:3;background:#fff;border-left:2px dashed #CDCAC0;padding:8px 12px;font:500 12px Inter;color:#5F635C">v3.0 draft · Nov</div></div>
+          </div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px">
+            <div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:12px">Key sections in selected version</div>
+            <sc-for list="{{ sec }}" as="x" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:50px 170px 1fr;gap:12px;padding:10px 0;border-top:1px solid #F2F1ED;font:400 14px/20px Inter"><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ x.a }}</span><b style="font-weight:500">{{ x.b }}</b><span>{{ x.c }}</span></div></sc-for>
+          </div>
+          <div style="display:flex;gap:12px;padding:12px 16px;border-radius:8px;border:1px solid #D9CDE6;background:#F0EBF5;color:#563B75;font:400 13px/20px Inter"><span style="{{ aiB }}">AI</span>Retrieval filters on claim date. A claim dated 20 Jun 2026 is assessed under v1.0 even if reviewed today.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- AI OPERATIONS -->
+    <sc-if value="{{ is.aiops }}">
+      <div style="display:flex;align-items:flex-end;margin-bottom:16px"><div><h1 style="margin:0;font:600 32px/40px Fraunces,Georgia,serif">AI operations</h1><div style="font:400 14px Inter;color:#5F635C;margin-top:2px">Last 7 days · {{ T.name }} · Supervisors &amp; platform admins</div></div></div>
+      <div data-st="2" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px">
+        <sc-for list="{{ aiv }}" as="k" hint-placeholder-count="12"><div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:14px 16px"><div style="font:500 11px/14px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;min-height:28px">{{ k.l }}</div><div style="font:600 24px/32px Inter;font-variant-numeric:tabular-nums">{{ k.v }}</div><div style="font:400 12px Inter;color:#5F635C">{{ k.d }}</div></div></sc-for>
+      </div>
+      <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px">
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter">AI execution volume</div><div style="font:400 12px Inter;color:#5F635C;margin-bottom:12px">Executions per hour, today</div><div style="height:140px;display:flex;align-items:flex-end;gap:3px">
+          <sc-for list="{{ vol }}" as="b" hint-placeholder-count="24"><div style="{{ b.style }}"></div></sc-for></div></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter">Human intervention trend</div><div style="font:400 12px Inter;color:#5F635C;margin-bottom:12px">% of claims reviewed, 12 weeks</div><div style="height:140px;display:flex;align-items:flex-end;gap:4px">
+          <sc-for list="{{ trend }}" as="b" hint-placeholder-count="12"><div style="{{ b.style }}"></div></sc-for></div></div>
+      </div>
+      <div data-st="1" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:hidden"><div style="padding:14px 20px;font:600 16px Inter;border-bottom:1px solid #E3E1DA">Agent activity</div>
+          <sc-for list="{{ agents }}" as="a" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:minmax(0,1.3fr) 100px 70px 60px 60px;gap:8px;padding:10px 20px;border-bottom:1px solid #F2F1ED;font:400 13px Inter;align-items:center"><b style="font-weight:500">{{ a.n }}</b><span><span style="{{ a.stS }}">{{ a.st }}</span></span><span style="text-align:right">{{ a.r }}</span><span style="text-align:right">{{ a.l }}</span><span style="text-align:right">{{ a.e }}</span></div></sc-for></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:hidden"><div style="padding:14px 20px;font:600 16px Inter;border-bottom:1px solid #E3E1DA">Model performance</div>
+          <sc-for list="{{ models }}" as="m" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:minmax(0,1.4fr) 80px 80px 60px 80px;gap:8px;padding:10px 20px;border-bottom:1px solid #F2F1ED;font:400 13px Inter;align-items:center"><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ m.n }}</span><span style="color:#5F635C">{{ m.u }}</span><span>{{ m.a }}</span><span>{{ m.l }}</span><span style="text-align:right">{{ m.c }}</span></div></sc-for>
+          <div style="padding:16px 20px"><div style="font:400 12px Inter;color:#5F635C;margin-bottom:6px">Decision distribution</div><div style="display:flex;height:14px;border-radius:7px;overflow:hidden"><div style="width:66%;background:#3F7D58"></div><div style="width:21%;background:#2F5D8C"></div><div style="width:13%;background:#A03428"></div></div><div style="display:flex;gap:16px;font:400 12px Inter;color:#43473F;margin-top:6px"><span>Auto-approve 66%</span><span>Escalated 21%</span><span>Rejected 13%</span></div></div></div>
+      </div>
+    </sc-if>
+
+    <!-- ADMINISTRATION -->
+    <sc-if value="{{ is.admin }}">
+      <h1 style="margin:0 0 16px;font:600 32px/40px Fraunces,Georgia,serif">Administration</h1>
+      <div style="border-bottom:1px solid #E3E1DA;display:flex;margin-bottom:16px"><sc-for list="{{ admTabs }}" as="t" hint-placeholder-count="2"><button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.l }}</button></sc-for></div>
+      <sc-if value="{{ admTenant }}">
+      <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Tenant identity &amp; branding</div>
+          <div style="display:flex;gap:16px;align-items:center"><div style="{{ tenantTile }}">{{ T.k }}</div><div style="font:400 14px/22px Inter"><b style="font-weight:600">{{ T.name }}</b><br>Production · Sri Lanka · tenant id <span style="font-family:'JetBrains Mono',monospace;font-size:12px">tn_{{ T.k }}_prod</span></div></div>
+          <div style="font:400 12px Inter;color:#5F635C;margin-top:12px">Customer-facing logo and accent apply to customer and partner portals only. The staff console keeps WarrantyOS chrome.</div></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">AI configuration</div>
+          <div style="display:grid;grid-template-columns:200px 1fr;gap:10px;font:400 14px Inter"><span style="color:#5F635C">Auto-approval limit</span><b style="font-weight:600">{{ lim }}</b><span style="color:#5F635C">Minimum confidence</span><b style="font-weight:600">{{ minConf }}</b><span style="color:#5F635C">Always escalate</span><span>Suspected fraud · policy ambiguity</span><span style="color:#5F635C">Model</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">decision-model-2026.09</span></div></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Users &amp; roles</div>
+          <div style="font:400 14px/28px Inter">R. Fernando — Supervisor<br>M. Dias — Claims agent<br>S. Karunaratne — Tenant administrator<br>Colombo Service Hub — Service partner</div></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:600 16px Inter;margin-bottom:12px">Service network</div><div style="font:400 14px/22px Inter">{{ T.meta }}<br><span style="color:#5F635C">Regions: Western, Central, Southern</span></div></div>
+      </div></sc-if>
+      <sc-if value="{{ admSec }}">
+        <div data-st="1" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px"><sc-for list="{{ ctrl }}" as="c" hint-placeholder-count="6"><div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:600 14px Inter;margin-bottom:4px">{{ c.k }}</div><div style="font:400 13px/18px Inter;color:#43473F">{{ c.v }}</div></div></sc-for></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:auto"><div style="min-width:1050px">
+          <div style="display:grid;grid-template-columns:110px 120px 120px 150px 100px 110px 190px 80px;gap:12px;padding:12px 16px;background:#FAFAF8;border-bottom:1px solid #E3E1DA;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C"><span>When</span><span>Who</span><span>Action</span><span>Claim / object</span><span>AI action</span><span>Human action</span><span>Model</span><span>Policy</span></div>
+          <sc-for list="{{ audit }}" as="a" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:110px 120px 120px 150px 100px 110px 190px 80px;gap:12px;padding:12px 16px;border-bottom:1px solid #F2F1ED;font:400 13px Inter"><span>{{ a.w }}</span><span>{{ a.who }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ a.act }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ a.cl }}</span><span>{{ a.ai }}</span><span>{{ a.hu }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ a.mo }}</span><span>{{ a.pv }}</span></div></sc-for></div></div>
+      </sc-if>
+    </sc-if>
+    <span data-end="console"></span>
+    </div>
+    </main>
+  </div>
+
+  <sc-if value="{{ menuCmd }}"><div onClick="{{ closeMenu }}" style="position:absolute;inset:0;background:rgba(28,31,28,.4);z-index:50;display:flex;justify-content:center;padding-top:100px">
+    <div onClick="{{ stop }}" style="width:560px;height:fit-content;background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(28,31,28,.2);overflow:hidden">
+      <input value="{{ cmdQ }}" onInput="{{ setCmd }}" placeholder="Jump to a screen, claim or policy…" autofocus style="width:100%;height:52px;border:0;border-bottom:1px solid #E3E1DA;padding:0 20px;font:400 16px Inter;outline:none">
+      <div style="max-height:340px;overflow:auto;padding:8px">
+        <sc-for list="{{ cmdItems }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.onClick }}" style="width:100%;display:flex;gap:12px;text-align:left;border:0;background:#fff;padding:10px 12px;border-radius:6px;font:400 14px Inter" onMouseOver="">{{ c.label }}<span style="margin-left:auto;color:#8B8F87;font-size:12px">{{ c.grp }}</span></button></sc-for>
+      </div>
+    </div>
+  </div></sc-if>
+  </sc-if>
+  <!-- ============ /CONSOLE ============ -->
+
+  <!-- FOUNDATIONS -->
+  <sc-if value="{{ is.foundations }}"><div style="flex:1;min-width:0;overflow:auto;padding:32px"><div style="max-width:1200px;margin:0 auto;display:grid;gap:32px">
+    <div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">WarrantyOS design system · 01</div><h1 style="margin:4px 0 8px;font:600 40px/48px Fraunces,Georgia,serif">Foundations</h1>
+      <p style="margin:0;max-width:760px;font:400 16px/24px Inter;color:#43473F">Warm neutrals, one green for action, and three actor inks. <b>Violet = AI recommends</b>, <b>blue = a person decides</b>, <b>grey = the system executes</b>. Borders do the structural work; shadows are a hint. Built on the Ledger foundation (Fraunces + Inter, 8-step spacing).</p></div>
+    <sc-for list="{{ colorGroups }}" as="g" hint-placeholder-count="3"><div><h2 style="margin:0 0 12px;font:600 20px/28px Fraunces,Georgia,serif">{{ g.g }}</h2>
+      <div data-st="2" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px"><sc-for list="{{ g.sw }}" as="c" hint-placeholder-count="8"><div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:10px"><div style="{{ c.bg }}"></div><div style="font:500 13px Inter;margin-top:8px">{{ c.n }}</div><div style="font:400 12px 'JetBrains Mono',monospace;color:#5F635C">{{ c.h }}</div><div style="font:400 12px Inter;color:#5F635C">{{ c.u }}</div></div></sc-for></div></div></sc-for>
+    <div><h2 style="margin:0 0 12px;font:600 20px/28px Fraunces,Georgia,serif">Typography</h2><div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px">
+      <sc-for list="{{ typeRows }}" as="t" hint-placeholder-count="9"><div style="display:grid;grid-template-columns:140px 240px minmax(0,1fr);gap:16px;padding:14px 20px;border-bottom:1px solid #F2F1ED;align-items:center"><b style="font:500 13px Inter">{{ t.n }}</b><span style="font:400 12px 'JetBrains Mono',monospace;color:#5F635C">{{ t.m }}</span><span style="{{ t.st }}">{{ t.x }}</span></div></sc-for></div></div>
+    <div data-st="1" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Spacing (px)</h3><sc-for list="{{ space }}" as="p" hint-placeholder-count="8"><div style="display:flex;gap:12px;align-items:center;margin-bottom:6px;font:400 12px 'JetBrains Mono',monospace"><span style="width:24px">{{ p.n }}</span><span style="{{ p.st }}"></span></div></sc-for></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Radius</h3><sc-for list="{{ radii }}" as="r" hint-placeholder-count="4"><div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;font:400 12px Inter"><span style="{{ r.st }}"></span>{{ r.n }}</div></sc-for></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;background:#FAFAF8"><h3 style="margin:0 0 12px;font:600 16px Inter">Elevation</h3><sc-for list="{{ elev }}" as="e" hint-placeholder-count="3"><div style="margin-bottom:14px"><div style="{{ e.st }}"></div><div style="font:400 12px Inter;margin-top:4px"><b>{{ e.n }}</b> · {{ e.u }}</div></div></sc-for></div>
+    </div>
+    <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;display:grid;gap:10px"><sc-for list="{{ toks }}" as="t" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:140px 1fr;gap:16px;font:400 14px/20px Inter"><b style="font-weight:600">{{ t.k }}</b><span>{{ t.v }}</span></div></sc-for></div>
+  </div></div></sc-if>
+
+  <!-- COMPONENTS -->
+  <sc-if value="{{ is.components }}"><div style="flex:1;min-width:0;overflow:auto;padding:32px"><div style="max-width:1200px;margin:0 auto;display:grid;gap:24px">
+    <div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">WarrantyOS design system · 02</div><h1 style="margin:4px 0 0;font:600 40px/48px Fraunces,Georgia,serif">Components</h1></div>
+    <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Buttons</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Approve</button>
+        <button style="height:36px;padding:0 16px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Secondary</button>
+        <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:#43473F;font:500 14px Inter">Ghost</button>
+        <button style="height:36px;padding:0 16px;border:1px solid #E8C2BB;border-radius:8px;background:#F8E9E6;color:#8A2B20;font:500 14px Inter">Reject</button>
+        <button style="height:36px;padding:0 16px;border:1px solid #2F5D8C;border-radius:8px;background:#E8EFF6;color:#244B73;font:500 14px Inter">Override…</button>
+        <button disabled style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter;opacity:.4;cursor:not-allowed">Disabled</button>
+        <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter;opacity:.8">Saving…</button></div>
+        <div style="font:400 12px/18px Inter;color:#5F635C;margin-top:12px">One primary per view. Human-decision actions (override, escalate) use the blue treatment.</div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Inputs</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font:500 13px Inter">
+        <label>Claim ID<input value="CLM-ABC-24-08172" style="width:100%;margin-top:4px;height:36px;border:1px solid #CDCAC0;border-radius:4px;padding:0 10px;font:400 14px 'JetBrains Mono',monospace"></label>
+        <label>Serial number<input value="AP7-2204" style="width:100%;margin-top:4px;height:36px;border:1px solid #A03428;border-radius:4px;padding:0 10px;font:400 14px Inter"><span style="color:#A03428;font-weight:400;font-size:12px">Serial must have 15 characters</span></label>
+        <label>Search<input placeholder="Search claims" style="width:100%;margin-top:4px;height:36px;border:1px solid #CDCAC0;border-radius:4px;padding:0 10px;font:400 14px Inter"></label>
+        <label>Purchase date<input type="date" style="width:100%;margin-top:4px;height:36px;border:1px solid #CDCAC0;border-radius:4px;padding:0 10px;font:400 14px Inter"></label>
+        <label>Product (combobox)<select style="width:100%;margin-top:4px;height:36px;border:1px solid #CDCAC0;border-radius:4px;padding:0 6px;font:400 14px Inter;background:#fff"><option>AquaPure W7 Washer</option><option>CoolMax 420L Fridge</option></select></label>
+        <label>Read-only<input value="Policy v2.1" readonly style="width:100%;margin-top:4px;height:36px;border:1px solid #E3E1DA;border-radius:4px;padding:0 10px;font:400 14px Inter;background:#F2F1ED;color:#5F635C"></label>
+        <label style="grid-column:1/3">Notes<textarea rows="2" style="width:100%;margin-top:4px;border:1px solid #CDCAC0;border-radius:4px;padding:8px 10px;font:400 14px Inter"></textarea></label></div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Status, actor &amp; risk badges</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="{{ b.ok }}">Approved</span><span style="{{ b.warn }}">Awaiting info</span><span style="{{ b.err }}">Rejected</span><span style="{{ b.pend }}">Pending</span><span style="{{ b.ai }}">AI recommendation</span><span style="{{ b.hu }}">Human review</span><span style="{{ b.sys }}">Auto-executed</span><span style="{{ b.err }}">High risk</span></div>
+        <h3 style="margin:20px 0 8px;font:600 16px Inter">Confidence &amp; risk</h3>
+        <div style="display:grid;gap:8px;font:400 13px Inter"><div style="display:flex;gap:10px;align-items:center"><span style="width:80px">High</span><span style="width:140px;height:8px;border-radius:4px;background:#F0EBF5"><span style="display:block;width:92%;height:8px;border-radius:4px;background:#6B4E8C"></span></span>92%</div><div style="display:flex;gap:10px;align-items:center"><span style="width:80px">Medium</span><span style="width:140px;height:8px;border-radius:4px;background:#F0EBF5"><span style="display:block;width:76%;height:8px;border-radius:4px;background:#6B4E8C"></span></span>76% · review suggested</div><div style="display:flex;gap:10px;align-items:center"><span style="width:80px">Low</span><span style="width:140px;height:8px;border-radius:4px;background:#F0EBF5"><span style="display:block;width:58%;height:8px;border-radius:4px;background:#6B4E8C"></span></span>58% · must escalate</div></div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Alerts &amp; toast</h3><div style="display:grid;gap:8px;font:400 13px/18px Inter">
+        <div style="padding:10px 12px;border-radius:6px;background:#E6F1EA;color:#175A3B;border:1px solid #BFDCCB">Policy v2.1 published. New claims will use it.</div>
+        <div style="padding:10px 12px;border-radius:6px;background:#FAF2E0;color:#7A520C;border:1px solid #E8D5A6">Policy v1.0 expires in 3 days.</div>
+        <div style="padding:10px 12px;border-radius:6px;background:#F8E9E6;color:#8A2B20;border:1px solid #E8C2BB">Upload failed. Check the file is under 20 MB.</div>
+        <div style="padding:10px 12px;border-radius:6px;background:#E8EFF6;color:#244B73;border:1px solid #C5D6E8">You are viewing ABC Appliances (Production).</div>
+        <div style="background:#1C1F1C;color:#fff;border-radius:8px;padding:10px 14px;width:fit-content">Override recorded — AUD-77120</div></div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">File &amp; image upload</h3>
+        <div style="border:1.5px dashed #CDCAC0;border-radius:8px;padding:20px;text-align:center;font:400 13px/20px Inter;color:#5F635C;background:#FAFAF8">Drop invoice or photos here, or <u>browse</u><br>PDF, JPG, PNG · up to 20 MB each</div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;font:400 13px Inter;border:1px solid #E3E1DA;border-radius:6px;padding:8px 10px"><span style="width:28px;height:28px;background:repeating-linear-gradient(135deg,#F2F1ED 0 4px,#FAFAF8 4px 8px);border-radius:4px"></span>Invoice_SM-88213.pdf<span style="margin-left:auto;color:#175A3B">Uploaded · scanned</span></div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Tabs · breadcrumbs · stepper · pagination</h3>
+        <div style="font:400 13px Inter;color:#5F635C;margin-bottom:10px">ABC Appliances / Claims / <b style="color:#1C1F1C;font-weight:500">CLM-ABC-24-08172</b></div>
+        <div style="display:flex;border-bottom:1px solid #E3E1DA;margin-bottom:14px"><span style="padding:8px 0;margin-right:18px;border-bottom:2px solid #1F6F4A;font:500 14px Inter">Case file</span><span style="padding:8px 0;margin-right:18px;font:500 14px Inter;color:#5F635C">Evidence</span><span style="padding:8px 0;font:500 14px Inter;color:#5F635C">Trace</span></div>
+        <div style="display:flex;gap:6px;align-items:center;font:500 12px Inter;margin-bottom:14px"><span style="width:22px;height:22px;border-radius:50%;background:#1F6F4A;color:#fff;display:grid;place-items:center">✓</span>Submit<span style="flex:1;height:2px;background:#1F6F4A"></span><span style="width:22px;height:22px;border-radius:50%;border:2px solid #1F6F4A;color:#1F6F4A;display:grid;place-items:center">2</span>Evidence<span style="flex:1;height:2px;background:#E3E1DA"></span><span style="width:22px;height:22px;border-radius:50%;border:2px solid #CDCAC0;color:#8B8F87;display:grid;place-items:center">3</span><span style="color:#8B8F87">Review</span></div>
+        <div style="display:flex;gap:6px;font:500 13px Inter"><span style="padding:4px 10px;border:1px solid #E3E1DA;border-radius:6px;color:#8B8F87">Prev</span><span style="padding:4px 10px;border:1px solid #1F6F4A;background:#E6F1EA;border-radius:6px">1</span><span style="padding:4px 10px;border:1px solid #E3E1DA;border-radius:6px">2</span><span style="padding:4px 10px;border:1px solid #E3E1DA;border-radius:6px">Next</span></div></div>
+    </div>
+    <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:auto"><div style="padding:14px 20px;border-bottom:1px solid #E3E1DA;font:600 16px Inter">Component documentation</div><div style="min-width:1000px">
+      <div style="display:grid;grid-template-columns:130px 150px 170px 190px minmax(0,1fr) 170px;gap:12px;padding:10px 20px;background:#FAFAF8;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C"><span>Component</span><span>Purpose</span><span>Variants</span><span>States</span><span>Accessibility</span><span>Responsive</span></div>
+      <sc-for list="{{ docsTbl }}" as="d" hint-placeholder-count="12"><div style="display:grid;grid-template-columns:130px 150px 170px 190px minmax(0,1fr) 170px;gap:12px;padding:12px 20px;border-top:1px solid #F2F1ED;font:400 13px/18px Inter"><b style="font-weight:600">{{ d.a }}</b><span>{{ d.b }}</span><span>{{ d.c }}</span><span>{{ d.d }}</span><span>{{ d.e }}</span><span>{{ d.f }}</span></div></sc-for></div></div>
+  </div></div></sc-if>
+
+  <!-- AI VISUAL LANGUAGE -->
+  <sc-if value="{{ is.ailang }}"><div style="flex:1;min-width:0;overflow:auto;padding:32px"><div style="max-width:1200px;margin:0 auto;display:grid;gap:24px">
+    <div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">WarrantyOS design system · 03</div><h1 style="margin:4px 0 8px;font:600 40px/48px Fraunces,Georgia,serif">AI visual language</h1><p style="margin:0;max-width:760px;font:400 16px/24px Inter;color:#43473F">Three actors, three treatments. AI output is always labelled, tinted violet and dashed-bordered — a proposal. Human decisions are blue and solid — committed. System actions are grey and carry timestamps.</p></div>
+    <div data-st="1" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+      <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;overflow:hidden"><div style="background:#F0EBF5;padding:10px 16px;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#563B75">AI recommends</div><div style="padding:16px;font:400 13px/20px Inter">Violet ink, tinted surface, <b>dashed</b> border, “AI” tag, confidence always shown. Words: <i>recommends, suggests, detected</i> — never “is”.</div></div>
+      <div style="background:#fff;border:1px solid #C5D6E8;border-radius:8px;overflow:hidden"><div style="background:#E8EFF6;padding:10px 16px;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#244B73">Human approves</div><div style="padding:16px;font:400 13px/20px Inter">Blue ink, <b>solid</b> border, person’s name and time. Overrides show AI value struck-through beside the human value.</div></div>
+      <div style="background:#fff;border:1px solid #DAD7CD;border-radius:8px;overflow:hidden"><div style="background:#F2F1ED;padding:10px 16px;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#43473F">System executes</div><div style="padding:16px;font:400 13px/20px Inter">Neutral grey, monospace IDs and timestamps. Shown only after guardrails pass or a human decides.</div></div>
+    </div>
+    <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <div style="background:#fff;border:1px dashed #BFA8D6;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#563B75;margin-bottom:8px">AI decision card · explanation</div><div style="font:600 28px/36px Fraunces,Georgia,serif;color:#175A3B">APPROVE <span style="font:400 14px Inter;color:#5F635C">92% · Low risk · Strong match</span></div><div style="font:400 13px/22px Inter;margin-top:8px">✓ Within warranty · ✓ Purchase verified · ✓ Failure covered · ✓ No exclusion</div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">AI / human comparison</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font:400 14px Inter"><div style="border:1px dashed #BFA8D6;background:#F0EBF5;border-radius:6px;padding:10px"><span style="font-size:12px;color:#563B75">AI</span><br><s>REJECT</s> 64%</div><div style="border:1px solid #C5D6E8;background:#E8EFF6;border-radius:6px;padding:10px"><span style="font-size:12px;color:#244B73">R. Fernando</span><br><b>APPROVE</b> · reason on file</div></div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Retrieved policy reference</div><div style="border:1px solid #D9CDE6;background:#F0EBF5;border-radius:6px;padding:10px;font:400 13px/20px Inter"><b>Warranty Policy v2.1 · §4.3</b><br>relevance 0.94 · effective 01 Jul 2026 · ABC Appliances</div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Agent status · tool call</div><div style="font:400 13px/22px Inter"><span style="{{ b.ai }}">Evidence Agent</span> <span style="{{ b.ok }}">Passed · 1.4s</span><div style="margin-top:8px;padding:8px;background:#FAFAF8;border:1px solid #E3E1DA;border-radius:6px;font:400 12px/18px 'JetBrains Mono',monospace">vision.inspect(IMG_0413.jpg) → residue_near_seal: true (0.88)</div></div></div>
+    </div>
+    <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Rules</div><div style="font:400 14px/24px Inter">1. AI content is never styled as final. 2. Confidence is always a number, never colour alone. 3. Reasoning is shown as factors, evidence and citations — not a transcript. 4. Human override is a primary control, never an error state. 5. Tenant and policy version always appear next to AI output.</div></div>
+  </div></div></sc-if>
+
+  <!-- STATES / A11Y / RESPONSIVE -->
+  <sc-if value="{{ is.states }}"><div style="flex:1;min-width:0;overflow:auto;padding:32px"><div style="max-width:1200px;margin:0 auto;display:grid;gap:24px">
+    <div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">WarrantyOS design system · 04</div><h1 style="margin:4px 0 0;font:600 40px/48px Fraunces,Georgia,serif">States, accessibility &amp; responsive</h1></div>
+    <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Component states</h3><div data-st="2" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;font:400 12px Inter;color:#5F635C">
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 13px Inter">Default</button>Default</div>
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#175A3B;color:#fff;font:500 13px Inter">Hover</button>Hover · darker</div>
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 13px Inter;outline:2px solid #1F6F4A;outline-offset:2px">Focus</button>Focus · 2px ring</div>
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#124A31;color:#fff;font:500 13px Inter">Active</button>Active · darker</div>
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 13px Inter;opacity:.4">Disabled</button>Disabled · 40%</div>
+      <div><button style="width:100%;height:36px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 13px Inter;opacity:.85">Loading…</button>Loading</div>
+      <div><div style="height:36px;border:1px solid #A03428;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#1C1F1C;font-size:13px">Invalid</div>Error</div>
+      <div><div style="height:36px;border:1px solid #3F7D58;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#1C1F1C;font-size:13px">Valid ✓</div>Success</div>
+      <div><div style="height:36px;border:1px dashed #BFA8D6;background:#F0EBF5;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#563B75;font-size:13px">AI-generated</div>AI-generated</div>
+      <div><div style="height:36px;border:1px solid #C5D6E8;background:#E8EFF6;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#244B73;font-size:13px">Human-reviewed</div>Human-reviewed</div>
+      <div><div style="height:36px;border:1px solid #E3E1DA;background:#F2F1ED;border-radius:4px;display:flex;align-items:center;padding:0 10px;color:#5F635C;font-size:13px">Read-only</div>Read-only</div>
+    </div></div>
+    <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Accessibility</h3><div style="font:400 14px/24px Inter">• Text contrast ≥ 4.5:1 on every actor surface (violet ink #563B75 on #F0EBF5 = 8.1:1).<br>• Status never conveyed by colour alone — every badge has text.<br>• 2px focus ring, 2px offset, on all interactive elements.<br>• Keyboard: ⌘K palette, Esc closes overlays, tab order follows reading order.<br>• Dialogs trap focus and return it to the trigger.<br>• Charts have text equivalents; motion respects reduced-motion.<br>• Touch targets ≥ 44px on mobile.</div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 12px;font:600 16px Inter">Responsive behaviour</h3><div style="font:400 14px/24px Inter"><b>Desktop ≥1280</b> — 240px sidebar, two- and three-column workspaces, tables.<br><b>Tablet 768–1279</b> — sidebar collapses to 64px rail; AI panel becomes a drawer; tables scroll horizontally.<br><b>Mobile &lt;768</b> — task-first: tracking, notifications, review/approve, evidence viewing, service updates. Tables become cards; navigation is a bottom bar; approve/reject sit in a sticky action sheet.</div></div>
+    </div>
+  </div></div></sc-if>
+
+  <!-- LOGIN -->
+  <sc-if value="{{ is.login }}"><div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)">
+    <div style="display:grid;place-items:center;padding:32px;background:#fff"><div style="width:360px">
+      <div style="font:600 28px Fraunces,Georgia,serif;margin-bottom:4px">WarrantyOS</div><div style="font:400 14px Inter;color:#5F635C;margin-bottom:28px">Sign in to your tenant workspace.</div>
+      <label style="font:500 13px Inter">Work email<input value="r.fernando@xyz-electronics.lk" style="width:100%;margin:4px 0 14px;height:40px;border:1px solid #CDCAC0;border-radius:4px;padding:0 10px;font:400 14px Inter"></label>
+      <label style="font:500 13px Inter">Password<input type="password" value="••••••••••" style="width:100%;margin:4px 0 16px;height:40px;border:1px solid #CDCAC0;border-radius:4px;padding:0 10px;font:400 14px Inter"></label>
+      <button onClick="{{ go.tenants }}" style="width:100%;height:40px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Sign in</button>
+      <button style="width:100%;height:40px;margin-top:8px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Continue with company SSO</button>
+      <div style="font:400 12px/18px Inter;color:#5F635C;margin-top:20px">Two-step verification required. Sessions are scoped to one tenant and logged.</div></div></div>
+    <div style="background:#1C1F1C;color:#fff;display:flex;flex-direction:column;justify-content:center;padding:48px 64px;gap:20px">
+      <div style="font:600 40px/48px Fraunces,Georgia,serif;max-width:520px">AI decides what it safely can. People decide the rest.</div>
+      <div style="font:400 16px/24px Inter;color:#D4D6CF;max-width:480px">Every recommendation is cited, every override is recorded, every tenant is isolated.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ flow }}" as="f" hint-placeholder-count="10"><span style="{{ f.style }}">{{ f.t }}</span></sc-for></div></div></div></sc-if>
+
+  <!-- TENANT SELECTION -->
+  <sc-if value="{{ is.tenants }}"><div style="flex:1;display:grid;place-items:center;padding:32px"><div style="width:560px;max-width:100%">
+    <div style="font:600 32px/40px Fraunces,Georgia,serif">Choose a tenant</div><div style="font:400 14px Inter;color:#5F635C;margin:4px 0 20px">You have access to 2 tenants. Pick carefully — all data and AI configuration are tenant-specific.</div>
+    <div style="display:grid;gap:12px"><sc-for list="{{ tenants }}" as="t" hint-placeholder-count="2"><button onClick="{{ t.onClick }}" style="display:flex;gap:16px;align-items:center;text-align:left;background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:16px;width:100%;box-shadow:0 1px 2px rgba(28,31,28,.05)"><span style="{{ t.tile }}">{{ t.k }}</span><span style="flex:1;font:400 13px/20px Inter;color:#5F635C"><b style="font:600 16px Inter;color:#1C1F1C">{{ t.name }}</b><br>{{ t.meta }}<br>Production · Sri Lanka</span><span style="color:#1F6F4A;font:500 14px Inter">Enter →</span></button></sc-for></div></div></div></sc-if>
+
+  <!-- CUSTOMER SUBMIT -->
+  <sc-if value="{{ is.csubmit }}"><div style="flex:1;overflow:auto;background:#FAFAF8">
+    <div style="height:56px;background:#fff;border-bottom:1px solid #E3E1DA;display:flex;align-items:center;padding:0 32px;gap:12px"><span style="width:28px;height:28px;border-radius:6px;background:#C08A2E;color:#fff;display:grid;place-items:center;font:600 12px Fraunces,serif">AB</span><b style="font:600 16px Inter">ABC Appliances</b><span style="color:#5F635C;font:400 13px Inter">Warranty claims</span><span style="margin-left:auto;font:400 13px Inter;color:#5F635C">Nimali Perera</span></div>
+    <div style="max-width:720px;margin:0 auto;padding:32px 24px"><div style="display:flex;margin-bottom:28px"><sc-for list="{{ cst }}" as="t" hint-placeholder-count="7"><div style="{{ t.style }}"><span style="{{ t.dot }}">{{ t.n }}</span>{{ t.t }}</div></sc-for></div>
+      <h1 style="margin:0 0 4px;font:600 32px/40px Fraunces,Georgia,serif">Add photos and your invoice</h1><p style="margin:0 0 20px;font:400 15px/22px Inter;color:#43473F">Clear photos help us decide faster. Most claims with a valid invoice are answered in minutes.</p>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:24px;display:grid;gap:16px">
+        <label style="font:500 14px Inter">Product<select style="width:100%;margin-top:4px;height:40px;border:1px solid #CDCAC0;border-radius:4px;padding:0 8px;font:400 14px Inter;background:#fff"><option>AquaPure W7 Washer · AP7-220418-4471</option></select></label>
+        <label style="font:500 14px Inter">What went wrong?<textarea rows="3" style="width:100%;margin-top:4px;border:1px solid #CDCAC0;border-radius:4px;padding:10px;font:400 14px Inter">The control panel stopped responding after heavy rain.</textarea></label>
+        <div style="border:1.5px dashed #CDCAC0;border-radius:8px;padding:28px;text-align:center;font:400 14px/22px Inter;color:#5F635C;background:#FAFAF8">Drop your invoice and 2–4 photos here, or <u>browse</u></div>
+        <div style="font:400 13px Inter;color:#5F635C">3 files uploaded · Invoice, control panel, serial plate</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button style="height:40px;padding:0 16px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Back</button><button onClick="{{ go.ctrack }}" style="height:40px;padding:0 20px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Submit claim</button></div></div>
+      <div style="font:400 12px/18px Inter;color:#5F635C;margin-top:12px">Your documents are stored securely and used only to process this claim.</div></div></div></sc-if>
+
+  <!-- CUSTOMER TRACK -->
+  <sc-if value="{{ is.ctrack }}"><div style="flex:1;overflow:auto;background:#FAFAF8">
+    <div style="height:56px;background:#fff;border-bottom:1px solid #E3E1DA;display:flex;align-items:center;padding:0 32px;gap:12px"><span style="width:28px;height:28px;border-radius:6px;background:#C08A2E;color:#fff;display:grid;place-items:center;font:600 12px Fraunces,serif">AB</span><b style="font:600 16px Inter">ABC Appliances</b><span style="margin-left:auto;font:400 13px Inter;color:#5F635C">Nimali Perera</span></div>
+    <div style="max-width:720px;margin:0 auto;padding:32px 24px"><div style="display:flex;margin-bottom:28px"><sc-for list="{{ cst2 }}" as="t" hint-placeholder-count="7"><div style="{{ t.style }}"><span style="{{ t.dot }}">{{ t.n }}</span>{{ t.t }}</div></sc-for></div>
+      <div style="background:#E6F1EA;border:1px solid #BFDCCB;border-radius:8px;padding:20px 24px;margin-bottom:16px"><div style="font:600 24px/32px Fraunces,Georgia,serif;color:#175A3B">Your claim is approved</div><div style="font:400 15px/22px Inter;color:#175A3B;margin-top:4px">AquaPure W7 Washer · Claim 08172. A control panel replacement is covered, at no cost to you.</div></div>
+      <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:24px"><h3 style="margin:0 0 16px;font:600 16px Inter">What happens next</h3>
+        <sc-for list="{{ ctl }}" as="t" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:20px 1fr;gap:12px;padding-bottom:16px"><span style="{{ t.dot }}"></span><div style="font:400 14px/20px Inter"><b style="font-weight:600">{{ t.h }}</b> <span style="color:#8B8F87;font-size:12px;margin-left:6px">{{ t.w }}</span><br><span style="color:#43473F">{{ t.d }}</span></div></div></sc-for>
+        <button style="height:40px;padding:0 16px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Choose a repair time</button></div></div></div></sc-if>
+
+  <!-- PARTNER -->
+  <sc-if value="{{ is.partner }}"><div style="flex:1;overflow:auto;background:#FAFAF8">
+    <div style="height:56px;background:#fff;border-bottom:1px solid #E3E1DA;display:flex;align-items:center;padding:0 32px;gap:12px"><b style="font:600 18px Fraunces,Georgia,serif">WarrantyOS</b><span style="color:#5F635C;font:400 13px Inter">Service partner · Colombo Service Hub</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center;font:400 13px Inter"><span style="width:10px;height:10px;border-radius:3px;background:#C08A2E"></span>Working for ABC Appliances</span></div>
+    <div style="max-width:1200px;margin:0 auto;padding:24px 32px;display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start">
+      <div style="display:grid;gap:8px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">Assigned repairs · 4</div><sc-for list="{{ repairs }}" as="r" hint-placeholder-count="4"><div style="{{ r.style }}"><span style="font:500 12px 'JetBrains Mono',monospace;color:#1F6F4A">{{ r.id }}</span><b style="font-weight:500">{{ r.prod }}</b><span style="color:#5F635C">{{ r.cust }}</span><span><span style="{{ r.stS }}">{{ r.st }}</span></span></div></sc-for></div>
+      <div style="display:grid;gap:16px">
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;display:flex;gap:24px;align-items:center;flex-wrap:wrap"><div><div style="font:500 12px 'JetBrains Mono',monospace;color:#5F635C">RPR-2291 · CLM-ABC-24-08172</div><div style="font:600 24px/32px Fraunces,Georgia,serif">AquaPure W7 · control panel replacement</div></div><span style="{{ b.ok }};margin-left:auto">Covered by warranty · v2.1 §4.3</span></div>
+        <div data-st="1" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;font:400 14px/22px Inter"><h3 style="margin:0 0 8px;font:600 16px Inter">Customer &amp; product</h3>Nimali Perera · +94 77 ••• 4821<br>14/3 Lake Rd, Nugegoda<br>Serial <span style="font:500 13px 'JetBrains Mono',monospace">AP7-220418-4471</span><br>Customer pays: LKR 0.00</div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;font:400 14px/22px Inter"><h3 style="margin:0 0 8px;font:600 16px Inter">Repair instructions</h3>1. Disconnect power; check seal and gasket.<br>2. Replace control panel board PN-W7-CP-02.<br>3. Replace gasket if cracked; photograph the old seal.</div></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px"><h3 style="margin:0 0 8px;font:600 16px Inter">Parts required</h3><sc-for list="{{ parts }}" as="p" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:1fr 140px 40px 180px;gap:12px;padding:8px 0;border-top:1px solid #F2F1ED;font:400 14px Inter"><span>{{ p.a }}</span><span style="font:400 12px 'JetBrains Mono',monospace;align-self:center">{{ p.b }}</span><span>{{ p.c }}</span><span style="color:#5F635C">{{ p.d }}</span></div></sc-for></div>
+        <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:end">
+          <label style="font:500 13px Inter">Repair status<select style="width:100%;margin-top:4px;height:36px;border:1px solid #CDCAC0;border-radius:4px;padding:0 6px;font:400 14px Inter;background:#fff"><option>In progress</option><option>Waiting for parts</option><option>Completed</option></select></label>
+          <div style="border:1.5px dashed #CDCAC0;border-radius:8px;padding:10px;text-align:center;font:400 13px Inter;color:#5F635C">Upload technician photos &amp; report</div>
+          <button style="height:36px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Submit invoice for payment</button></div>
+      </div></div></div></sc-if>
+
+  <!-- MOBILE -->
+  <sc-if value="{{ is.mobile }}"><div style="flex:1;overflow:auto;padding:32px;background:#F2F1ED"><div style="display:flex;gap:32px;justify-content:center;flex-wrap:wrap">
+    <div style="width:340px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Customer · claim tracking</div>
+      <div style="height:660px;background:#FAFAF8;border:1px solid #CDCAC0;border-radius:28px;overflow:hidden;display:flex;flex-direction:column"><div style="padding:20px 20px 12px;background:#fff;border-bottom:1px solid #E3E1DA;font:600 16px Inter">ABC Appliances</div><div style="padding:20px;flex:1"><div style="background:#E6F1EA;border-radius:8px;padding:16px;color:#175A3B"><div style="font:600 20px/28px Fraunces,Georgia,serif">Claim approved</div><div style="font:400 14px/20px Inter">AquaPure W7 · Claim 08172</div></div>
+        <div style="margin-top:20px;display:grid;gap:14px"><sc-for list="{{ mobTrack }}" as="m" hint-placeholder-count="4"><div style="display:flex;gap:12px;align-items:center;font:400 15px Inter"><span style="{{ m.dot }}"></span><span style="flex:1"><b style="font-weight:600">{{ m.a }}</b><br><span style="color:#5F635C;font-size:13px">{{ m.b }}</span></span></div></sc-for></div></div>
+        <button style="margin:16px;height:48px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 16px Inter">Choose repair time</button></div></div>
+    <div style="width:340px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Supervisor · review &amp; approve</div>
+      <div style="height:660px;background:#FAFAF8;border:1px solid #CDCAC0;border-radius:28px;overflow:hidden;display:flex;flex-direction:column"><div style="height:3px;background:#1E6F7A"></div><div style="padding:14px 20px;background:#fff;border-bottom:1px solid #E3E1DA;font:600 14px Inter">XYZ Electronics <span style="color:#5F635C;font-weight:400">· Production</span></div>
+        <div style="padding:16px;flex:1;overflow:auto;display:grid;gap:12px;align-content:start"><div style="background:#E8EFF6;border:1px solid #C5D6E8;border-radius:8px;padding:12px;color:#244B73;font:500 14px/20px Inter">Human review required<br><span style="font-weight:400">High value · conflicting evidence</span></div>
+          <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;padding:14px;font:400 14px/22px Inter"><span style="font:500 12px 'JetBrains Mono',monospace;color:#5F635C">CLM-XYZ-24-03391</span><br><b>Lumen 55" QLED TV</b><br>LKR 182,000 · SLA 1h 05m</div>
+          <div style="background:#F0EBF5;border:1px dashed #BFA8D6;border-radius:8px;padding:14px;font:400 14px/22px Inter;color:#563B75"><b>AI recommends REJECT</b><br>64% confidence · Policy v1.4 §6.2</div>
+          <button style="height:44px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">View evidence (4)</button></div>
+        <div style="padding:12px 16px;background:#fff;border-top:1px solid #E3E1DA;display:grid;grid-template-columns:1fr 1fr;gap:8px"><button style="height:48px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 15px Inter">Approve</button><button style="height:48px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;color:#A03428;font:500 15px Inter">Reject</button><button style="grid-column:1/3;height:44px;border:1px solid #2F5D8C;border-radius:8px;background:#E8EFF6;color:#244B73;font:500 14px Inter">Override AI…</button></div></div></div>
+    <div style="width:340px"><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;margin-bottom:8px">Technician · service update</div>
+      <div style="height:660px;background:#FAFAF8;border:1px solid #CDCAC0;border-radius:28px;overflow:hidden;display:flex;flex-direction:column"><div style="padding:20px 20px 12px;background:#fff;border-bottom:1px solid #E3E1DA;font:600 16px Inter">RPR-2291</div><div style="padding:20px;flex:1;display:grid;gap:14px;align-content:start"><div style="font:400 15px/22px Inter"><b>AquaPure W7</b><br>Control panel replacement<br><span style="color:#175A3B">Covered by warranty</span></div>
+        <div style="display:grid;gap:8px"><button style="height:48px;border:2px solid #1F6F4A;border-radius:8px;background:#E6F1EA;font:500 15px Inter">In progress</button><button style="height:48px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 15px Inter">Waiting for parts</button><button style="height:48px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 15px Inter">Completed</button></div>
+        <div style="border:1.5px dashed #CDCAC0;border-radius:8px;padding:20px;text-align:center;font:400 14px Inter;color:#5F635C">Add photo of old seal</div></div><button style="margin:16px;height:48px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 16px Inter">Save update</button></div></div>
+  </div></div></sc-if>
+
+  <!-- DEMO -->
+  <sc-if value="{{ is.demo }}"><div style="flex:1;overflow:auto;padding:32px"><div style="max-width:1280px;margin:0 auto">
+    <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:16px;flex-wrap:wrap"><div><div style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C">End-to-end scenario</div><h1 style="margin:4px 0 0;font:600 32px/40px Fraunces,Georgia,serif">Same claim, two tenants, two policies</h1></div><span style="flex:1"></span>
+      <span style="font:500 13px Inter;color:#5F635C">Step {{ demoLabel }}</span>
+      <button onClick="{{ demoReset }}" style="height:36px;padding:0 14px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Reset</button>
+      <button onClick="{{ demoPrev }}" style="height:36px;padding:0 14px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Back</button>
+      <button onClick="{{ demoNext }}" style="height:36px;padding:0 14px;border:1px solid #CDCAC0;border-radius:8px;background:#fff;font:500 14px Inter">Next step</button>
+      <button onClick="{{ demoPlay }}" style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#1F6F4A;color:#fff;font:500 14px Inter">Play</button></div>
+    <div style="background:#fff;border:1px solid #E3E1DA;border-radius:8px;overflow:hidden;box-shadow:0 1px 2px rgba(28,31,28,.05)">
+      <div data-st="1" style="display:grid;grid-template-columns:260px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:0 20px"><span></span>
+        <div style="height:3px;background:#C08A2E;grid-column:2"></div><div style="height:3px;background:#1E6F7A;grid-column:3"></div></div>
+      <div data-st="1" style="display:grid;grid-template-columns:260px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:12px 20px;border-bottom:1px solid #E3E1DA;font:600 15px Inter"><span style="font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;align-self:center">Stage</span><span>ABC Appliances · Policy v2.1</span><span>XYZ Electronics · Policy v1.4</span></div>
+      <sc-for list="{{ drows }}" as="r" hint-placeholder-count="9"><div style="{{ r.row }}"><span style="display:flex;gap:10px;align-items:center;color:#1C1F1C"><span style="{{ r.dot }}">{{ r.n }}</span><span><b style="font-weight:500">{{ r.l }}</b><br><span style="{{ r.aS }}">{{ r.actor }}</span></span></span><span>{{ r.a }}</span><span>{{ r.x }}</span></div></sc-for>
+    </div>
+    <div style="font:400 13px/20px Inter;color:#5F635C;margin-top:12px">Open the console as XYZ Electronics → Human review to perform the override yourself; the decision trace then shows the human step.</div>
+  </div></div></sc-if>
+
+  <span data-end="outer"></span>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tenant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ABC&quot;,&quot;XYZ&quot;],&quot;default&quot;:&quot;ABC&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Context&quot;},&quot;initialScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;claims&quot;,&quot;claim&quot;,&quot;decision&quot;,&quot;review&quot;,&quot;evidence&quot;,&quot;trace&quot;,&quot;kb&quot;,&quot;policy&quot;,&quot;aiops&quot;,&quot;admin&quot;,&quot;foundations&quot;,&quot;components&quot;,&quot;ailang&quot;,&quot;states&quot;,&quot;login&quot;,&quot;tenants&quot;,&quot;csubmit&quot;,&quot;ctrack&quot;,&quot;partner&quot;,&quot;mobile&quot;,&quot;demo&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Context&quot;}}">
+const TN={ok:['#E6F1EA','#175A3B','#BFDCCB'],warn:['#FAF2E0','#7A520C','#E8D5A6'],err:['#F8E9E6','#8A2B20','#E8C2BB'],ai:['#F0EBF5','#563B75','#D9CDE6'],hu:['#E8EFF6','#244B73','#C5D6E8'],sys:['#F2F1ED','#43473F','#DAD7CD'],pend:['#FFFFFF','#5F635C','#CDCAC0']};
+const bd=t=>`display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;font:500 12px Inter;white-space:nowrap;background:${TN[t][0]};color:${TN[t][1]};border:1px solid ${TN[t][2]}`;
+const TEN={ABC:{k:'ABC',name:'ABC Appliances',c:'#C08A2E',region:'Sri Lanka',meta:'Appliances · 12 products · 48 service partners'},XYZ:{k:'XYZ',name:'XYZ Electronics',c:'#1E6F7A',region:'Sri Lanka',meta:'Consumer electronics · 9 products · 31 service partners'}};
+const GROUPS=[
+['System','Design system',[['foundations','Foundations'],['components','Components'],['ailang','AI visual language'],['states','States · A11y · Responsive']]],
+['Shell','Product shell',[['login','Sign in'],['tenants','Tenant selection']]],
+['Console','Operations console',[['dashboard','Dashboard'],['claims','Claims'],['claim','Claim detail'],['decision','AI decision'],['review','Human review'],['evidence','Evidence'],['trace','Decision trace'],['kb','Knowledge base'],['policy','Policy versions'],['aiops','AI operations'],['admin','Administration']]],
+['Customer','Customer',[['csubmit','Submit claim'],['ctrack','Track claim']]],
+['Partner','Service partner',[['partner','Workspace']]],
+['Mobile','Mobile',[['mobile','Mobile views']]],
+['Demo','Demo',[['demo','Two-tenant scenario']]]];
+const CONSOLE=['dashboard','claims','claim','decision','review','evidence','trace','kb','policy','aiops','admin'];
+const LABEL={};GROUPS.forEach(g=>g[2].forEach(s=>LABEL[s[0]]=s[1]));
+const NAV=[['Dashboard','dashboard',['dashboard']],['Claims','claims',['claims','claim','decision','evidence','trace']],['Customers',null],['Products',null],['Warranty Policies','policy',['policy']],['Service Network',null],['AI Operations','aiops',['aiops']],['Human Review','review',['review'],'3'],['Knowledge Base','kb',['kb']],['Reports',null],['Administration','admin',['admin']]];
+const CLAIMS=[
+['ABC','CLM-ABC-24-08172','Nimali Perera','AquaPure W7 Washer','Moisture ingress','48,500','Auto-approved','sys','Low','ok',92,'Approve','ai','System','02 Oct','Met','ok'],
+['ABC','CLM-ABC-24-08169','Dilan Jayasuriya','CoolMax 420L Fridge','Compressor failure','96,000','Approved','sys','Low','ok',95,'Approve','ai','System','02 Oct','Met','ok'],
+['ABC','CLM-ABC-24-08165','Shamila Rodrigo','AquaPure W9 Washer','Physical damage','132,000','Human review','hu','Medium','warn',71,'Reject','ai','R. Fernando','01 Oct','3h 20m','warn'],
+['ABC','CLM-ABC-24-08158','Chathura Silva','HeatWave Oven O3','Heating element','41,200','Awaiting info','pend','Low','ok',84,'Request info','ai','M. Dias','01 Oct','1d 4h','ok'],
+['ABC','CLM-ABC-24-08141','Ishara Fonseka','CoolMax 300L Fridge','Cosmetic','18,900','Rejected','err','High','err',88,'Reject','ai','M. Dias','30 Sep','Met','ok'],
+['XYZ','CLM-XYZ-24-03391','Kasun Wijesinghe','Lumen 55" QLED TV','Panel failure','182,000','Human review','hu','Medium','warn',64,'Reject','ai','R. Fernando','02 Oct','1h 05m','err'],
+['XYZ','CLM-XYZ-24-03388','Tharindu Perera','Pulse X2 Soundbar','No power','34,000','Auto-approved','sys','Low','ok',93,'Approve','ai','System','02 Oct','Met','ok'],
+['XYZ','CLM-XYZ-24-03380','Anushka Gunathilake','Lumen 65" QLED TV','Liquid exposure','245,000','Human review','hu','High','err',58,'Reject','ai','R. Fernando','01 Oct','5h 40m','warn'],
+['XYZ','CLM-XYZ-24-03372','Mahesh Bandara','Orbit Tab 11','Screen crack','62,500','Rejected','err','Medium','warn',90,'Reject','ai','A. Kumar','30 Sep','Met','ok'],
+['XYZ','CLM-XYZ-24-03365','Sandya Liyanage','Orbit Phone P5','Battery swelling','58,000','Approved','hu','Low','ok',86,'Approve','ai','A. Kumar','30 Sep','Met','ok']];
+const CL={
+ABC:{id:'CLM-ABC-24-08172',cust:'Nimali Perera',email:'n•••••••@mail.lk',phone:'+94 77 ••• 4821',prod:'AquaPure W7 Washer',serial:'AP7-220418-4471',purchase:'14 Mar 2025 · Singer Mega, Colombo 03',price:'LKR 129,900.00',wend:'14 Mar 2027 (24 months)',cdate:'02 Oct 2026',type:'Moisture ingress — control panel',desc:'Control panel stopped responding after a week of rain. Water droplets visible under the display bezel. Machine was not exposed to direct water.',value:'LKR 48,500.00',rec:'APPROVE',recT:'ok',conf:92,risk:'Low',riskT:'ok',riskScore:18,match:'Strong',pol:'Warranty Policy v2.1 · §4.3',status:'Auto-approved',statusT:'sys',human:false,banner:'AI recommendation — requires no human approval under current tenant policy (auto-approval limit LKR 75,000).',action:'Claim can be automatically approved',
+why:[['✓','ok','Product is within the 24-month warranty period'],['✓','ok','Purchase verified against retailer invoice'],['✓','ok','Failure type (moisture ingress via seal defect) is covered'],['✓','ok','No exclusion detected under v2.1 §5']],
+ev:['Invoice verified — retailer record matches','Product image analysed — moisture residue near seal','Serial number validated against manufacturing batch'],
+find:[['sup','Invoice date and serial match registered product','Invoice p.1'],['sup','Residue pattern consistent with seal failure, not external water','Photo 2'],['neu','Machine operated normally for 18 months','Claim history']],
+st:[['1','System','Claim received','ok','0.1s','Tenant ABC-PROD resolved from claim token','tenant.resolve','—',''],['2','AI','Intake Agent','ok','0.6s','Classified: moisture ingress · control panel','classify_claim · pii.mask','—',''],['3','AI','Evidence Agent','ok','1.4s','Invoice verified; serial valid; residue near seal in photo 2','ocr.extract · vision.inspect ×3 · serial.validate','—','OCR timeout on invoice p.2 — retried once, succeeded'],['4','AI','Policy Retrieval','ok','0.5s','Policy v2.1 §4.3 (0.94) · Regional rules LK §2.2 (0.81)','kb.search(tenant=ABC)','3 chunks · 2 documents',''],['5','AI','Risk Analysis','ok','0.3s','Risk 18/100 · no duplicates · clean claim history','risk.score · claims.history','—',''],['6','AI','Decision Agent','ok','0.8s','APPROVE · confidence 92%','decide(policy,evidence,risk)','Policy v2.1 §4.3',''],['7','System','Guardrails','ok','0.1s','Value 48,500 < limit 75,000 · confidence ≥ 85% · no exclusion — all pass','guardrail.check ×4','Tenant limits',''],['8','System','Auto approval','ok','0.2s','Approved, customer notified, repair partner assigned','claims.approve · notify · dispatch','—','']]},
+XYZ:{id:'CLM-XYZ-24-03391',cust:'Kasun Wijesinghe',email:'k•••••••@mail.lk',phone:'+94 71 ••• 9033',prod:'Lumen 55" QLED TV',serial:'LM55-310122-9082',purchase:'22 Jan 2026 · XYZ Store, Kandy',price:'LKR 214,000.00',wend:'22 Jan 2027 (12 months)',cdate:'02 Oct 2026',type:'Panel failure — liquid indicator triggered',desc:'Vertical lines then black screen after power cut. Customer states no liquid contact. Service tag shows indicator triggered.',value:'LKR 182,000.00',rec:'REJECT',recT:'err',conf:64,risk:'Medium',riskT:'warn',riskScore:57,match:'Partial',pol:'Warranty Policy v1.4 · §6.2',status:'Human review',statusT:'hu',human:true,banner:'Human approval required — claim value exceeds the configured threshold (LKR 100,000) and evidence conflicts.',action:'Escalated — a reviewer must decide',
+why:[['!','warn','Within 12-month warranty period'],['✓','ok','Purchase verified against invoice'],['✕','err','Liquid indicator triggered — excluded under §6.2'],['!','warn','Technician photo shows intact seal — exception §6.4 may apply']],
+ev:['Invoice verified','Service-tag photo: liquid indicator triggered','Technician photo: seal appears intact (conflict)'],
+find:[['sup','Invoice and serial match registered product','Invoice p.1'],['con','Liquid indicator is red on service-tag photo','Photo 1'],['con','Technician photo shows intact seal and no residue','Photo 3'],['neu','Power-cut reported by customer; no external confirmation','Claim text']],
+st:[['1','System','Claim received','ok','0.1s','Tenant XYZ-PROD resolved from claim token','tenant.resolve','—',''],['2','AI','Intake Agent','ok','0.7s','Classified: panel failure · consumer electronics','classify_claim · pii.mask','—',''],['3','AI','Evidence Agent','warn','1.9s','Invoice verified. Liquid indicator red (photo 1) conflicts with intact seal (photo 3)','ocr.extract · vision.inspect ×4 · serial.validate','—','Vision model low-light warning on photo 3 — re-run with enhancement'],['4','AI','Policy Retrieval','ok','0.6s','Policy v1.4 §6.2 liquid exclusion (0.91) · §6.4 seal-defect exception (0.78)','kb.search(tenant=XYZ)','4 chunks · 2 documents',''],['5','AI','Risk Analysis','warn','0.4s','Risk 57/100 · high value · liquid indicator · no duplicates','risk.score · claims.history','—',''],['6','AI','Decision Agent','warn','0.9s','REJECT · confidence 64% (below 85% minimum)','decide(policy,evidence,risk)','Policy v1.4 §6.2',''],['7','System','Guardrails','warn','0.1s','Auto-action blocked: value > 100,000 · confidence < 85% · conflicting evidence','guardrail.check ×4','Tenant limits',''],['8','System','Escalated to Human Review','hu','0.2s','Queued for R. Fernando · SLA 2h','review.enqueue · notify','—','']]}};
+const QUEUE={
+ABC:[{id:'CLM-ABC-24-08165',cust:'Shamila Rodrigo',prod:'AquaPure W9 Washer',val:'LKR 132,000',why:['High claim value','Policy ambiguity'],rec:'REJECT',conf:71,pol:'Policy v2.1 · §5.1 vs §5.4',sla:'3h 20m',sig:['Drum cracked — impact or defect unclear','§5.1 excludes impact; §5.4 covers structural defects','First claim from customer']},{id:'CLM-ABC-24-08150',cust:'Pradeep Samarakoon',prod:'CoolMax 420L Fridge',val:'LKR 118,500',why:['High claim value'],rec:'APPROVE',conf:90,pol:'Policy v2.1 · §3.2',sla:'6h 10m',sig:['Compressor failure, within warranty','Value above LKR 75,000 limit — approval needed']},{id:'CLM-ABC-24-08133',cust:'Hiruni Peiris',prod:'HeatWave Oven O3',val:'LKR 39,000',why:['Low confidence'],rec:'APPROVE',conf:61,pol:'Policy v2.1 · §4.1',sla:'9h',sig:['Invoice image blurred — OCR 62%','Serial not verifiable']}],
+XYZ:[{id:'CLM-XYZ-24-03391',cust:'Kasun Wijesinghe',prod:'Lumen 55" QLED TV',val:'LKR 182,000',why:['High claim value','Conflicting evidence'],rec:'REJECT',conf:64,pol:'Policy v1.4 · §6.2 / §6.4',sla:'1h 05m',sig:['Liquid indicator red (photo 1)','Technician photo shows intact seal (photo 3)','No prior claims · invoice verified']},{id:'CLM-XYZ-24-03380',cust:'Anushka Gunathilake',prod:'Lumen 65" QLED TV',val:'LKR 245,000',why:['Potential fraud','Low confidence'],rec:'REJECT',conf:58,pol:'Policy v1.4 · §6.2',sla:'5h 40m',sig:['Invoice reseller not in authorised network','Serial registered 2 times in 90 days']},{id:'CLM-XYZ-24-03377',cust:'Dulani Wickrama',prod:'Orbit Tab 11',val:'LKR 71,000',why:['Policy ambiguity'],rec:'APPROVE',conf:73,pol:'Policy v1.4 · §3.8',sla:'8h',sig:['Screen defect vs. accidental crack unclear']}]};
+class Component extends DCLogic {
+  state={traceTech:false,screen:'dashboard',collapsed:false,menu:null,tenant:'ABC',ovOpen:false,ovReason:'',ovDone:false,tab:'all',admTab:'tenant',demoStep:0,polVer:'v2',evSel:0,qi:0,custStep:1,toast:null,cmdQ:''};
+  componentDidMount(){
+    const p=this.props;
+    if(p.tenant||p.initialScreen)this.setState({tenant:p.tenant||'ABC',screen:p.initialScreen||'dashboard'});
+    this._r=()=>{const nr=window.innerWidth<1100;if(nr!==this._n){this._n=nr;this.setState({collapsed:nr})}};this._r();window.addEventListener("resize",this._r);this._k=e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();this.setState({menu:'cmd'})}if(e.key==='Escape')this.setState({menu:null,ovOpen:false})};
+    window.addEventListener('keydown',this._k);
+  }
+  extra(s,T,go,set){
+    const c=CL[s.tenant],q=QUEUE[s.tenant],qi=q[Math.min(s.qi,q.length-1)],ovd=s.ovDone&&s.tenant==='XYZ'&&s.qi===0;
+    const dotC=t=>t==='ok'?'#3F7D58':t==='warn'?'#C08A2E':t==='err'?'#A03428':'#5F635C';
+    const mk={ok:'#175A3B',warn:'#7A520C',err:'#8A2B20'};
+    const act=['Claim','Understand','Investigate','Retrieve policy','Reason','Assess risk','Decide','Validate',c.human?'Escalate':'Automate','Audit'];
+    const actor=['sys','ai','ai','ai','ai','ai','ai','sys',c.human?'hu':'sys','sys'];
+    const pipe=act.map((t,i)=>{const done=i<8||(i===8&&!c.human)||(i===8&&ovd)||(i===9&&(!c.human||ovd)),cur=c.human&&!ovd&&i===8;
+      return{t,style:done?bd(actor[i]):cur?bd('hu')+';box-shadow:0 0 0 2px #fff,0 0 0 4px #2F5D8C':bd('pend')+';border-style:dashed'}});
+    const stRows=c.st.map(r=>({n:r[0],actor:r[1],name:r[2],stat:r[3],dur:r[4],res:r[5],tools:r[6],know:r[7],retry:r[8],hasRetry:!!r[8],aS:bd(r[1]==='AI'?'ai':r[1]==='Human'?'hu':'sys'),
+      dot:`width:14px;height:14px;border-radius:50%;background:${r[3]==='ok'?'#3F7D58':r[3]==='warn'?'#C08A2E':r[3]==='hu'?'#2F5D8C':'#A03428'};border:3px solid #fff;box-shadow:0 0 0 1px ${r[3]==='ok'?'#3F7D58':r[3]==='warn'?'#C08A2E':'#2F5D8C'}`,
+      sS:bd(r[3]==='ok'?'ok':r[3]==='warn'?'warn':'hu'),sT:r[3]==='ok'?'Passed':r[3]==='warn'?'Attention':'Handed to human'}));
+    if(ovd)stRows.push({n:'9',actor:'Human',name:'Human decision · R. Fernando',stat:'hu',dur:'12m 40s',res:'Override: AI REJECT → APPROVE. Reason recorded (technician report shows factory seal defect, §6.4)',tools:'review.decide · audit.write',know:'Policy v1.4 §6.4',retry:'',hasRetry:false,aS:bd('hu'),dot:'width:14px;height:14px;border-radius:50%;background:#2F5D8C;border:3px solid #fff;box-shadow:0 0 0 1px #2F5D8C',sS:bd('hu'),sT:'Decided'});
+    const evItems=(s.tenant==='ABC'?[['Invoice_SM-88213.pdf','Invoice','ok','Retailer invoice, 2 pages'],['IMG_0412.jpg','Product photo','ok','Front, control panel'],['IMG_0413.jpg','Damage photo','ok','Panel bezel, residue visible'],['IMG_0414.jpg','Serial plate','ok','Rear label']]:[['Invoice_XYZ-55120.pdf','Invoice','ok','Retailer invoice, 1 page'],['IMG_2201.jpg','Service tag','err','Liquid indicator: red'],['Tech_Report_KDY-118.pdf','Technician report','warn','Seal intact; no residue noted'],['IMG_2203.jpg','Damage photo','warn','Panel lines, low light']]).map((e,i)=>({name:e[0],kind:e[1],sub:e[3],on:s.evSel===i,onClick:set({evSel:i}),style:`width:100%;text-align:left;display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid ${s.evSel===i?'#1F6F4A':'#E3E1DA'};border-radius:8px;background:${s.evSel===i?'#E6F1EA':'#fff'};font:400 13px Inter`,dot:`width:8px;height:8px;border-radius:50%;flex:none;background:${dotC(e[2])}`}));
+    const ocr=(s.tenant==='ABC'?[['Invoice no.','SM-88213','99%','ok'],['Invoice date','14 Mar 2025','98%','ok'],['Model','AquaPure W7','97%','ok'],['Serial','AP7-220418-4471','96%','ok'],['Amount','LKR 129,900.00','99%','ok']]:[['Invoice no.','XYZ-55120','99%','ok'],['Invoice date','22 Jan 2026','97%','ok'],['Model','Lumen 55 QLED','95%','ok'],['Serial','LM55-310122-9082','93%','ok'],['Amount','LKR 214,000.00','99%','ok']]).map(o=>({f:o[0],v:o[1],c:o[2],style:bd('ai')}));
+    const finds=c.find.map(f=>({t:f[1],ref:f[2],tag:f[0]==='sup'?'Supports':f[0]==='con'?'Conflicts':'Neutral',style:bd(f[0]==='sup'?'ok':f[0]==='con'?'err':'sys')}));
+    const rec=ovd?'APPROVE':qi.rec;
+    return{
+      b:{ok:bd('ok'),warn:bd('warn'),err:bd('err'),pend:bd('pend'),ai:bd('ai'),hu:bd('hu'),sys:bd('sys')},polChip:bd('ai'),aiB:bd('ai'),huB:bd('hu'),sysB:bd('sys'),notHuman:!c.human,rvReasons:qi.why.join(' · '),
+      c,pipe,stRows,evItems,ocr,finds,
+      fam:['claim','decision','evidence','trace'].includes(s.screen),
+      ctabs:[['claim','Case file'],['decision','AI decision'],['evidence','Evidence'],['trace','Decision trace']].map(t=>({l:t[1],onClick:go[t[0]],style:`height:40px;padding:0 4px;margin-right:20px;border:0;background:none;font:500 14px Inter;color:${s.screen===t[0]?'#1C1F1C':'#5F635C'};border-bottom:2px solid ${s.screen===t[0]?'#1F6F4A':'transparent'}`})),
+      statB:bd(c.statusT),recB:bd(c.recT),riskB:bd(c.riskT),confW:`height:8px;border-radius:4px;background:#6B4E8C;width:${c.conf}%`,riskW:`height:8px;border-radius:4px;background:${dotC(c.riskT)};width:${c.riskScore}%`,
+      recBig:`font:600 40px/48px Fraunces,Georgia,serif;color:${c.recT==='ok'?'#175A3B':'#8A2B20'}`,
+      whyRows:c.why.map(w=>({t:w[2],m:w[0],ms:`width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;font:600 12px Inter;background:${TN[w[1]][0]};color:${mk[w[1]]};border:1px solid ${TN[w[1]][2]}`})),
+      evRef:c.ev.map(t=>({t})),
+      bannerHuman:c.human,bannerStyle:`display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:8px;font:500 14px/20px Inter;border:1px ${c.human?'solid':'dashed'} ${c.human?'#C5D6E8':'#D9CDE6'};background:${c.human?'#E8EFF6':'#F0EBF5'};color:${c.human?'#244B73':'#563B75'}`,
+      bannerTag:c.human?'HUMAN':'AI',bannerTagS:bd(c.human?'hu':'ai'),
+      techToggle:set({traceTech:!s.traceTech}),techLabel:s.traceTech?'Technical view':'Operational view',techOn:s.traceTech,
+      // review
+      qRows:q.map((x,i)=>({id:x.id,prod:x.prod,val:x.val,sla:x.sla,why:x.why.join(' · '),onClick:set({qi:i,ovDone:false}),style:`width:100%;text-align:left;border:1px solid ${i===s.qi?'#2F5D8C':'#E3E1DA'};background:${i===s.qi?'#E8EFF6':'#fff'};border-radius:8px;padding:12px;font:400 13px/18px Inter;display:block`})),
+      qi,rv:{...qi,rec,conf:ovd?'—':qi.conf+'%'},ovd,notOvd:!ovd,
+      rvWhy:qi.why.map(w=>({w,style:bd('hu')})),rvSig:qi.sig.map(t=>({t})),
+      rvRecS:bd(qi.rec==='APPROVE'?'ok':'err'),
+      openOv:set({ovOpen:true}),closeOv:set({ovOpen:false}),ovOpen:s.ovOpen,ovReason:s.ovReason,setOv:e=>this.setState({ovReason:e.target.value}),
+      ovReady:s.ovReason.trim().length>=20,
+      ovBtn:`height:36px;padding:0 14px;border:0;border-radius:8px;font:500 14px Inter;color:#fff;background:${s.ovReason.trim().length>=20?'#2F5D8C':'#8B8F87'};cursor:${s.ovReason.trim().length>=20?'pointer':'not-allowed'}`,
+      confirmOv:()=>{if(s.ovReason.trim().length>=20)this.setState({ovDone:true,ovOpen:false,toast:'Override recorded — audit entry AUD-77120 created'})},
+      quick:q=>()=>this.setState({toast:q}),
+      okAct:()=>this.setState({toast:'Approved — decision recorded as human decision'}),
+      toastOn:!!s.toast,toast:s.toast,hideToast:set({toast:null}),
+      oppRec:qi.rec==='APPROVE'?'REJECT':'APPROVE',
+    };
+  }
+  extra2(s,T,go,set){
+    const abc=s.tenant==='ABC';
+    const docs=(abc?[['Product Warranty — Appliances','Warranty policy','All appliances','Sri Lanka','v2.1','01 Jul 2026','—','Active','Agents + staff'],['Product Warranty — Appliances','Warranty policy','All appliances','Sri Lanka','v1.0','01 Jan 2026','30 Jun 2026','Superseded','Agents + staff'],['AquaPure W7 Service Manual','Product manual','AquaPure W7','Global','r4','12 Feb 2025','—','Active','Partners + staff'],['Moisture & Seal Exclusions','Exclusions','Washers','Sri Lanka','v1.3','01 Jul 2026','—','Active','Agents + staff'],['Replacement Rules — Major Appliances','Replacement rules','Fridges, washers','Sri Lanka','v2.0','01 Jul 2026','—','Active','Supervisors'],['Colombo Labour Rate Card','Pricing rules','All','Western','2026-Q3','01 Jul 2026','30 Sep 2026','Expiring','Admins']]:[['Product Warranty — Consumer Electronics','Warranty policy','All electronics','Sri Lanka','v1.4','01 Mar 2026','—','Active','Agents + staff'],['Liquid Damage Exclusions','Exclusions','TVs, tablets','Sri Lanka','v1.2','01 Mar 2026','—','Active','Agents + staff'],['Lumen QLED Service Manual','Product manual','Lumen series','Global','r7','05 Jan 2026','—','Active','Partners + staff'],['Warranty Policy — Draft v2.0','Warranty policy','All electronics','Sri Lanka','v2.0','01 Nov 2026','—','Draft','Admins'],['Repair vs Replace Rules','Repair rules','All','Sri Lanka','v1.1','01 Mar 2026','—','Active','Supervisors']]).map(d=>({n:d[0],t:d[1],p:d[2],r:d[3],v:d[4],e:d[5],x:d[6],st:d[7],stS:bd(d[7]==='Active'?'ok':d[7]==='Draft'?'pend':d[7]==='Expiring'?'warn':'sys'),a:d[8],tn:T.name}));
+    const ret=(abc?[['Warranty Policy v2.1 · §4.3 Moisture ingress','Policy','94','Effective 01 Jul 2026'],['AquaPure W7 Service Manual · p.41','Manual','86','Rev 4'],['Regional Warranty Rules LK · §2.2','Regional','81','Effective 01 Jan 2026']]:[['Warranty Policy v1.4 · §6.2 Liquid exclusion','Policy','91','Effective 01 Mar 2026'],['Liquid Damage Exclusions v1.2 · §2','Exclusions','84','Effective 01 Mar 2026'],['Warranty Policy v1.4 · §6.4 Seal-defect exception','Policy','78','Effective 01 Mar 2026']]).map(r=>({t:r[0],k:r[1],rel:r[2]+'%',w:`display:block;height:6px;width:${r[2]}%;background:#6B4E8C`,eff:r[3]}));
+    const v2=s.polVer==='v2';
+    const pv=[['v1.0','Jan 2026','Superseded','sys',s.polVer==='v1'],['v2.1','Jul 2026','Active','ok',s.polVer==='v2'],['v3.0 draft','Nov 2026','Draft','pend',false]];
+    const pvs=pv.map((p,i)=>({l:p[0],d:'Effective '+p[1],st:p[2],stS:bd(p[3]),onClick:i<2?set({polVer:i?'v2':'v1'}):()=>{},style:`text-align:left;border:1px solid ${p[4]?'#1F6F4A':'#E3E1DA'};background:${p[4]?'#E6F1EA':'#fff'};border-radius:8px;padding:12px 14px;font:400 13px Inter;display:grid;gap:4px;width:100%`}));
+    const sec=(v2?[['§4.3','Moisture ingress','Covered where caused by seal or gasket defect, 24 months from purchase.'],['§5.1','Impact damage','Excluded.'],['§5.4','Structural defects','Covered for 36 months on drum assemblies.']]:[['§4.3','Moisture ingress','Covered for 12 months from purchase.'],['§5.1','Impact damage','Excluded.'],['§5.4','Structural defects','Covered for 24 months.']]).map(x=>({a:x[0],b:x[1],c:x[2]}));
+    const aiv=[['Claims processed','4,812','+9% wk'],['Auto-approval rate','66%','+3 pts'],['Human review rate','21%','−2 pts'],['AI decision confidence','86%','median'],['Avg processing time','3.8 min','−0.6 min'],['RAG retrieval quality','0.91','nDCG@3'],['AI errors','0.7%','12 retried'],['Human overrides','8.4%','of reviews 37'],['Token usage','38.2M','this week'],['Model usage','3 models','1 primary'],['Estimated AI cost','USD 412','$0.086 / claim'],['Guardrail blocks','5.1%','mostly threshold']].map(a=>({l:a[0],v:a[1],d:a[2]}));
+    const vol=[22,18,15,14,16,24,38,56,72,80,76,68,62,70,78,74,66,58,44,36,30,26,22,20].map((h,i)=>({style:`flex:1;height:${h}%;background:${i===9?'#6B4E8C':'#D9CDE6'};border-radius:2px 2px 0 0`}));
+    const trend=[14,13,12,13,11,10,11,9,9,8,9,8].map(h=>({style:`flex:1;height:${h*6}%;background:#2F5D8C;border-radius:2px 2px 0 0;opacity:.85`}));
+    const agents=[['Intake Agent','Healthy','ok','4,812','0.6s','0.1%'],['Evidence Agent','Healthy','ok','4,790','1.6s','1.2%'],['Policy Retrieval','Healthy','ok','4,771','0.5s','0.3%'],['Risk Analysis','Degraded','warn','4,771','0.4s','0.9%'],['Decision Agent','Healthy','ok','4,771','0.9s','0.4%']].map(a=>({n:a[0],st:a[1],stS:bd(a[2]),r:a[3],l:a[4],e:a[5]}));
+    const models=[['decision-model-2026.09','Decision','91.2%','0.9s','USD 0.052'],['vision-inspect-v3','Evidence','88.4%','1.2s','USD 0.021'],['embed-policy-v2','Retrieval','nDCG 0.91','0.1s','USD 0.001']].map(m=>({n:m[0],u:m[1],a:m[2],l:m[3],c:m[4]}));
+    const audit=[['02 Oct 09:41','System','claims.approve','CLM-ABC-24-08172','AI','—','decision-model-2026.09','v2.1 §4.3'],['02 Oct 09:58','R. Fernando','claim.override','CLM-XYZ-24-03391','AI REJECT','Human APPROVE','decision-model-2026.09','v1.4 §6.4'],['02 Oct 10:02','M. Dias','pii.reveal','CLM-ABC-24-08158','—','Human','—','—'],['02 Oct 10:15','Platform admin','tenant.switch','—','—','Human','—','—'],['02 Oct 10:31','S. Karunaratne','policy.publish','Policy v2.1','—','Human','—','v2.1']].map(a=>({w:a[0],who:a[1],act:a[2],cl:a[3],ai:a[4],hu:a[5],mo:a[6],pv:a[7]}));
+    const ctrl=[['Tenant isolation','Enforced · separate index, keys and storage per tenant'],['Role-based access','7 roles · least privilege · approval limits per role'],['PII protection','Masked by default · reveal needs reason and is logged'],['Secure documents','Encrypted at rest · signed, expiring URLs'],['AI provider controls','2 approved providers · region-locked · no training on data'],['Audit logging','Immutable · 7-year retention · export to SIEM']].map(c=>({k:c[0],v:c[1]}));
+    const tabs=[['tenant','Tenant settings'],['security','Security & audit']].map(t=>({l:t[1],onClick:set({admTab:t[0]}),style:`height:40px;padding:0 4px;margin-right:20px;border:0;background:none;font:500 14px Inter;color:${s.admTab===t[0]?'#1C1F1C':'#5F635C'};border-bottom:2px solid ${s.admTab===t[0]?'#1F6F4A':'transparent'}`}));
+    return{docs,ret,pvs,sec,v2,v1:!v2,aiv,vol,trend,agents,models,audit,ctrl,admTabs:tabs,admTenant:s.admTab==='tenant',admSec:s.admTab==='security',
+      docHead:'display:grid;grid-template-columns:minmax(0,2fr) 130px 120px 100px 70px 110px 110px 100px 120px;gap:12px;padding:12px 16px;background:#FAFAF8;border-bottom:1px solid #E3E1DA;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C',
+      docRow:'display:grid;grid-template-columns:minmax(0,2fr) 130px 120px 100px 70px 110px 110px 100px 120px;gap:12px;padding:12px 16px;border-bottom:1px solid #F2F1ED;font:400 13px Inter;align-items:center',
+      lim:abc?'LKR 75,000':'LKR 100,000',minConf:'85%'};
+  }
+  extra3(s,T,go,set){
+    const sw=(a)=>a.map(x=>({n:x[0],h:x[1],u:x[2],bg:`height:44px;border-radius:6px;background:${x[1]};border:1px solid rgba(28,31,28,.12)`}));
+    const colorGroups=[['Neutrals',sw([['bg','#FAFAF8','Page background'],['surface','#FFFFFF','Cards, panels'],['surface-muted','#F2F1ED','Hover, wells'],['border','#E3E1DA','Dividers'],['border-strong','#CDCAC0','Inputs'],['text','#1C1F1C','Primary text'],['text-secondary','#5F635C','Secondary'],['text-muted','#8B8F87','Hints only']])],
+    ['Primary & status',sw([['primary','#1F6F4A','Primary action · focus'],['success','#3F7D58','Passed, covered'],['warning','#C08A2E','Needs attention'],['error','#A03428','Failed, rejected'],['info','#2F5D8C','Informational'],['pending','#8B8F87','Waiting'],['high-risk','#A03428','Risk ≥ 70'],['primary-soft','#E6F1EA','Selected rows']])],
+    ['Actor language',sw([['ai','#6B4E8C','AI content (ink)'],['ai-soft','#F0EBF5','AI surface'],['human','#2F5D8C','Human decision (ink)'],['human-soft','#E8EFF6','Human surface'],['system','#5F635C','System action'],['system-soft','#F2F1ED','System surface'],['tenant-abc','#C08A2E','Tenant marker only'],['tenant-xyz','#1E6F7A','Tenant marker only']])]].map(g=>({g:g[0],sw:g[1]}));
+    const typeRows=[['Display','Fraunces 600 · 40/48','font:600 40px/48px Fraunces,Georgia,serif','Claim approved'],['Page title','Fraunces 600 · 32/40','font:600 32px/40px Fraunces,Georgia,serif','Claims'],['Section title','Fraunces 600 · 20/28','font:600 20px/28px Fraunces,Georgia,serif','Needs a human'],['Card title','Inter 600 · 16/24','font:600 16px/24px Inter','Customer'],['Body','Inter 400 · 14/20','font:400 14px/20px Inter','Product is within the 24-month warranty period.'],['Small','Inter 400 · 12/16','font:400 12px/16px Inter;color:#5F635C','Customer-written text · original evidence'],['Label','Inter 500 · 12 · +0.04em caps','font:500 12px/16px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C','Claim value'],['Data','Inter 400 · 13 tabular','font:400 13px/20px Inter;font-variant-numeric:tabular-nums','LKR 182,000.00'],['Mono','JetBrains Mono 400 · 12','font:400 12px/16px "JetBrains Mono",monospace','CLM-XYZ-24-03391 · TRC-2C91']].map(t=>({n:t[0],m:t[1],st:t[2],x:t[3]}));
+    const space=[4,8,12,16,24,32,48,64].map(n=>({n,st:`height:16px;width:${n}px;background:#1F6F4A;border-radius:2px`}));
+    const radii=[['4 · badge, input',4],['8 · button, card',8],['12 · dialog',12],['full · avatar, pill',24]].map(r=>({n:r[0],st:`width:72px;height:48px;border:1px solid #CDCAC0;background:#fff;border-radius:${r[1]}px`}));
+    const elev=[['raised','0 1px 2px rgba(28,31,28,.05)','Cards'],['overlay','0 4px 12px rgba(28,31,28,.12)','Menus, popovers'],['modal','0 16px 40px rgba(28,31,28,.2)','Dialogs, drawers']].map(e=>({n:e[0],u:e[2],st:`width:100%;height:56px;background:#fff;border-radius:8px;box-shadow:${e[1]}`}));
+    const toks=[['Motion','120ms hover · 160–200ms enter · 240ms fills · cubic-bezier(.2,0,0,1) · respects reduced-motion'],['Breakpoints','sm 640 · md 1024 · lg 1280 · xl 1536'],['Grid','12 columns · 24px gutter desktop · 16px tablet · 4 columns mobile'],['Borders','1px --border everywhere; dashed = AI proposal, solid = committed']].map(t=>({k:t[0],v:t[1]}));
+    const docsTbl=[['Button','Trigger an action','Primary · secondary · ghost · danger · human','Default, hover, focus, active, disabled, loading','Native button; 44px touch target on mobile; label states action','Full-width in mobile sheets'],['Input / Textarea','Capture text','Default · with hint · with prefix','Default, focus, error, success, disabled, read-only','Visible label, aria-describedby for hints and errors','Single column below 640px'],['Combobox','Pick from large lists','Single · multi · async','Open, loading, empty, error','ARIA combobox pattern; type-ahead; Esc closes','Becomes full-screen sheet on mobile'],['Status badge','State of a record','Status · actor · risk','Static','Text always present — never colour alone','Truncates to icon-less text'],['Confidence indicator','Show model certainty','Bar + number','High ≥85 · Medium 70–84 · Low <70','role=meter with aria-valuenow; number visible','Number only on mobile'],['AI Decision Card','Present AI recommendation as advisory','Compact · full workspace','Recommendation, escalated, overridden','Heading hierarchy; dashed border supplemented by label text','Stacks metrics 2×2'],['Human Review Banner','Signal human control point','Required · overridden · complete','Open, in-review, decided','role=region with aria-label; not an error alert','Sticky at top on mobile'],['Decision Trace','Auditable execution timeline','Operational · technical','Passed, attention, handed to human','Ordered list; status as text; expandable details','Collapses to vertical list'],['Table','Dense records','Sortable · selectable','Hover, selected, loading, empty','Real table semantics; sticky header; keyboard row open','Becomes card list below 768px'],['Dialog','Confirm consequential action','Confirm · destructive · override','Open, submitting, error','Focus trap; Esc; returns focus to trigger','Bottom sheet on mobile'],['Stepper','Show progress of a claim','Customer · internal','Done, current, upcoming, blocked','aria-current=step; text labels','Vertical on mobile'],['Toast','Confirm result','Success · error · info','Enter, dismiss','role=status; 6s min; actions never only in toast','Bottom-anchored']].map(d=>({a:d[0],b:d[1],c:d[2],d:d[3],e:d[4],f:d[5]}));
+    const dsteps=[['Tenant identified','sys','ABC-PROD resolved · knowledge index scoped','XYZ-PROD resolved · knowledge index scoped'],['Claim submitted','sys','Control panel failure · AquaPure W7 · LKR 48,500','Panel failure · Lumen 55" TV · LKR 182,000'],['Evidence analysed','ai','Invoice verified · serial valid · residue near seal','Invoice verified · liquid indicator red · technician photo conflicts'],['Tenant policy retrieved','ai','Policy v2.1 §4.3 — seal-defect moisture covered, 24 mo','Policy v1.4 §6.2 — liquid damage excluded unless seal defect proven'],['AI decision generated','ai','APPROVE · 92% · low risk','REJECT · 64% · medium risk'],['Guardrails & outcome','sys','Auto-approved — under LKR 75,000 limit','Escalated — value > LKR 100,000 and evidence conflicts'],['Human review','hu','Not required','Supervisor R. Fernando opens case'],['Human overrides AI','hu','—','Override REJECT → APPROVE · reason recorded'],['Decision trace recorded','sys','TRC · 8 stages · 4.0s','TRC · 9 stages · AI + human decision · immutable']];
+    const n=s.demoStep;
+    const drows=dsteps.map((d,i)=>{const on=i<n,cur=i===n-1;const cell=on?'color:#1C1F1C':'color:#B9BCB4';return{n:i+1,l:d[0],aS:bd(d[1]==='ai'?'ai':d[1]==='hu'?'hu':'sys'),actor:d[1]==='ai'?'AI':d[1]==='hu'?'HUMAN':'SYSTEM',a:on?d[2]:'…',x:on?d[3]:'…',
+      row:`display:grid;grid-template-columns:260px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:14px 20px;border-bottom:1px solid #F2F1ED;align-items:center;font:400 14px/20px Inter;background:${cur?'#FAFAF8':'#fff'};${cell}`,
+      dot:`width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 12px Inter;flex:none;background:${on?'#1C1F1C':'#fff'};color:${on?'#fff':'#8B8F87'};border:1px solid ${on?'#1C1F1C':'#CDCAC0'}`}});
+    const csteps=['Submit','Evidence','Processing','Review','Decision','Repair','Done'];
+    const cst=(cur)=>csteps.map((t,i)=>({t,n:i+1<cur?'✓':i+1,style:`display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;font:500 12px Inter;color:${i+1<=cur?'#1C1F1C':'#8B8F87'}`,dot:`width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:600 12px Inter;background:${i+1<cur?'#1F6F4A':i+1===cur?'#fff':'#fff'};color:${i+1<cur?'#fff':i+1===cur?'#1F6F4A':'#8B8F87'};border:2px solid ${i+1<=cur?'#1F6F4A':'#CDCAC0'}`}));
+    const ctl=[['02 Oct, 09:41','Claim received','We have your claim and photos.'],['02 Oct, 09:42','Checked automatically','Your invoice, serial number and photos were verified.'],['02 Oct, 09:42','Approved','Your washer is covered under your 24-month warranty.'],['Next','Repair booking','Colombo Service Hub will contact you within 1 working day.']].map((t,i)=>({w:t[0],h:t[1],d:t[2],dot:`width:12px;height:12px;border-radius:50%;margin-top:4px;background:${i<3?'#1F6F4A':'#fff'};border:2px solid ${i<3?'#1F6F4A':'#CDCAC0'}`}));
+    const repairs=[['RPR-2291','Nimali Perera','AquaPure W7 · control panel','In progress','hu'],['RPR-2287','Dilan Jayasuriya','CoolMax 420L · compressor','Parts ordered','warn'],['RPR-2280','Chaminda Ekanayake','HeatWave O3 · element','Scheduled','pend'],['RPR-2274','Ishara Fonseka','CoolMax 300L · door seal','Completed','ok']].map((r,i)=>({id:r[0],cust:r[1],prod:r[2],st:r[3],stS:bd(r[4]),style:`width:100%;text-align:left;border:1px solid ${i===0?'#1F6F4A':'#E3E1DA'};background:${i===0?'#E6F1EA':'#fff'};border-radius:8px;padding:12px;font:400 13px/18px Inter;display:grid;gap:4px`}));
+    const parts=[['Control panel board','PN-W7-CP-02','1','In stock'],['Gasket seal kit','PN-W7-GS-11','1','Ordered · ETA 04 Oct']].map(p=>({a:p[0],b:p[1],c:p[2],d:p[3]}));
+    const tenants=Object.values(TEN).map(t=>({name:t.name,meta:t.meta,tile:`width:44px;height:44px;border-radius:10px;background:${t.c};color:#fff;display:grid;place-items:center;font:600 16px Fraunces,serif`,k:t.k,onClick:()=>this.setState({tenant:t.k,screen:'dashboard'})}));
+    const mobTrack=[['Received','02 Oct 09:41',1],['Checked','02 Oct 09:42',1],['Approved','02 Oct 09:42',1],['Repair booked','Pending',0]].map(m=>({a:m[0],b:m[1],dot:`width:14px;height:14px;border-radius:50%;background:${m[2]?'#1F6F4A':'#fff'};border:2px solid ${m[2]?'#1F6F4A':'#CDCAC0'}`}));
+    return{colorGroups,typeRows,space,radii,elev,toks,docsTbl,drows,
+      cst:cst(2),cst2:cst(5),ctl,repairs,parts,tenants,mobTrack,
+      chipOn:'display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:14px;background:#1C1F1C;color:#fff;font:500 13px Inter',
+      chipOff:'display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:14px;background:#fff;border:1px solid #CDCAC0;color:#43473F;font:500 13px Inter',
+      tenantTile:`width:56px;height:56px;border-radius:12px;background:${T.c};color:#fff;display:grid;place-items:center;font:600 20px Fraunces,serif`,
+      demoNext:()=>this.setState({demoStep:Math.min(9,s.demoStep+1)}),demoPrev:()=>this.setState({demoStep:Math.max(0,s.demoStep-1)}),demoReset:()=>{clearInterval(this._p);this.setState({demoStep:0,playing:false})},
+      demoPlay:()=>{clearInterval(this._p);this.setState({demoStep:s.demoStep>=9?1:Math.max(1,s.demoStep),playing:true});this._p=setInterval(()=>{if(this.state.demoStep>=9){clearInterval(this._p);this.setState({playing:false})}else this.setState({demoStep:this.state.demoStep+1})},1400)},
+      demoLabel:n+' / 9',
+    };
+  }
+  componentWillUnmount(){clearInterval(this._p);window.removeEventListener("resize",this._r);window.removeEventListener('keydown',this._k)}
+  renderVals(){
+    const s=this.state,T=TEN[s.tenant],set=o=>()=>this.setState(o);
+    const grp=GROUPS.find(g=>g[2].some(x=>x[0]===s.screen))||GROUPS[2];
+    const go={};GROUPS.forEach(g=>g[2].forEach(x=>go[x[0]]=()=>this.setState({screen:x[0],menu:null,ovOpen:false})));
+    const groups=GROUPS.map(g=>({label:g[1],onClick:go[g[2][0][0]],style:`height:28px;padding:0 12px;border:0;border-radius:6px;font:500 13px Inter;white-space:nowrap;background:${g===grp?'#fff':'transparent'};color:${g===grp?'#1C1F1C':'#D4D6CF'}`}));
+    const subs=grp[2].map(x=>({label:x[1],onClick:go[x[0]],style:`height:26px;padding:0 10px;border-radius:13px;font:500 12px Inter;white-space:nowrap;border:1px solid ${x[0]===s.screen?'#1C1F1C':'#CDCAC0'};background:${x[0]===s.screen?'#1C1F1C':'#fff'};color:${x[0]===s.screen?'#fff':'#43473F'}`}));
+    const is={};GROUPS.forEach(g=>g[2].forEach(x=>is[x[0]]=s.screen===x[0]));is.console=CONSOLE.includes(s.screen);
+    const exp=!s.collapsed;
+    const nav=NAV.map(n=>{const on=n[2]&&n[2].includes(s.screen);return{label:n[0],ini:{"Dashboard":"DB","Claims":"CL","Customers":"CU","Products":"PR","Warranty Policies":"WP","Service Network":"SN","AI Operations":"AI","Human Review":"HR","Knowledge Base":"KB","Reports":"RP","Administration":"AD"}[n[0]],count:n[3]||'',showCount:exp&&!!n[3],onClick:n[1]?go[n[1]]:()=>{},
+      style:`display:flex;align-items:center;gap:10px;height:36px;padding:0 ${exp?10:0}px;justify-content:${exp?'flex-start':'center'};border:0;border-radius:6px;font:${on?500:400} 14px Inter;background:${on?'#E6F1EA':'transparent'};color:${on?'#175A3B':n[1]?'#43473F':'#A2A69D'}`,
+      iniStyle:`width:28px;height:24px;border-radius:5px;display:grid;place-items:center;font:600 10px Inter;letter-spacing:.02em;flex:none;background:${on?'#1F6F4A':'#F2F1ED'};color:${on?'#fff':'#5F635C'}`,
+      countStyle:'min-width:20px;height:20px;border-radius:10px;background:#2F5D8C;color:#fff;font:600 11px/20px Inter;text-align:center;padding:0 5px'}});
+    const sel={foundations:'Foundations',claims:'Claims'};
+    const crumbMap={dashboard:['Dashboard'],claims:['Claims'],claim:['Claims','CLM'],decision:['Claims','CLM','AI decision'],evidence:['Claims','CLM','Evidence'],trace:['Claims','CLM','Decision trace'],review:['Human Review'],kb:['Knowledge Base'],policy:['Warranty Policies','Product Warranty — Appliances'],aiops:['AI Operations'],admin:['Administration']};
+    const cid=(s.tenant==='ABC'?'CLM-ABC-24-08172':'CLM-XYZ-24-03391');
+    const cr=(crumbMap[s.screen]||[]).map(x=>x==='CLM'?cid:x);
+    const crumbs=[{t:T.name,sep:'/',style:'color:#1C1F1C;font-weight:500'}].concat(cr.map((x,i)=>({t:x,sep:i<cr.length-1?'/':'',style:i===cr.length-1?'color:#1C1F1C;font-weight:500':'color:#5F635C'})));
+    const rowCols='grid-template-columns:140px 150px 170px 130px 140px 90px 130px 90px 130px 110px 110px 80px 80px';
+    const rows=CLAIMS.filter(c=>c[0]===s.tenant).map(c=>({id:c[1],cust:c[2],prod:c[3],tn:TEN[c[0]].name,tdot:`width:8px;height:8px;border-radius:2px;background:${TEN[c[0]].c}`,type:c[4],val:'LKR '+c[5],st:c[6],stS:bd(c[7]),risk:c[8],rdot:`width:8px;height:8px;border-radius:50%;background:${c[9]==='ok'?'#3F7D58':c[9]==='warn'?'#C08A2E':'#A03428'}`,conf:c[10]+'%',cbar:`display:block;height:6px;width:${c[10]}%;background:#6B4E8C`,dec:c[11],dS:bd(c[12]),who:c[13],date:c[14]+' 2026',sla:c[15],slaS:`font:500 12px Inter;color:${c[16]==='err'?'#A03428':c[16]==='warn'?'#7A520C':'#5F635C'}`,onClick:go.claim}));
+    return{...this.extra(s,T,go,set),...this.extra2(s,T,go,set),...this.extra3(s,T,go,set),
+      is,go,groups,subs,nav,crumbs,rows,T,expanded:exp,
+      claimCount:rows.length,
+      sidebarStyle:`width:${exp?240:64}px;flex:none;background:#fff;border-right:1px solid #E3E1DA;display:flex;flex-direction:column;transition:width .2s cubic-bezier(.2,0,0,1)`,
+      collapseLabel:exp?'Collapse':'»',toggleSide:set({collapsed:!s.collapsed}),
+      tenantStrip:`height:3px;flex:none;background:${T.c}`,tenantDot:`width:10px;height:10px;border-radius:3px;background:${T.c}`,
+      menuTenant:s.menu==='tenant',menuNotif:s.menu==='notif',menuUser:s.menu==='user',menuCmd:s.menu==='cmd',
+      toggleTenantMenu:()=>this.setState({menu:s.menu==='tenant'?null:'tenant'}),toggleNotif:()=>this.setState({menu:s.menu==='notif'?null:'notif'}),toggleUser:()=>this.setState({menu:s.menu==='user'?null:'user'}),
+      openCmd:set({menu:'cmd',cmdQ:''}),closeMenu:set({menu:null}),stop:e=>e.stopPropagation(),cmdQ:s.cmdQ,setCmd:e=>this.setState({cmdQ:e.target.value}),
+      cmdItems:Object.keys(LABEL).filter(k=>LABEL[k].toLowerCase().includes(s.cmdQ.toLowerCase())).slice(0,8).map(k=>({label:LABEL[k],grp:(GROUPS.find(g=>g[2].some(x=>x[0]===k))||[])[1],onClick:go[k]})),
+      tenantOpts:Object.values(TEN).map(t=>({name:t.name,meta:t.meta+' · '+t.region,cur:t.k===s.tenant?'Current':'',dot:`width:12px;height:12px;border-radius:3px;background:${t.c}`,style:`width:100%;display:flex;gap:12px;align-items:center;border:0;border-radius:6px;padding:10px;font:400 14px Inter;background:${t.k===s.tenant?'#F2F1ED':'#fff'}`,onClick:()=>this.setState({tenant:t.k,menu:null,qi:0,ovDone:false,screen:'dashboard',toast:'Switched to '+t.name})})),
+      notifs:[{tag:'HUMAN',style:bd('hu'),text:'3 claims need review — 1 breaches SLA in 1h.',when:'2 min ago'},{tag:'AI',style:bd('ai'),text:'Low-confidence decision escalated on '+cid+'.',when:'14 min ago'},{tag:'SYSTEM',style:bd('sys'),text:'Policy v2.1 published for Appliances.',when:'1 h ago'},{tag:'SYSTEM',style:bd('sys'),text:'Partner Colombo Service Hub accepted repair RPR-2291.',when:'3 h ago'}],
+      flow:['Claim','Understand','Investigate','Retrieve policy','Reason','Assess risk','Decide','Validate','Automate / escalate','Audit'].map((t,i)=>({t,style:bd([ 'sys','ai','ai','ai','ai','ai','ai','sys','hu','sys'][i])})),
+      kpis:[['Claims today','214','+12% vs last Thu'],['Pending human reviews','3','1 near SLA breach'],['Auto-approved','141','66% of today'],['High-risk claims','9','4 flagged for fraud signals'],['Avg processing time','3.8 min','Auto: 0.9 min · Human: 41 min'],['Claim cost','LKR 8.4M','Approved today'],['Open service requests','37','6 awaiting parts'],['AI automation rate','68%','Target 70%']].map(k=>({l:k[0],v:k[1],d:k[2]})),
+      attention:[{id:'CLM-XYZ-24-03391',title:'Lumen 55" QLED TV · panel failure',why:'High claim value · conflicting evidence',val:'LKR 182,000',sla:'1h 05m',slaStyle:'font:500 12px Inter;color:#A03428;text-align:right'},{id:'CLM-XYZ-24-03380',title:'Lumen 65" QLED TV · liquid exposure',why:'Potential fraud · low confidence (58%)',val:'LKR 245,000',sla:'5h 40m',slaStyle:'font:500 12px Inter;color:#7A520C;text-align:right'},{id:'CLM-ABC-24-08165',title:'AquaPure W9 Washer · physical damage',why:'Policy ambiguity — §5.1 vs §5.4',val:'LKR 132,000',sla:'3h 20m',slaStyle:'font:500 12px Inter;color:#7A520C;text-align:right'}],
+      decided:[['#5F635C','Automated by system','146 · 68%'],['#6B4E8C','AI recommendation, confirmed','45 · 21%'],['#2F5D8C','Human decision','23 · 11%']].map(d=>({dot:`width:10px;height:10px;border-radius:2px;background:${d[0]}`,l:d[1],v:d[2]})),
+      filters:[['Tenant',T.name],['Status','All'],['Product','All'],['Claim type','All'],['Risk','All'],['AI decision','All'],['Human review','Any'],['Date','Last 30 days']].map(f=>({k:f[0],v:f[1],style:'height:32px;padding:0 12px;border:1px solid #CDCAC0;border-radius:6px;background:#fff;font:500 13px Inter'})),
+      rowHead:`display:grid;${rowCols};gap:12px;padding:12px 16px;background:#FAFAF8;border-bottom:1px solid #E3E1DA;font:500 12px Inter;letter-spacing:.04em;text-transform:uppercase;color:#5F635C;align-items:center`,
+      rowStyle:`display:grid;${rowCols};gap:12px;padding:12px 16px;border-bottom:1px solid #F2F1ED;font:400 14px Inter;align-items:center;cursor:pointer`,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

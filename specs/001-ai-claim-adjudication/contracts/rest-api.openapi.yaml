@@ -492,11 +492,15 @@ components:
 
     Me:
       type: object
-      required: [sub, name, tenantDisplayName, roles]
+      required: [sub, name, tenantDisplayName, tenantCurrency, roles]
       properties:
         sub: { type: string }
         name: { type: string }
         tenantDisplayName: { type: string }
+        tenantCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 code from tenant settings; the currency of every claim value
         roles:
           type: array
           items: { type: string, enum: [claims-agent, claims-reviewer, auditor] }

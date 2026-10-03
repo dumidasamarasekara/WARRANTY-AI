@@ -34,7 +34,8 @@ limiting); EF Core 10 + Npgsql; Pgvector for .NET; Anthropic official C# SDK (`A
 Microsoft.Extensions.AI (embedding abstraction); Azure.Storage.Blobs; .NET Aspire 13 (AppHost,
 ServiceDefaults, PostgreSQL, Azure Storage emulator, Keycloak, Ollama, Vite integrations);
 OpenTelemetry; Vite, React Router, TanStack Query, oidc-client-ts / react-oidc-context,
-openapi-typescript / openapi-fetch
+openapi-typescript / openapi-fetch; self-hosted `@fontsource` fonts (Fraunces, Inter, JetBrains
+Mono) for the WarrantyOS design system ([ui-design.md](./ui-design.md))
 
 **Storage**: PostgreSQL 17 (pgvector image): database `warranty` (transactional, schemas per
 domain) and database `knowledge` (RAG chunks, namespace-partitioned); Azurite (Azure Blob API) for
@@ -180,6 +181,27 @@ retry ends the run with disposition `HumanReview` (FR-023, FR-031).
   agent's output.
 - **Data model**: [data-model.md](./data-model.md).
 
+### User interface design
+
+The SPA implements the **WarrantyOS design system** (Claude Design prototype in
+[design/WarrantyOS.dc.html](./design/WarrantyOS.dc.html)), adapted to this feature in
+[ui-design.md](./ui-design.md), which is binding for every `src/web` task:
+
+- **Tokens** (colour, tone triples, type scale, spacing, radius, elevation, motion) as CSS custom
+  properties in `src/web/src/shared/styles/tokens.css`; CSS modules only, no UI library (R20).
+- **Component kit** in `src/web/src/shared/ui/` (buttons, badges, confidence meter, AI panel,
+  disposition banner, tables, dialog, form fields, file drop, stepper, timeline, policy citation)
+  and the domain-to-visual mapping (claim status, AI decision, disposition, trail actor) in
+  `src/web/src/shared/presentation/`, built once (T117) before any page.
+- **Actor visual language**: AI output is violet, dashed and labelled "AI", always with its
+  confidence; human decisions are blue and solid with the person and time; system actions are grey
+  with mono IDs and timestamps. This puts Principles III and IV on screen.
+- **Screens**: staff shell with a read-only tenant banner (no tenant switcher), claims list, claim
+  workspace (case file · AI decision · evidence · decision trace), human review queue with the
+  override/justification dialog, policy versions, and the tenant-branded claimant portal (submit,
+  access, status, supplement). Prototype screens without a requirement here (dashboard, AI
+  operations, knowledge base, administration, partner, mobile, demo) are out of scope.
+
 ### Testing strategy
 
 | Layer | What | How |
@@ -189,7 +211,7 @@ retry ends the run with disposition `HumanReview` (FR-023, FR-031).
 | Integration | RLS and query filters (including raw-SQL probes as another tenant), knowledge retrieval filters and version selection, blob isolation, job queue, API endpoints with test auth | Testcontainers (Postgres+pgvector, Azurite), WebApplicationFactory |
 | Scenario (deterministic AI) | The FR-043 scenarios end to end (auto-approve, auto-reject, request info, high value, suspicious, override, same claim/different tenant, cross-tenant denial) plus policy-version and AI-failure scenarios | Replay model provider + recorded responses |
 | Evaluation | Golden dataset metrics (R19) | `tests/Warranty.Evaluation` (`--replay` in CI, `--live` opt-in) |
-| Frontend | Forms, review decision rules (justification required), trace rendering, claimant access flow | Vitest + RTL + MSW |
+| Frontend | Forms, review decision rules (justification required), trace rendering, claimant access flow; UI kit behaviour (status mappings, confidence meter semantics, dialog focus handling) | Vitest + RTL + MSW |
 | Smoke | Whole AppHost boots and one claim completes | Aspire testing builder (manual / nightly) |
 
 ### PoC simplifications and future extension points
@@ -211,6 +233,7 @@ retry ends the run with disposition `HumanReview` (FR-023, FR-031).
 | Model-reported confidence used as-is | Calibration layer fed by evaluation results |
 | Disk-level encryption only; Azurite unencrypted | Managed storage encryption, column-level encryption for PII |
 | Single region, single language (English) | Localization of claimant explanations, multi-region data residency |
+| Tenant marker colours mapped from the display name in the SPA (`tenantTheme.ts`) | Branding fields in tenant settings, served by `/api/public/tenant` and `/api/me` |
 
 ### Local development setup (summary)
 
@@ -229,6 +252,8 @@ specs/001-ai-claim-adjudication/
 ├── research.md          # Phase 0 output (/speckit-plan command)
 ├── data-model.md        # Phase 1 output (/speckit-plan command)
 ├── quickstart.md        # Phase 1 output (/speckit-plan command)
+├── ui-design.md         # WarrantyOS design system applied to the SPA (binding for src/web tasks)
+├── design/              # Claude Design source: WarrantyOS.dc.html + support.js (reference only)
 ├── contracts/           # Phase 1 output (/speckit-plan command)
 │   ├── rest-api.openapi.yaml
 │   ├── ai-gateway.md
@@ -301,6 +326,9 @@ src/
     ├── src/features/review/       # review queue, decision form
     ├── src/features/trace/        # decision trace timeline, AI call details
     ├── src/shared/api/            # generated OpenAPI types + client
+    ├── src/shared/styles/         # tokens.css, base.css (WarrantyOS foundations)
+    ├── src/shared/ui/             # component kit (ui-design.md §5)
+    ├── src/shared/presentation/   # status/decision/actor → label + tone mappings, formatting
     └── tests/
 tests/
 ├── Warranty.UnitTests/            # includes architecture (NetArchTest) tests

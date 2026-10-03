@@ -8,7 +8,7 @@ WARRANTY-AI is a **Spec-Driven Development (SDD)** project scaffolded with [GitH
 
 ## Tech stack and commands (planned in `specs/001-ai-claim-adjudication/plan.md`)
 
-The stack is chosen but the code is not yet implemented (`/speckit-implement` creates it). Planned stack: .NET 10 / ASP.NET Core modular monolith (`src/Warranty.*`), React + TypeScript + Vite SPA (`src/web`), PostgreSQL + pgvector, Azurite blobs, Keycloak, Ollama embeddings, Anthropic models via a provider-agnostic AI Gateway, orchestrated locally by .NET Aspire on **Podman**. Planned commands (verify once the projects exist):
+The stack is chosen but the code is not yet implemented (`/speckit-implement` creates it). Planned stack: .NET 10 / ASP.NET Core modular monolith (`src/Warranty.*`), React + TypeScript + Vite SPA (`src/web`), PostgreSQL + pgvector, Azurite blobs, Keycloak, Ollama embeddings, Anthropic models via a provider-agnostic AI Gateway, orchestrated locally by .NET Aspire on **Podman**. The SPA's look and behaviour follow the WarrantyOS design system in `specs/001-ai-claim-adjudication/ui-design.md` (tokens, component kit, AI/human/system visual language, screen layouts); the Claude Design source it was taken from is in that feature's `design/` folder (reference only — don't import it). Planned commands (verify once the projects exist):
 
 - Run everything: `aspire run` (requires `DOTNET_ASPIRE_CONTAINER_RUNTIME=podman`; Anthropic key in AppHost user secrets as `Parameters:anthropic-api-key`)
 - Backend tests: `dotnet test tests/Warranty.UnitTests`, `dotnet test tests/Warranty.IntegrationTests` (Testcontainers on Podman: set `DOCKER_HOST`, `TESTCONTAINERS_RYUK_DISABLED=true`); single test: `dotnet test --filter "FullyQualifiedName~<Name>"`
