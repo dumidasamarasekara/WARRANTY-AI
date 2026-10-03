@@ -16,12 +16,14 @@
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Testcontainers.Azurite" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Aspire.Hosting.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Warranty.Api\Warranty.Api.csproj" />
-    <!-- Aliased: its top-level Program would clash with the API's Program used by WebApplicationFactory. -->
+    <!-- Aliased: their top-level Program would clash with the API's Program used by WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Warranty.MigrationService\Warranty.MigrationService.csproj" Aliases="migration" />
+    <ProjectReference Include="..\..\src\Warranty.AppHost\Warranty.AppHost.csproj" Aliases="apphost" />
   </ItemGroup>
 
   <ItemGroup>
