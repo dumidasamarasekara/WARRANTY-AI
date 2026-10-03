@@ -1,6 +1,6 @@
 # Research & Decisions: AI-Powered Warranty Claim Adjudication PoC
 
-**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 | **Plan**: [plan.md](./plan.md)
+**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 (R23–R25 added 2026-10-03) | **Plan**: [plan.md](./plan.md)
 
 This document resolves every open technical question for the plan. Each entry records the
 decision, why it was chosen, and the alternatives considered. Technology constraints given by the
@@ -272,12 +272,15 @@ treated as fixed inputs; the research below chooses *within* them.
   compile-time property, not a convention.
 - Escalation triggers implemented (user list ↔ spec): value above limit, confidence below minimum,
   evidence conflicts, ambiguous policy (coverage `UNDETERMINED`, no applicable policy, or more than
-  one applicable version), risk medium/high, tenant rule requiring human approval, invalid or
-  unavailable AI output, AI recommends `HUMAN_REVIEW`.
+  one applicable version), risk medium/high (any risk signal, R23), tenant rule requiring human
+  approval, invalid or unavailable AI output, AI recommends `HUMAN_REVIEW`, claim returned after a
+  reviewer's information request, information still incomplete after two automatic requests
+  (R24), unsafe claimant-facing text (R25).
 - **Reconciliation with the spec**: the user's list says "required information is missing →
   escalate". Spec FR-010 / FR-029 (business behavior, which governs) say missing information
   pauses the claim in `PendingInformation` for the **submitter** — itself a human checkpoint.
-  It is routed to a **reviewer** only when another escalation condition also applies.
+  It is routed to a **reviewer** only when another escalation condition also applies, including
+  the two-request limit (R24).
 
 ## R14. Prompt-injection and untrusted content
 
@@ -286,8 +289,8 @@ treated as fixed inputs; the research below chooses *within* them.
   the user turn and the system prompt states it is evidence only; (b) a deterministic detector
   (phrase/pattern list maintained in global knowledge) raises a `MANIPULATION_ATTEMPT` risk signal;
   (c) the Decision schema includes `manipulationDetected`; (d) LLM agents only hold read-only
-  tools; (e) any manipulation signal blocks automatic approval in the guardrail engine (FR-019,
-  SC-010).
+  tools; (e) any manipulation signal, like every risk signal (R23), blocks automatic approval and
+  rejection in the guardrail engine (FR-019, SC-010).
 
 ## R15. Privacy controls in the gateway
 
@@ -386,6 +389,85 @@ treated as fixed inputs; the research below chooses *within* them.
   stored in user secrets, never in source.
 - **Alternatives considered**: Podman Compose only (works, but loses the Aspire dashboard,
   service discovery and wiring of connection strings).
+
+## R23. Risk level derivation (clarification 2026-10-03, FR-017)
+
+- **Decision**: The risk level is computed deterministically by `IRiskAssessor` from the **union**
+  of deterministic signals and the signals listed in the Decision Agent's `risk.signals`; the
+  model's own `risk.level` is recorded for display but never used by the guardrails.
+  - No signal at all → `Low` (score 0). This is the only way to reach `Low`.
+  - One or more signals → at least `Medium`; `High` when the score reaches the tenant's
+    `risk_high_threshold` (default 60).
+  - Score = `min(100, Σ severity weights)` with weights `Low` 10 · `Medium` 25 · `High` 40. Fixed
+    severities for deterministic signals: `MANIPULATION_ATTEMPT`, `EVIDENCE_REUSED`,
+    `SERIAL_MISMATCH_PHOTO` → High; `DUPLICATE_SERIAL_CLAIM`, `PRODUCT_NOT_IN_CATALOG`,
+    `SOURCE_INCONSISTENCY`, `PURCHASE_DATE_ANOMALY` → Medium. AI-sourced signals
+    (`DAMAGE_INCONSISTENT_WITH_DESCRIPTION`, `OTHER`, and AI-reported duplicates of the codes
+    above) → Medium unless the same code was also raised deterministically (then the
+    deterministic severity applies, counted once).
+  - The guardrail check `RISK_LOW` passes only when the signal list is empty, so FR-026 and
+    FR-027 apply the same condition.
+  - Photos that do not show the product or the damage are **not** a signal: the Evidence Agent
+    reports them as missing information (`PHOTO_OF_DAMAGE` / `PHOTO_OF_SERIAL_LABEL`), which leads
+    to `RequestInformation` when nothing else escalates (US5 scenario 2).
+- **Rationale**: One rule ("any signal blocks automatic finalization") is easy to test at its
+  boundary and removes the earlier FR-026/FR-027 asymmetry. The score now only orders the review
+  queue and separates Medium from High; it no longer decides whether a claim is automated.
+- **Alternatives considered**: Weighted score with a Medium threshold (lets a single low-severity
+  signal through, and the weights become an untested policy decision); a closed "suspicious" subset
+  that blocks while other signals only add to the score (two lists to keep consistent across the
+  spec, data model and prompts).
+
+## R24. Reviewer loop and the automatic information-request limit (clarification 2026-10-03)
+
+- **Decision**: Two counters on the claim, written only by the `ActionExecutor` and read by the
+  guardrails as case facts:
+  - `reviewer_info_requested` (bool, sticky): set when a reviewer's `RequestInformation` decision
+    is executed; never cleared. Any later round evaluates fully (so the reviewer sees a fresh AI
+    recommendation) but the check `NOT_RETURNED_FROM_REVIEW` fails and the disposition is
+    `HumanReview` with reason `RETURNED_AFTER_REVIEWER_REQUEST`, whatever the AI recommends
+    (FR-028, FR-034).
+  - `auto_info_request_count` (int): incremented when a guardrail-issued `RequestInformation`
+    action is executed (intake short-circuit or AI `REQUEST_MORE_INFORMATION`). When a round would
+    produce `RequestInformation` and the count is already 2, the check
+    `AUTO_INFO_REQUESTS_WITHIN_LIMIT` fails and the disposition is `HumanReview` with reason
+    `INFO_INCOMPLETE_AFTER_2_REQUESTS` (FR-010). Reviewer requests do not increment it. The limit
+    is a constant in `Warranty.Guardrails` (`MaxAutomaticInformationRequests = 2`), not a tenant
+    setting, because the spec fixes it.
+  - Both checks run in the intake short-circuit as well (they are deterministic and do not need
+    the missing information), so FR-028 precedence over FR-010 holds.
+- **Rationale**: Storing the facts on the claim keeps the guardrail engine pure (no history
+  queries) and makes both rules unit-testable from `CaseFacts` alone.
+- **Alternatives considered**: Deriving both from `review_decisions` and run history at evaluation
+  time (an extra query inside a "pure" engine); a tenant-configurable limit (not required; can be
+  added later behind the same constant).
+
+## R25. Claimant-facing explanations and duplicate detection (clarification 2026-10-03)
+
+- **Decision — explanations**: `claims.final_explanation` is filled from the AI's
+  `claimantExplanation` for automatic decisions and from the reviewer's
+  `review_decisions.claimant_explanation` for reviewer decisions (FR-036, FR-037). The review API
+  requires `claimantExplanation` (20–1,500 characters) for `Approve`/`Reject` and rejects it for
+  `RequestInformation`; the SPA pre-fills it from the AI's text only when the reviewer's decision
+  matches the AI decision (`APPROVE`↔`Approve`, `REJECT`↔`Reject`). The internal `justification`
+  is never copied into any claimant-visible field. A deterministic `ClaimantTextScreen` (in
+  `Warranty.Guardrails`) checks claimant-facing text for disclosure terms (risk, fraud, suspicious,
+  manipulation, reused, duplicate, signal codes, `EV-`/`POL-`/`GLB-` IDs): on the AI's text it is
+  guardrail check `CLAIMANT_TEXT_SAFE` (failure → no automatic finalization → `HumanReview`); on a
+  reviewer's text it is a `400` validation error naming the offending term.
+- **Decision — duplicates**: `DUPLICATE_SERIAL_CLAIM` is raised when another claim of the same
+  tenant has the same normalized serial number and is either not final (`Submitted`,
+  `UnderEvaluation`, `PendingInformation`, `UnderReview`) or reached `Approved`/`Rejected` within
+  90 days before this claim's claim date (`claims.finalized_at`). Earlier rounds of the same claim
+  are the same claim and never count. The window is a constant
+  (`DuplicateClaimWindowDays = 90`). The accidental-damage incident count (`maxIncidents`) is a
+  separate, all-time count of approved accidental-damage claims for the serial.
+- **Rationale**: A separate claimant field keeps fraud reasoning out of claimant views by
+  construction; the term screen is a cheap backstop for both AI and human text (closes CHK005).
+  An explicit status-and-window rule makes the duplicate signal reproducible in seed data and tests.
+- **Alternatives considered**: Reusing the AI explanation when the reviewer agrees (the AI text
+  may have been written expecting escalation); showing the justification (leaks internal
+  reasoning); any prior claim as a duplicate (escalates every genuine repeat failure).
 
 ---
 

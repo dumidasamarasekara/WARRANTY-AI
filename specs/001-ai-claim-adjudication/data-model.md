@@ -1,6 +1,6 @@
 # Data Model: AI-Powered Warranty Claim Adjudication PoC
 
-**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 | **Plan**: [plan.md](./plan.md)
+**Feature**: `specs/001-ai-claim-adjudication` | **Date**: 2026-10-02 (updated 2026-10-03 for the spec clarifications) | **Plan**: [plan.md](./plan.md)
 
 Conventions:
 
@@ -70,7 +70,7 @@ Maps a claimant-channel hostname to a tenant (R9).
 | auto_approve_enabled | bool | default true |
 | auto_reject_enabled | bool | default true (clarification Q2) |
 | always_review_categories | text[] | product categories that always need a human decision |
-| risk_medium_threshold / risk_high_threshold | int | default 30 / 60 (risk score 0–100) |
+| risk_high_threshold | int | default 60 (risk score 0–100); separates `Medium` from `High` only — any risk signal already makes risk at least `Medium` (R23) |
 | version | int | optimistic concurrency |
 
 ## Domain: catalog (simulated ERP data)
@@ -192,7 +192,7 @@ windowMonths` and fewer prior approved accidental claims for the serial than `ma
 | product_model_code | text | as submitted |
 | product_id | uuid | nullable — set when found in catalog |
 | serial_number | text | required, normalized |
-| purchase_date | date | required; not in future; ≤ claim_date |
+| purchase_date | date | required; not in future; ≤ claim_date — enforced at submission (400); the intake `PURCHASE_DATE_*` checks re-verify it as a backstop |
 | purchase_place | text | required |
 | purchase_price | numeric(12,2) | required, > 0 (cross-checked against invoice; not the claim value) |
 | region | enum `NA`, `EU` | from purchase place country, else customer address |
@@ -201,9 +201,12 @@ windowMonths` and fewer prior approved accidental claims for the serial than `ma
 | status | enum (see state machine) | |
 | final_outcome | enum `Approved`, `Rejected` | null until final |
 | final_decided_by | enum `System`, `Reviewer` | null until final |
-| final_explanation | text | claimant-facing explanation, no risk signals |
+| final_explanation | text | claimant-facing explanation, no risk signals: the AI's `claimant_explanation` for automatic decisions, the reviewer's `claimant_explanation` for reviewer decisions (FR-036, FR-037) |
+| finalized_at | timestamptz | null until `Approved`/`Rejected`; used by the 90-day duplicate window (R25) |
 | requested_items | jsonb | items requested from the submitter while `PendingInformation` |
 | current_round | int | starts at 1; +1 per supplement |
+| auto_info_request_count | int | default 0; +1 when a guardrail-issued `RequestInformation` is executed; at 2, a further need for information escalates (FR-010, R24) |
+| reviewer_info_requested | bool | default false; set when a reviewer's `RequestInformation` is executed; never cleared — later rounds always end in `HumanReview` (FR-034, R24) |
 | row_version | xid | optimistic concurrency (review decisions use `If-Match`) |
 | created_at / updated_at | timestamptz | |
 
@@ -230,6 +233,13 @@ Rules: `Approved` and `Rejected` are terminal; supplements are refused on termin
 `ActionExecutor` (holding an `ApprovedAction` or a recorded reviewer decision) can move a claim to
 `Approved`, `Rejected` or `PendingInformation`. Claimant-visible names: Submitted, Under Evaluation,
 Pending Information, Under Review, Approved, Rejected (FR-037).
+
+Loop limits (R24): a supplement after a **reviewer's** information request still goes
+`UnderEvaluation` (full re-evaluation), but its run always ends in `UnderReview` with reason
+`RETURNED_AFTER_REVIEWER_REQUEST`. An **automatic** information request is allowed only while
+`auto_info_request_count < 2`; otherwise the run ends in `UnderReview` with reason
+`INFO_INCOMPLETE_AFTER_2_REQUESTS`. The `PendingInformation` → `UnderEvaluation` edge is therefore
+taken at most twice without a reviewer involved.
 
 ### `claims.claim_evidence`
 
@@ -321,8 +331,24 @@ evidence analysis, used when the intake short-circuit applies), `score` int 0–
 
 Signal codes (FR-017): `SOURCE_INCONSISTENCY`, `PRODUCT_NOT_IN_CATALOG`, `SERIAL_MISMATCH_PHOTO`,
 `DUPLICATE_SERIAL_CLAIM`, `EVIDENCE_REUSED`, `DAMAGE_INCONSISTENT_WITH_DESCRIPTION`,
-`PURCHASE_DATE_ANOMALY`, `MANIPULATION_ATTEMPT`. Any of `EVIDENCE_REUSED`, `SERIAL_MISMATCH_PHOTO`,
-`MANIPULATION_ATTEMPT`, `DUPLICATE_SERIAL_CLAIM` forces level ≥ `Medium`.
+`PURCHASE_DATE_ANOMALY`, `MANIPULATION_ATTEMPT`, `OTHER` (AI only).
+
+Level rule (FR-017, R23), computed over the union of deterministic and AI-reported signals:
+
+| Signals | Score | Level |
+|---------|-------|-------|
+| none | 0 | `Low` — the only way to reach `Low` |
+| ≥ 1 | `min(100, Σ weight)`; weight `Low` 10 · `Medium` 25 · `High` 40 | `High` if score ≥ `risk_high_threshold`, else `Medium` |
+
+Fixed severities: `MANIPULATION_ATTEMPT`, `EVIDENCE_REUSED`, `SERIAL_MISMATCH_PHOTO` → `High`;
+`DUPLICATE_SERIAL_CLAIM`, `PRODUCT_NOT_IN_CATALOG`, `SOURCE_INCONSISTENCY`,
+`PURCHASE_DATE_ANOMALY` → `Medium`; AI-only signals → `Medium`. A code raised by both sources is
+counted once, with the deterministic severity. Photos that do not show the product or the damage
+are missing information (`PHOTO_OF_DAMAGE`, `PHOTO_OF_SERIAL_LABEL`), not a signal.
+
+`DUPLICATE_SERIAL_CLAIM` (R25): another claim of the tenant with the same normalized serial that
+is not final, or whose `finalized_at` is within 90 days before this claim's `claim_date`. Earlier
+rounds of the same claim never count.
 
 ### `adjudication.recommendations`
 
@@ -353,7 +379,23 @@ The recommendation is **never modified** after creation (FR-036).
 Check codes: `SCHEMA_VALID`, `REFERENCES_VALID`, `REQUIRED_INFO_COMPLETE`, `PRODUCT_IN_CATALOG`,
 `POLICY_APPLICABLE`, `COVERAGE_WINDOW_AGREES`, `CLAIM_VALUE_WITHIN_LIMIT`, `CONFIDENCE_AT_OR_ABOVE_MIN`,
 `RISK_LOW`, `NO_CONFLICTS`, `NO_MANIPULATION`, `CATEGORY_NOT_ALWAYS_REVIEW`, `GROUNDED_IN_CLAUSE`,
-`AUTO_DECISION_ENABLED`, `ACTOR_AUTHORIZED`.
+`AUTO_DECISION_ENABLED`, `ACTOR_AUTHORIZED`, `NOT_RETURNED_FROM_REVIEW`,
+`AUTO_INFO_REQUESTS_WITHIN_LIMIT`, `CLAIMANT_TEXT_SAFE`.
+
+`RISK_LOW` passes only when no risk signal is present (R23). `NOT_RETURNED_FROM_REVIEW` fails when
+`claims.reviewer_info_requested`; `AUTO_INFO_REQUESTS_WITHIN_LIMIT` fails when a
+`RequestInformation` disposition would be issued with `auto_info_request_count ≥ 2` (R24);
+`CLAIMANT_TEXT_SAFE` fails when the AI's claimant explanation contains disclosure terms (R25).
+
+Escalation reason codes (`reasons`, shown to reviewers with a readable label): `VALUE_ABOVE_LIMIT`,
+`CONFIDENCE_BELOW_MIN`, `ALWAYS_REVIEW_CATEGORY`, `RISK_MEDIUM`, `RISK_HIGH`, `EVIDENCE_CONFLICT`,
+`AI_DETERMINISTIC_DISAGREEMENT`, `INVALID_RECOMMENDATION`, `AI_UNAVAILABLE`, `AI_RECOMMENDS_REVIEW`,
+`NO_APPLICABLE_POLICY`, `AMBIGUOUS_POLICY`, `PRODUCT_NOT_IN_CATALOG`,
+`RETURNED_AFTER_REVIEWER_REQUEST` ("returned after reviewer information request"),
+`INFO_INCOMPLETE_AFTER_2_REQUESTS` ("information still incomplete after 2 requests"),
+`UNSAFE_CLAIMANT_TEXT`. For the `claims-agent` role, the risk-related reasons (`RISK_MEDIUM`,
+`RISK_HIGH`, `EVIDENCE_CONFLICT`, `AI_DETERMINISTIC_DISAGREEMENT`, `UNSAFE_CLAIMANT_TEXT`) are shown
+only as "Additional checks required", and check details are not returned (FR-005).
 
 ## Domain: review
 
@@ -365,12 +407,14 @@ Check codes: `SCHEMA_VALID`, `REFERENCES_VALID`, `REQUIRED_INFO_COMPLETE`, `PROD
 | tenant_id, claim_id, run_id | uuid | decision applies to the latest run |
 | reviewer_sub / reviewer_name | text | from token |
 | decision | enum `Approve`, `Reject`, `RequestInformation` | |
-| justification | text | **required** when `overrides_ai` or `decision = Reject` (FR-035); 10–2,000 chars |
+| justification | text | internal, staff-only; **required** when `overrides_ai` or `decision = Reject` (FR-035); 10–2,000 chars; never shown to claimants |
+| claimant_explanation | text | **required** for `Approve`/`Reject`, absent for `RequestInformation`; 20–1,500 chars; must pass `ClaimantTextScreen` (no risk/fraud terms or reference IDs); becomes `claims.final_explanation` (FR-036, FR-037, R25) |
 | requested_items | jsonb | required non-empty when `RequestInformation` |
-| overrides_ai | bool | computed: decision differs from the AI recommendation |
+| overrides_ai | bool | computed: true only when the latest run has a **valid** recommendation of `APPROVE` or `REJECT` and the decision differs (`APPROVE`↔`Approve`, `REJECT`↔`Reject`); false when the recommendation is missing/invalid (AI failure) or is `HUMAN_REVIEW` / `REQUEST_MORE_INFORMATION` (FR-035) |
 | decided_at | timestamptz | |
 
 Allowed only when claim status is `UnderReview`; second concurrent decision → 409 (row version).
+Executing a `RequestInformation` decision sets `claims.reviewer_info_requested = true` (R24).
 
 ## Domain: audit
 
@@ -468,6 +512,10 @@ Token claims used by the API: `sub`, `name`, `tenant_id` (user attribute), realm
   - **v1** effective 2025-01-01 → 2026-06-30: manufacturing defects 12 months (NA) / 24 months
     (EU); battery 6 months; excludes accidental, liquid, cosmetic damage and unauthorized repair.
   - **v2** effective 2026-07-01 → open: as v1 but battery 12 months.
+- Historical claims for the duplicate-window scenario (quickstart S18), with dates computed
+  relative to the seeding day so the window holds whenever the PoC is run: one `AUR-TAB10` serial
+  with a claim `Approved` 30 days ago, another `AUR-TAB10` serial with a claim `Approved` 120 days
+  ago (each with a minimal decision trail marked as seeded history).
 
 ### Tenant B — `borealis` ("Borealis Devices", fictional electronics & appliances)
 

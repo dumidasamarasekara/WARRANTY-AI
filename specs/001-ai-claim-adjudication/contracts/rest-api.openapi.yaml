@@ -177,6 +177,13 @@ paths:
     get:
       tags: [Claims]
       summary: Full staff view of a claim and its latest evaluation (FR-033)
+      description: >
+        Roles claims-agent, claims-reviewer, auditor. For role claims-agent,
+        latestEvaluation.risk, latestEvaluation.recommendation.reasoningSummary,
+        latestEvaluation.guardrails.checks and reviewDecisions[].justification are omitted, and
+        risk-related guardrails.reasons (RISK_MEDIUM, RISK_HIGH, EVIDENCE_CONFLICT,
+        AI_DETERMINISTIC_DISAGREEMENT, UNSAFE_CLAIMANT_TEXT) are replaced by a single
+        "Additional checks required" (FR-005).
       parameters:
         - $ref: '#/components/parameters/ClaimId'
       responses:
@@ -250,8 +257,13 @@ paths:
       tags: [Review]
       summary: Record a reviewer decision (FR-034 – FR-036)
       description: >
-        Role claims-reviewer. Allowed only when status is UnderReview. Justification is required
-        when the decision differs from the AI recommendation or is Reject.
+        Role claims-reviewer. Allowed only when status is UnderReview. Justification (internal,
+        never shown to the claimant) is required when the decision differs from a valid APPROVE or
+        REJECT recommendation, or is Reject. claimantExplanation is required for Approve and Reject, must be
+        absent for RequestInformation, and becomes the claimant's outcome explanation; it is
+        rejected with 400 when it contains risk/fraud terms or reference IDs (FR-036, FR-037).
+        A RequestInformation decision marks the claim so that, after the supplement, it is
+        re-evaluated and returns to this queue instead of being finalized automatically (FR-034).
       parameters:
         - $ref: '#/components/parameters/ClaimId'
         - name: If-Match
@@ -428,7 +440,10 @@ components:
           required: [date, place, price, currency, country]
           additionalProperties: false
           properties:
-            date: { type: string, format: date }
+            date:
+              type: string
+              format: date
+              description: Not in the future and not after the submission date; otherwise 400 (FR-009)
             place: { type: string, maxLength: 200 }
             price: { type: number, exclusiveMinimum: 0 }
             currency: { type: string, pattern: '^[A-Z]{3}$' }
@@ -478,7 +493,12 @@ components:
         status: { $ref: '#/components/schemas/ClaimStatus' }
         submittedAt: { type: string, format: date-time }
         productName: { type: string }
-        outcomeExplanation: { type: string, description: Present when Approved or Rejected }
+        outcomeExplanation:
+          type: string
+          description: >
+            Present when Approved or Rejected: the AI's claimant explanation for automatic
+            decisions, or the reviewer's claimantExplanation for reviewer decisions. Never the
+            reviewer's justification.
         requestedItems:
           type: array
           items: { $ref: '#/components/schemas/RequestedItem' }
@@ -570,6 +590,15 @@ components:
           items: { $ref: '#/components/schemas/ReviewDecision' }
         finalOutcome: { type: string, enum: [Approved, Rejected] }
         finalDecidedBy: { type: string, enum: [System, Reviewer] }
+        finalExplanation: { type: string, description: Claimant-facing explanation shown for the final outcome }
+        autoInfoRequestCount:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: Automatic requests for more information made so far (limit 2, FR-010)
+        reviewerInfoRequested:
+          type: boolean
+          description: A reviewer has requested more information; later rounds always return to review (FR-034)
 
     EvidenceItem:
       type: object
@@ -713,6 +742,7 @@ components:
         escalatedAt: { type: string, format: date-time }
         escalationReasons:
           type: array
+          description: Readable labels of the guardrail reason codes (data-model.md), e.g. "returned after reviewer information request"
           items: { type: string }
 
     ReviewDecisionRequest:
@@ -721,7 +751,19 @@ components:
       additionalProperties: false
       properties:
         decision: { type: string, enum: [Approve, Reject, RequestInformation] }
-        justification: { type: string, minLength: 10, maxLength: 2000 }
+        justification:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Internal, staff-only reason; required when overriding the AI or rejecting (FR-035)
+        claimantExplanation:
+          type: string
+          minLength: 20
+          maxLength: 1500
+          description: >
+            Required for Approve and Reject, not allowed for RequestInformation. Shown to the
+            claimant as the outcome explanation; must not contain risk or fraud indicators (FR-036).
+            The SPA pre-fills it from the AI's claimantExplanation when the decision matches the AI's.
         requestedItems:
           type: array
           items: { $ref: '#/components/schemas/RequestedItem' }
@@ -733,10 +775,13 @@ components:
         id: { type: string, format: uuid }
         decision: { type: string, enum: [Approve, Reject, RequestInformation] }
         justification: { type: string }
+        claimantExplanation: { type: string }
         requestedItems:
           type: array
           items: { $ref: '#/components/schemas/RequestedItem' }
-        overridesAi: { type: boolean }
+        overridesAi:
+          type: boolean
+          description: True only when the decision differs from a valid APPROVE/REJECT recommendation (FR-035)
         reviewerName: { type: string }
         decidedAt: { type: string, format: date-time }
 

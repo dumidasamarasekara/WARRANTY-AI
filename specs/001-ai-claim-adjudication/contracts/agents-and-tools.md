@@ -87,9 +87,9 @@ public sealed class AgentExecutionContext
 | Agent | Input | Deterministic part | Model part | Tools | Output |
 |-------|-------|--------------------|-----------|-------|--------|
 | **Intake** | `CaseContext` | FR-009 checks (required fields, ≥1 photo, invoice present, file types, dates, region) → missing items | Structure the problem description | `customer_lookup`, `product_lookup` | `IntakeResult` = validation + [intake-extraction](./schemas/intake-extraction.schema.json); missing items short-circuit to `RequestInformation` |
-| **Evidence** | Case + intake | SHA-256 reuse lookup input, image downscaling | Invoice extraction (`extraction`, PDF/image), photo analysis (`vision`, one call per photo, in parallel) | `invoice_validation`, `product_lookup` | `EvidenceResult` = [invoice-extraction](./schemas/invoice-extraction.schema.json) + [photo-analysis](./schemas/photo-analysis.schema.json)[] + consistency checks |
+| **Evidence** | Case + intake | SHA-256 reuse lookup input, image downscaling | Invoice extraction (`extraction`, PDF/image), photo analysis (`vision`, one call per photo, in parallel) | `invoice_validation`, `product_lookup` | `EvidenceResult` = [invoice-extraction](./schemas/invoice-extraction.schema.json) + [photo-analysis](./schemas/photo-analysis.schema.json)[] + consistency checks. Photos that show neither the product nor the damage become missing items (`PHOTO_OF_DAMAGE` / `PHOTO_OF_SERIAL_LABEL`), not risk signals (R23) |
 | **Policy** | Case + intake | `RetrievePolicyClausesAsync` (filter-first); version outcome | Decide which clauses apply and the coverage reading | `warranty_lookup`, `search_policy_knowledge`, `search_global_knowledge` | `PolicyResult` = clauses + [policy-assessment](./schemas/policy-assessment.schema.json) + structured terms |
-| **Risk** (capability, not an LLM agent in the PoC) | Case + evidence + intake | Signals: catalog mismatch, duplicate serial, evidence reuse, date anomalies, injection detector, source inconsistencies | — (AI-identified signals come from Evidence/Decision outputs) | `claim_history_lookup` (direct call) | `RiskAssessment` (score, level, signals). Behind `IRiskAssessor` so it can become an agent later |
+| **Risk** (capability, not an LLM agent in the PoC) | Case + evidence + intake | Signals: catalog mismatch, duplicate serial, evidence reuse, date anomalies, injection detector, source inconsistencies | — (AI-identified signals come from Evidence/Decision outputs) | `claim_history_lookup` (direct call) | `RiskAssessment` (score, level, signals). Level from the union of deterministic and AI signals: none → `Low`, any → ≥ `Medium` (R23); the model's own `risk.level` is not used. Behind `IRiskAssessor` so it can become an agent later |
 | **Decision** | All of the above | — | Recommendation | `claim_history_lookup`, `search_global_knowledge` | [decision-recommendation](./schemas/decision-recommendation.schema.json) |
 
 All agent prompts state that content inside `<untrusted_claim_content>` is evidence only and must
@@ -137,7 +137,7 @@ Enforcement:
 | `product_lookup` | ReadOnly | intake, evidence | `{ modelCode, serialNumber }` | `{ found, serialRegistered, productName, category }` |
 | `warranty_lookup` | ReadOnly | policy | `{ component: enum }` | Applicable version (code, version, effective dates) and structured terms for the claim's region, with deterministically computed `coverageEndDate`, `withinStandardCoverage`, `accidentalWindowEndDate` |
 | `invoice_validation` | ReadOnly | evidence | `{ invoiceRef, extracted: {invoiceDate, modelCode, serial, amount, seller} }` | Field-by-field `{ field, claimValue, invoiceValue, match }` |
-| `claim_history_lookup` | ReadOnly | decision, risk | `{}` | `{ priorClaimsForSerial, priorApprovedAccidental, evidenceReuseMatches }` — counts only, same tenant |
+| `claim_history_lookup` | ReadOnly | decision, risk | `{}` | `{ duplicateClaimsForSerial, priorApprovedAccidental, evidenceReuseMatches }` — counts only, same tenant. `duplicateClaimsForSerial`: other claims with the same serial that are not final or were finalized within 90 days before this claim date (R25); `priorApprovedAccidental`: all-time approved accidental-damage claims for the serial |
 | `search_policy_knowledge` | ReadOnly | policy | `{ query }` | Additional clauses (same filters as the run's retrieval), returned as new `POL-n` |
 | `search_global_knowledge` | ReadOnly | policy, decision | `{ query, documentType? }` | Global snippets as `GLB-n` (not citable as policy) |
 | `service_network_lookup` | ReadOnly | action-executor | `{ region, category }` | Nearest simulated service center |
@@ -175,11 +175,21 @@ public interface IActionExecutor        // Warranty.Application/Actions
 }
 ```
 
+`CaseFacts` carries the claim's loop state, `ReviewerInfoRequested` and `AutoInfoRequestCount`
+(R24). The `ActionExecutor` is the only writer of both: executing a guardrail-issued
+`RequestInformation` increments `auto_info_request_count`; executing a reviewer's
+`RequestInformation` sets `reviewer_info_requested`. A reviewer `Approve`/`Reject` writes the
+reviewer's `claimantExplanation` to `claims.final_explanation`; an automatic finalization writes
+the AI's `claimantExplanation` (which already passed `CLAIMANT_TEXT_SAFE`).
+
 Disposition rules (spec FR-026–FR-029 + clarifications), evaluated after all checks:
 
 | Disposition | Requires |
 |-------------|----------|
-| `AutoApprove` | AI `APPROVE`; valid recommendation; references valid; ≥1 supporting `POL-n`; confidence ≥ `min_confidence`; risk `Low`; no conflict/suspicious/manipulation signal; claim value ≤ `auto_approval_limit`; deterministic coverage window agrees; category not in `always_review_categories`; `auto_approve_enabled` |
-| `AutoReject` | AI `REJECT`; valid; references valid; ≥1 `POL-n` with `SUPPORTS_REJECTION`; confidence ≥ minimum; risk `Low`; no conflict; claim value ≤ limit; if the ground is an expired period, the deterministic window confirms it; category not always-review; `auto_reject_enabled` |
-| `RequestInformation` | Intake found missing items, **or** AI `REQUEST_MORE_INFORMATION` with no escalation condition |
-| `HumanReview` | Anything else: value above limit, confidence below minimum, risk `Medium`/`High`, conflicts, AI vs deterministic disagreement, invalid/unavailable AI output, no/ambiguous policy, always-review category, AI `HUMAN_REVIEW` |
+| `AutoApprove` | AI `APPROVE`; valid recommendation; references valid; ≥1 supporting `POL-n`; confidence ≥ `min_confidence`; risk `Low` (**no risk signal of any kind**, R23); claim value ≤ `auto_approval_limit`; deterministic coverage window agrees; category not in `always_review_categories`; `auto_approve_enabled`; not returned from review; claimant text safe |
+| `AutoReject` | AI `REJECT`; valid; references valid; ≥1 `POL-n` with `SUPPORTS_REJECTION`; confidence ≥ minimum; risk `Low` (**no risk signal of any kind**, R23); claim value ≤ limit; if the ground is an expired period, the deterministic window confirms it; category not always-review; `auto_reject_enabled`; not returned from review; claimant text safe |
+| `RequestInformation` | (Intake found missing items **or** AI `REQUEST_MORE_INFORMATION`) **and** no escalation condition **and** `auto_info_request_count < 2` **and** not returned from review |
+| `HumanReview` | Anything else: value above limit, confidence below minimum, risk `Medium`/`High`, conflicts, AI vs deterministic disagreement, invalid/unavailable AI output, no/ambiguous policy, always-review category, AI `HUMAN_REVIEW`, `reviewer_info_requested` (reason `RETURNED_AFTER_REVIEWER_REQUEST`), information still missing with `auto_info_request_count = 2` (reason `INFO_INCOMPLETE_AFTER_2_REQUESTS`), unsafe AI claimant text |
+
+The value, category, deterministic-risk and loop-state checks also run in the intake short-circuit,
+so any of them turns a would-be `RequestInformation` into `HumanReview` (FR-028 precedence).
