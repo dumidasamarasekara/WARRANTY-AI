@@ -17,4 +17,9 @@
     <ProjectReference Include="..\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Warranty.UnitTests" />
+    <InternalsVisibleTo Include="Warranty.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
