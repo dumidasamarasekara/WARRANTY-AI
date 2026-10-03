@@ -44,8 +44,9 @@ The design's visual language puts the constitution's *Explainable Decisions* (II
 | Claim statuses Auto-approved / Human review / Awaiting info | `ClaimStatus` values with spec labels (§4.1); "decided by" shown separately | FR-037 |
 | Claims table with 13 columns (customer, value, risk, confidence, assignee, SLA, …) | The fields in `ClaimSummary`: reference, product, status, AI decision, disposition, submitted | contracts/rest-api.openapi.yaml |
 | SLA countdowns in the review queue | "Escalated *n* ago" from `escalatedAt`; oldest first | no SLA in the spec |
-| Separate "Override AI recommendation…" action | Kept as an affordance. An override is any decision that differs from the AI's (`overridesAi` is computed by the API); the dialog captures the justification | FR-034, FR-035, T087 |
+| Separate "Override AI recommendation…" action | Kept as an affordance. An override is a decision that differs from a valid AI `APPROVE`/`REJECT` (`overridesAi` is computed by the API; no override without a valid AI decision); the dialog captures the justification | FR-034, FR-035, T087 |
 | Override reason "min. 20 characters" | 10–2,000 characters | `ReviewDecisionRequest.justification` |
+| One reason field per decision | Two fields: the internal **justification** and a separate **message to the claimant** (required on approve/reject, pre-filled from the AI's claimant explanation when the decision matches the AI's) | FR-036, FR-037, research R25 |
 | Policy version applies by "claim date" | Applies by **purchase date** | research R7, contracts/rag.md |
 | AI region overlays on photos | Omitted; the photo-analysis output has no coordinates | contracts/schemas/photo-analysis.schema.json |
 | Customer PII masked with "reveal" flow | Customer data shown as returned by `GET /api/claims/{id}`; no reveal flow | not in the spec |
@@ -301,6 +302,11 @@ file** · **AI decision** · **Evidence** · **Decision trace** (trace for revie
   badge with "Executed after guardrails passed · *time*"; for escalations "Escalated — a reviewer
   must decide" and, for reviewers, **Open in review** (`human` button). *Risk signals* — code,
   source badge, severity, detail. *Model information* — model, prompt version.
+- For `claims-agent` the API omits risk, `reasoningSummary`, guardrail checks and review
+  justifications, and reduces risk-related escalation reasons to "Additional checks required"
+  (FR-005): the Risk metric, *Why — decision factors* and *Risk signals* card are not rendered (no
+  empty placeholders that hint at hidden content); the disposition banner, citations and evidence
+  references stay visible.
 - `isValid = false` → `err` alert listing `validationErrors`; `failureReason` → `warn` alert "AI
   analysis could not be completed — routed to human review" (FR-031).
 
@@ -340,14 +346,27 @@ latency, cost, status, attempt), tool calls (tool, allowed, latency, summary) an
     workspace for the complete FR-033 view.
   - Action bar: **Approve** (primary) · **Reject** (danger) · **Request more information**
     (secondary) · right-aligned **Override AI recommendation…** (`human`).
-- Decision rules: approving in agreement with the AI submits directly; any decision that differs
-  from the AI's, and any rejection, opens the justification `Dialog` ("Override AI
+- Decision rules: every **Approve** or **Reject** opens the decision `Dialog`, which always has a
+  *Message to the claimant* textarea (`CharacterCount` 20–1,500; helper "Shown to the claimant.
+  Don't mention risk or fraud checks."), pre-filled from the AI's `claimantExplanation` only when
+  the decision matches the AI's (`APPROVE`↔Approve, `REJECT`↔Reject), the AI's recommendation is
+  valid and its text passed `CLAIMANT_TEXT_SAFE`, and empty otherwise. With no valid AI decision
+  (AI failure, `HUMAN_REVIEW`, `REQUEST_MORE_INFORMATION`) the *AI recommendation* card shows "No
+  AI decision", nothing is pre-filled and no decision counts as an override (FR-035).
+  Approving in agreement with the AI needs only that message ("Approve claim"). Any decision that
+  differs from the AI's, and any rejection, adds the internal justification ("Override AI
   recommendation" / "Reject claim": "AI recommends **X**. You are choosing **Y**. This is recorded
-  as a human decision with your reason, linked to the decision trace."; textarea with
-  `CharacterCount` 10–2,000; confirm disabled until valid). Request information opens the same
-  dialog with a requested-items picker. Every submission sends `If-Match`; 409 → "This claim has
-  already been decided" with a refresh; 412 → "The claim changed since you opened it — reload".
-  Success → toast "Decision recorded" and the claim leaves the queue.
+  as a human decision with your reason, linked to the decision trace."; textarea labelled
+  "Internal reason — never shown to the claimant", `CharacterCount` 10–2,000). Confirm stays
+  disabled until every required field is valid; a `400` naming a disclosure term is shown as the
+  message field's error. Request information opens the same dialog with a requested-items picker
+  and no claimant message, and warns "After the customer responds, this claim returns to the
+  review queue." Every submission sends `If-Match`; 409 → "This claim has already been decided"
+  with a refresh; 412 → "The claim changed since you opened it — reload". Success → toast
+  "Decision recorded" and the claim leaves the queue.
+- Queue cards and the banner show escalation reasons by their readable labels, including
+  "Returned after reviewer information request" and "Information still incomplete after 2
+  requests".
 
 ### 6.5 Policies — `/staff/policies` (T081)
 

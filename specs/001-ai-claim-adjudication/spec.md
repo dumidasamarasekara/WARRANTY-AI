@@ -44,6 +44,29 @@ explainability and auditability."
   uploading requested information? → A: Both the claim reference and the email address or phone
   number given at submission must match.
 
+### Session 2026-10-03
+
+- Q: Can a claim be approved or rejected automatically while it has any risk signal at all? → A:
+  No. Any risk signal raises risk to at least Medium, so automatic approval and automatic
+  rejection both require zero risk signals; photos that do not show the product or damage count
+  as missing information, not as a risk signal.
+- Q: When a reviewer asks for more information and the submitter provides it, can the
+  re-evaluated claim be finalized automatically, or must it go back to a reviewer? → A: It goes
+  back to a reviewer. The claim is fully re-evaluated, then always returns to the review queue
+  with the reason "returned after reviewer information request" and is never finalized
+  automatically.
+- Q: When a reviewer makes the final approve or reject decision, where does the claimant-facing
+  explanation come from? → A: The reviewer always provides it, separate from the internal
+  justification; it is pre-filled from the AI's claimant explanation when the decision matches the
+  AI recommendation, and must not mention risk or fraud indicators.
+- Q: How many times can the system automatically ask for more information on the same claim
+  before it must go to a human reviewer? → A: Two. If information is still missing or unusable
+  after two automatic requests, the claim goes to human review with the reason "information still
+  incomplete after 2 requests".
+- Q: Which earlier claims for the same serial number at the same tenant count as a duplicate
+  claim? → A: Another claim for the same serial that is still open, or was approved or rejected
+  in the last 90 days; earlier rounds of the same claim never count.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### Actors
@@ -167,12 +190,15 @@ AI recommended approving) and verify a justification is required and recorded.
    references, the AI recommendation, confidence, risk level and signals, reasoning summary, and
    each guardrail check result.
 4. **Given** an escalated claim the AI recommended approving, **When** the reviewer rejects it,
-   **Then** the system requires a written justification, records the override with reviewer
-   identity and timestamp, retains the original AI recommendation unchanged, and finalizes the
-   claim as REJECTED.
+   **Then** the system requires a written justification and a claimant-facing explanation,
+   records the override with reviewer identity and timestamp, retains the original AI
+   recommendation unchanged, finalizes the claim as REJECTED, and shows the claimant only the
+   reviewer's claimant-facing explanation.
 5. **Given** an escalated claim, **When** the reviewer requests more information, **Then** the
    claim moves to "Pending Information" with the reviewer's specified items communicated to the
-   submitter.
+   submitter; once the submitter provides them, the claim is fully re-evaluated and returns to the
+   review queue with the reason "returned after reviewer information request" instead of being
+   finalized automatically.
 
 ---
 
@@ -272,13 +298,17 @@ happened.
   review within the claim's tenant.
 - **Serial number visible in a photo differs from the claimed serial**: conflict risk signal;
   routed to human review.
-- **Invoice purchase date differs from the stated purchase date**, or purchase date is in the
-  future or after the claim date: conflict/anomaly risk signal; not auto-finalized.
+- **Stated purchase date in the future or after the claim date**: rejected at submission with a
+  clear message (FR-009); the claim is not created.
+- **Invoice purchase date differs from the stated purchase date, or the invoice date is in the
+  future or after the claim date**: purchase-date anomaly risk signal (FR-017); routed to human
+  review, never auto-finalized.
 - **Illegible invoice, blurry or irrelevant photos, unsupported file types**: unsupported types
   are rejected at submission with a clear message; illegible/unusable evidence leads to a specific
   request for more information.
 - **Duplicate claim for the same serial number, or a photo reused from another claim** (within
-  the same tenant): suspicious risk signal; routed to human review. Checks never span tenants.
+  the same tenant): suspicious risk signal; routed to human review. Checks never span tenants. A
+  claim for the same serial finalized more than 90 days earlier is not a duplicate (FR-017).
 - **No applicable policy found** for the product, region or date: routed to human review; never
   auto-rejected for lack of policy.
 - **Multiple policy versions could apply**: the version in effect at the purchase date is used;
@@ -291,6 +321,9 @@ happened.
   evidence only, flagged as a manipulation risk signal, never auto-approved.
 - **AI analysis unavailable, timed out, or output malformed**: claim is never auto-finalized;
   routed to human review with the reason recorded.
+- **Submitter keeps supplying missing or unusable information**: after two automatic requests for
+  more information, the claim goes to human review ("information still incomplete after 2
+  requests") instead of a third request.
 - **Submitter supplements a claim that has already been finalized**: not permitted on the same
   claim; finalized outcomes change only through a recorded human decision.
 - **Reviewer or agent attempts cross-tenant access**: denied without revealing whether the target
@@ -319,7 +352,9 @@ happened.
   recommendation, review decision and audit entry MUST belong to exactly one tenant.
 - **FR-005**: Each staff user MUST belong to exactly one tenant and MUST only be able to view,
   search or act on claims, evidence, policies and audit records of that tenant. Denied attempts
-  MUST NOT reveal whether the target exists and MUST be recorded as security events.
+  MUST NOT reveal whether the target exists and MUST be recorded as security events. Claims agents
+  MUST NOT see risk signals, fraud indicators, AI reasoning summaries or reviewer justifications;
+  reviewers and auditors see the full claim view (FR-033).
 - **FR-006**: All information made available to AI analysis of a claim MUST originate only from
   that claim, its own tenant's data, and platform-owned general knowledge (warranty terminology,
   generic fraud patterns, operating procedures) that contains no tenant or customer data.
@@ -336,12 +371,17 @@ happened.
   identifiers shown in photos (e.g., serial labels).
 - **FR-009**: System MUST validate, using deterministic rules, that all required information is
   present and valid: required fields completed, at least one photo, an invoice present and
-  legible, supported file types, purchase date not in the future and not after the claim date.
+  legible, supported file types, purchase date not in the future and not after the claim date. A
+  stated purchase date that fails the date checks MUST be rejected at submission, before a claim is
+  created.
 - **FR-010**: When required information is missing or invalid, and no escalation condition that
   can be determined without that information holds (see FR-028), system MUST set the claim to
   "Pending Information", tell the submitter specifically which items are missing or invalid, and
   allow the submitter to supplement the same claim. A supplemented claim MUST be fully re-evaluated
-  with all prior evaluations preserved.
+  with all prior evaluations preserved. At most two automatic requests for more information (from
+  validation or the AI) MUST be made on a claim; if information is still missing or unusable after
+  the second, the claim MUST be routed to human review with the reason "information still
+  incomplete after 2 requests".
 
 #### Policy retrieval
 
@@ -364,9 +404,13 @@ happened.
   and seller across the claim form, invoice and photos.
 - **FR-017**: System MUST assess risk as low, medium or high and list the specific risk signals
   found, covering at minimum: inconsistencies between sources; product/serial not in the tenant's
-  catalog; prior claims for the same serial number within the tenant; photos reused from another
+  catalog; a duplicate claim, meaning another claim for the same serial number within the tenant
+  that is still open or was approved or rejected in the previous 90 days (earlier rounds of the
+  same claim do not count); photos reused from another
   claim within the tenant; damage inconsistent with the description; purchase-date anomalies; and
-  submitted content attempting to influence the decision.
+  submitted content attempting to influence the decision. Any risk signal raises the risk level to
+  at least medium; risk is low only when no risk signal is present. Photos that do not show the
+  product or the damage are treated as missing information (FR-010), not as a risk signal.
 - **FR-018**: Duplicate-claim and reused-evidence checks MUST consider only claims of the same
   tenant.
 - **FR-019**: System MUST treat all submitted content (description, invoice text, text in images)
@@ -398,24 +442,26 @@ happened.
   the tenant's auto-approval limit; confidence versus the tenant's minimum confidence; risk
   level; and the presence of conflicts.
 - **FR-026**: A claim MUST be automatically finalized as APPROVED only when all of the following
-  hold: AI recommends APPROVE; confidence is at or above the tenant's minimum; risk is low; no
-  conflict or suspicious signal is present; claim value is at or below the tenant's auto-approval
-  limit; the independent coverage-period check agrees; the product category is not one the tenant
-  always routes to a human; the tenant has automatic approval enabled; and at least one valid
-  supporting policy reference is cited.
+  hold: AI recommends APPROVE; confidence is at or above the tenant's minimum; risk is low, meaning
+  no risk signal of any kind is present (FR-017); claim value is at or below the tenant's
+  auto-approval limit; the independent coverage-period check agrees; the product category is not
+  one the tenant always routes to a human; the tenant has automatic approval enabled; and at least
+  one valid supporting policy reference is cited.
 - **FR-027**: A claim MUST be automatically finalized as REJECTED only when all of the following
-  hold: AI recommends REJECT; confidence is at or above the tenant's minimum; risk is low; no
-  conflict is present; claim value is at or below the tenant's auto-approval limit; the product
-  category is not one the tenant always routes to a human; the tenant has automatic rejection
-  enabled; the rejection is grounded in at least one cited policy clause (e.g., an exclusion or an expired coverage
-  period); and, where an expired coverage period is the ground, the independent check confirms it.
+  hold: AI recommends REJECT; confidence is at or above the tenant's minimum; risk is low, meaning
+  no risk signal of any kind is present (FR-017); claim value is at or below the tenant's
+  auto-approval limit; the product category is not one the tenant always routes to a human; the
+  tenant has automatic rejection enabled; the rejection is grounded in at least one cited policy
+  clause (e.g., an exclusion or an expired coverage period); and, where an expired coverage period
+  is the ground, the independent check confirms it.
 - **FR-028**: A claim MUST be routed to human review when any of the following holds: claim value
   above the tenant's auto-approval limit; confidence below the tenant's minimum; a product category
   the tenant always routes to a human; risk medium or high; conflicting evidence; disagreement
-  between the AI recommendation and an independent check; invalid recommendation; or AI recommends
-  HUMAN_REVIEW. Claim value, product category and deterministic risk conditions are evaluated even
-  when required information is missing; if any of them holds, human review takes precedence over
-  FR-010.
+  between the AI recommendation and an independent check; invalid recommendation; AI recommends
+  HUMAN_REVIEW; a reviewer has previously requested more information on the claim; or information
+  is still incomplete after two automatic requests (FR-010). Claim value, product category,
+  deterministic risk conditions and the automatic-request count are evaluated even when required
+  information is missing; if any of them holds, human review takes precedence over FR-010.
 - **FR-029**: When the AI recommends REQUEST_MORE_INFORMATION and no escalation condition applies,
   system MUST request the specific missing items from the submitter.
 - **FR-030**: System MUST record each guardrail check (the check, the values compared, pass/fail)
@@ -431,17 +477,28 @@ happened.
   including photos and invoice; extracted data; retrieved policy excerpts with references; AI
   recommendation; confidence; risk level and signals; reasoning summary; and guardrail results.
 - **FR-034**: Reviewers MUST be able to approve, reject or request more information on an
-  escalated claim, regardless of the AI recommendation (thereby accepting or overriding it).
-- **FR-035**: Reviewers MUST provide a written justification when their decision differs from the
-  AI recommendation and whenever they reject a claim.
+  escalated claim, regardless of the AI recommendation (thereby accepting or overriding it). When a
+  reviewer requests more information, the supplemented claim MUST be fully re-evaluated and then
+  returned to the review queue with the reason "returned after reviewer information request"; it
+  MUST NOT be finalized automatically.
+- **FR-035**: Reviewers MUST provide a written justification when their decision differs from a
+  valid AI recommendation of APPROVE or REJECT, and whenever they reject a claim. When the AI
+  produced no valid recommendation, or recommended HUMAN_REVIEW or REQUEST_MORE_INFORMATION, the
+  reviewer's decision is not an override.
 - **FR-036**: The reviewer's decision MUST become the claim's final outcome and be recorded with
-  reviewer identity and timestamp; the original AI recommendation MUST be retained unchanged.
+  reviewer identity and timestamp; the original AI recommendation MUST be retained unchanged. For
+  every approve or reject decision, the reviewer MUST provide a claimant-facing explanation, kept
+  separate from the internal justification and pre-filled from the AI's claimant explanation when
+  the decision matches the AI recommendation; it MUST NOT contain risk signals or fraud
+  indicators.
 
 #### Claim status and outcome visibility
 
 - **FR-037**: Submitters MUST be able to see their claim's status (Submitted, Under Evaluation,
   Pending Information, Under Review, Approved, Rejected) and, for final outcomes, a plain-language
-  explanation. Internal risk signals and fraud indicators MUST NOT be shown to claimants.
+  explanation: the AI's claimant explanation for automatic decisions, or the reviewer's
+  claimant-facing explanation (FR-036) for reviewer decisions. Internal risk signals, fraud
+  indicators and reviewer justifications MUST NOT be shown to claimants.
 - **FR-037a**: A claimant MUST be able to view a claim or supplement it with requested information
   only by providing, through the tenant's own submission channel, both the claim reference and the
   email address or phone number given at submission. Failed attempts MUST NOT reveal whether the
@@ -517,8 +574,8 @@ happened.
   confidence, risk, evidence and policy references, missing items, reasoning summary).
 - **Guardrail Evaluation**: The set of deterministic checks applied to a recommendation, their
   results and the resulting disposition.
-- **Review Decision**: A reviewer's action on an escalated claim, with identity, justification and
-  timestamp.
+- **Review Decision**: A reviewer's action on an escalated claim, with identity, internal
+  justification, claimant-facing explanation (for approve/reject) and timestamp.
 - **Decision Trail Entry**: An immutable, timestamped record of one step in a claim's lifecycle,
   including AI processing step traces.
 - **User**: A claims agent, reviewer or auditor, with a role; belongs to exactly one tenant.
@@ -545,8 +602,9 @@ happened.
   minutes.
 - **SC-008**: A reviewer can review all information for an escalated claim and record a decision
   in under 5 minutes.
-- **SC-009**: 100% of claims missing required information receive a specific list of the missing
-  items, and none is automatically approved.
+- **SC-009**: 100% of claims missing required information either receive a specific list of the
+  missing items or, when an FR-028 condition applies (including the two-request limit in FR-010),
+  are routed to human review; none is automatically approved.
 - **SC-010**: 100% of test claims containing manipulative instructions are flagged and none is
   automatically approved.
 

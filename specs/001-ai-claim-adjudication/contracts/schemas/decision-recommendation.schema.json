@@ -32,7 +32,11 @@
       "additionalProperties": false,
       "required": ["level", "signals"],
       "properties": {
-        "level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "level": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH"],
+          "description": "Model's own reading, recorded for display only. The guardrails derive the level deterministically: any listed signal makes risk at least MEDIUM (research R23)."
+        },
         "signals": {
           "type": "array",
           "items": {
@@ -116,7 +120,7 @@
     },
     "claimantExplanation": {
       "type": "string",
-      "description": "Plain-language explanation for the claimant; must not mention risk or fraud signals, max 800 characters (validated)."
+      "description": "Plain-language explanation for the claimant; must not mention risk or fraud signals or reference IDs, max 800 characters (validated). Screened by the guardrail check CLAIMANT_TEXT_SAFE; a failure prevents automatic finalization. Pre-fills the reviewer's claimant message when the reviewer's decision matches."
     },
     "manipulationDetected": { "type": "boolean" }
   }
