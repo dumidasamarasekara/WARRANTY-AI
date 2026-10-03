@@ -6,6 +6,7 @@ using Warranty.Domain.Audit;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Tenancy;
 using Warranty.Infrastructure.Persistence;
+using Warranty.Infrastructure.Persistence.Sql;
 
 namespace Warranty.UnitTests.Infrastructure;
 
@@ -109,6 +110,24 @@ public sealed class WarrantyModelTests
                     "TenantId", $"{entity.ClrType.Name} -> {foreignKey.PrincipalEntityType.ClrType.Name}");
             }
         }
+    }
+
+    [Fact]
+    public void The_migrations_cover_the_current_model()
+    {
+        using var context = CreateContext(new FakeTenantContext(Aurora));
+
+        context.Database.HasPendingModelChanges().ShouldBeFalse("run `dotnet ef migrations add` for the model change");
+    }
+
+    [Fact]
+    public void The_roles_and_rls_script_is_embedded_and_isolates_tenant_owned_tables()
+    {
+        var sql = SqlScripts.Load().Where(s => s.Name == "001_roles_and_rls.sql").ShouldHaveSingleItem().Sql;
+
+        sql.ShouldContain("FORCE ROW LEVEL SECURITY");
+        sql.ShouldContain("current_setting(''app.tenant_id'', true)");
+        sql.ShouldContain("NOBYPASSRLS");
     }
 
     [Theory]
