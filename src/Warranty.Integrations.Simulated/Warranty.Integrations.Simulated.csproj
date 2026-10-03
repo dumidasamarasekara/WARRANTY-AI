@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Simulated CRM, ERP, service network and notifications behind Application ports. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Integrations.Simulated</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Application\Warranty.Application.csproj" />
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

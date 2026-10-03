@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Deterministic guardrail engine. Must never reference an AI, harness or gateway project. -->
+  <PropertyGroup>
+    <RootNamespace>Warranty.Guardrails</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Warranty.Domain\Warranty.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
