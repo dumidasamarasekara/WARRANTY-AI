@@ -11,6 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The migration service may open NoTenantScope connections to seed platform tables. -->
+    <InternalsVisibleTo Include="Warranty.MigrationService" />
     <InternalsVisibleTo Include="Warranty.UnitTests" />
     <InternalsVisibleTo Include="Warranty.IntegrationTests" />
   </ItemGroup>
