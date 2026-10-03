@@ -8,13 +8,26 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 // Lives in Microsoft.Extensions.Hosting (Aspire convention) so hosts call AddServiceDefaults()
-// without an extra using. Warranty-specific trace sources are added in T040.
+// without an extra using.
 namespace Microsoft.Extensions.Hosting;
 
 public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+
+    /// <summary>
+    /// The application's <c>ActivitySource</c> and <c>Meter</c> names (harness runs and agent steps, model
+    /// calls, retrieval, tool calls, API operations); every one is traced and its metrics collected.
+    /// </summary>
+    public static IReadOnlyList<string> WarrantyTelemetrySources { get; } =
+    [
+        "Warranty.AI.Harness",
+        "Warranty.AI.Gateway",
+        "Warranty.Knowledge",
+        "Warranty.Tools",
+        "Warranty.Api",
+    ];
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder)
         where TBuilder : IHostApplicationBuilder
@@ -43,11 +56,13 @@ public static class Extensions
 
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics
+                .AddMeter([.. WarrantyTelemetrySources])
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation())
             .WithTracing(tracing => tracing
                 .AddSource(builder.Environment.ApplicationName)
+                .AddSource([.. WarrantyTelemetrySources])
                 .AddAspNetCoreInstrumentation(options =>
                     options.Filter = context =>
                         !context.Request.Path.StartsWithSegments(HealthEndpointPath)
