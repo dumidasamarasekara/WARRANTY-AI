@@ -17,6 +17,8 @@ public sealed class AiGatewayOptions
 
     public AnthropicProviderOptions Anthropic { get; set; } = new();
 
+    public ReplayProviderOptions Replay { get; set; } = new();
+
     public RateLimitOptions RateLimits { get; set; } = new();
 
     /// <summary>Price per million tokens by model.</summary>
@@ -102,4 +104,17 @@ public sealed class AnthropicProviderOptions
 
     /// <summary>The provider does not train on API inputs (FR-006a); routes to a provider without it are refused.</summary>
     public bool NoTraining { get; set; }
+}
+
+/// <summary>The <c>AiGateway:Replay</c> section: where recorded model responses live (research R18).</summary>
+public sealed class ReplayProviderOptions
+{
+    /// <summary>Root of <c>{scenarioId}/{agent}-{callIndex}.json</c>; relative paths are searched upwards from the app directory.</summary>
+    public string RecordingsPath { get; set; } = "tests/fixtures/ai-recordings";
+
+    /// <summary>The golden scenario list that maps a claim's serial number to its scenario.</summary>
+    public string ScenariosPath { get; set; } = "seed/golden/scenarios.json";
+
+    /// <summary>Calls the live provider and writes each response as a fixture instead of reading fixtures.</summary>
+    public bool Record { get; set; }
 }
