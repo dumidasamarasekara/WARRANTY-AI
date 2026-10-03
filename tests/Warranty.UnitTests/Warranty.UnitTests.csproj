@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\Warranty.Knowledge\Warranty.Knowledge.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Api\Warranty.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
