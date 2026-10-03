@@ -1,0 +1,42 @@
+[
+  {
+    "id": "22222222-0002-7000-8000-000000000001",
+    "fullName": "Sample Customer NA-1",
+    "email": "na1.customer@borealis.example.com",
+    "phone": "+1 555 020 0001",
+    "addressLine": "10 Example Lane",
+    "city": "Riverton",
+    "postalCode": "00010",
+    "country": "US"
+  },
+  {
+    "id": "22222222-0002-7000-8000-000000000002",
+    "fullName": "Sample Customer NA-2",
+    "email": "na2.customer@borealis.example.com",
+    "phone": "+1 555 020 0002",
+    "addressLine": "20 Example Crescent",
+    "city": "Hillview",
+    "postalCode": "B2B 2B2",
+    "country": "CA"
+  },
+  {
+    "id": "22222222-0002-7000-8000-000000000003",
+    "fullName": "Sample Customer EU-1",
+    "email": "eu1.customer@borealis.example.com",
+    "phone": "+33 1 55 50 00 03",
+    "addressLine": "3 Rue Exemple",
+    "city": "Lyon",
+    "postalCode": "69001",
+    "country": "FR"
+  },
+  {
+    "id": "22222222-0002-7000-8000-000000000004",
+    "fullName": "Sample Customer EU-2",
+    "email": "eu2.customer@borealis.example.com",
+    "phone": "+34 91 555 0004",
+    "addressLine": "Calle Ejemplo 4",
+    "city": "Madrid",
+    "postalCode": "28001",
+    "country": "ES"
+  }
+]

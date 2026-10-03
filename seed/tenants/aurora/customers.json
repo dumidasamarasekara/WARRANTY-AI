@@ -1,0 +1,52 @@
+[
+  {
+    "id": "11111111-0002-7000-8000-000000000001",
+    "fullName": "Sample Customer NA-1",
+    "email": "na1.customer@aurora.example.com",
+    "phone": "+1 555 010 0001",
+    "addressLine": "100 Example Avenue",
+    "city": "Springfield",
+    "postalCode": "00001",
+    "country": "US"
+  },
+  {
+    "id": "11111111-0002-7000-8000-000000000002",
+    "fullName": "Sample Customer NA-2",
+    "email": "na2.customer@aurora.example.com",
+    "phone": "+1 555 010 0002",
+    "addressLine": "200 Example Road",
+    "city": "Lakeside",
+    "postalCode": "A1A 1A1",
+    "country": "CA"
+  },
+  {
+    "id": "11111111-0002-7000-8000-000000000003",
+    "fullName": "Sample Customer EU-1",
+    "email": "eu1.customer@aurora.example.com",
+    "phone": "+49 30 5550 0003",
+    "addressLine": "Beispielstrasse 3",
+    "city": "Berlin",
+    "postalCode": "10115",
+    "country": "DE"
+  },
+  {
+    "id": "11111111-0002-7000-8000-000000000004",
+    "fullName": "Sample Customer EU-2",
+    "email": "eu2.customer@aurora.example.com",
+    "phone": "+31 20 555 0004",
+    "addressLine": "Voorbeeldweg 4",
+    "city": "Amsterdam",
+    "postalCode": "1011 AB",
+    "country": "NL"
+  },
+  {
+    "id": "11111111-0002-7000-8000-000000000005",
+    "fullName": "Sample Customer History",
+    "email": "history.customer@aurora.example.com",
+    "phone": "+1 555 010 0005",
+    "addressLine": "500 Example Boulevard",
+    "city": "Springfield",
+    "postalCode": "00005",
+    "country": "US"
+  }
+]

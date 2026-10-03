@@ -1,0 +1,15 @@
+{
+  "id": "11111111-1111-7111-8111-111111111111",
+  "slug": "aurora",
+  "displayName": "Aurora Electronics",
+  "channel": "aurora.localhost",
+  "settings": {
+    "currency": "USD",
+    "autoApprovalLimit": 500,
+    "minConfidence": 85,
+    "autoApproveEnabled": true,
+    "autoRejectEnabled": true,
+    "alwaysReviewCategories": [],
+    "riskHighThreshold": 60
+  }
+}

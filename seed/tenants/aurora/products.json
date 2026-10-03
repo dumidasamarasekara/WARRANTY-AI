@@ -1,0 +1,23 @@
+[
+  {
+    "id": "11111111-0001-7000-8000-000000000001",
+    "modelCode": "AUR-TAB10",
+    "name": "Aurora Tab 10",
+    "category": "tablet",
+    "claimValue": 450
+  },
+  {
+    "id": "11111111-0001-7000-8000-000000000002",
+    "modelCode": "AUR-PHN6",
+    "name": "Aurora Phone 6",
+    "category": "phone",
+    "claimValue": 480
+  },
+  {
+    "id": "11111111-0001-7000-8000-000000000003",
+    "modelCode": "AUR-BOOK15",
+    "name": "Aurora Book 15",
+    "category": "laptop",
+    "claimValue": 1400
+  }
+]
