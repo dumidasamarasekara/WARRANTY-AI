@@ -5,6 +5,7 @@ using Warranty.Domain.Policies;
 using Warranty.Domain.Tenancy;
 using Warranty.Guardrails;
 using Warranty.Guardrails.Pipeline;
+using Warranty.Guardrails.Rules;
 
 namespace Warranty.UnitTests.Guardrails;
 
@@ -95,9 +96,10 @@ internal sealed class GuardrailScenario
 
     public IReadOnlyList<RetrievedPolicyRef> Clauses { get; }
 
-    public DateOnly? CoverageEndDate { get; set; } = new(2027, 1, 15);
+    /// <summary>Deterministic coverage window (the calculator's result is built from these two values).</summary>
+    public DateOnly CoverageEndDate { get; set; } = new(2027, 1, 15);
 
-    public bool? WithinCoverageWindow { get; set; } = true;
+    public bool WithinCoverageWindow { get; set; } = true;
 
     // Risk (Low means no signal of any kind, research R23)
     public List<RiskSignal> RiskSignals { get; } = [];
@@ -184,8 +186,10 @@ internal sealed class GuardrailScenario
             RunId, Tenant, [new ValidationCheck("INVOICE_PRESENT", true, null), new ValidationCheck("PHOTO_PRESENT", true, null)],
             "{}", IntakeMissingItems);
         var evidence = new EvidenceFacts(ConsistencyChecks.ToArray(), [new PhotoFinding(PhotoRef, PhotoDamageTypes.ToArray())], []);
-        var policy = new PolicyFacts(
-            VersionOutcome, VersionOutcome == PolicyVersionOutcome.Ok ? Version : null, Clauses, CoverageEndDate, WithinCoverageWindow);
+        var window = VersionOutcome == PolicyVersionOutcome.Ok
+            ? new CoverageWindowResult(CoverageWindowOutcome.Determined, CoverageEndDate, WithinCoverageWindow, WithinCoverageWindow)
+            : new CoverageWindowResult(CoverageWindowOutcome.NoApplicablePolicy, null, null, null);
+        var policy = new PolicyFacts(VersionOutcome, VersionOutcome == PolicyVersionOutcome.Ok ? Version : null, Clauses, window);
         var risk = RiskAssessment.Create(
             RunId, Tenant, RiskAssessmentStage.Full, Math.Min(100, 25 * RiskSignals.Count),
             RiskSignals.Count == 0 ? RiskLevel.Low : RiskLevel.Medium, RiskSignals);

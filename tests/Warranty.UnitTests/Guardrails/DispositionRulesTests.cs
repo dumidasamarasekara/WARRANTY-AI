@@ -23,7 +23,7 @@ public sealed class DispositionRulesTests
         input.Recommendation.Decision.ShouldBe(decision);
         input.Risk.ShouldNotBeNull().Level.ShouldBe(RiskLevel.Low);
         input.Policy.ShouldNotBeNull().Version.ShouldNotBeNull();
-        input.Policy.WithinCoverageWindow.ShouldBe(decision == AiDecision.Approve);
+        input.Policy.CoverageWindow.WithinComponentCoverage.ShouldBe(decision == AiDecision.Approve);
         input.Recommendation.PolicyRefs.Select(r => r.Ref).ShouldAllBe(id => input.IssuedReferences.Contains(id));
         input.Recommendation.EvidenceRefs.Select(r => r.Ref).ShouldAllBe(id => input.IssuedReferences.Contains(id));
         input.Settings.IsAboveAutoApprovalLimit(input.Case.ClaimValue!.Value).ShouldBeFalse();
