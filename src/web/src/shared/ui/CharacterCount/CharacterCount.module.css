@@ -1,0 +1,15 @@
+.count {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ok {
+  color: var(--color-text-secondary);
+}
+
+.over {
+  color: var(--tone-err-ink);
+  font-weight: 500;
+}

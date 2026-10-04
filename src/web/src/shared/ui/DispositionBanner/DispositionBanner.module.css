@@ -1,0 +1,40 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--t-border);
+  border-radius: var(--radius-md);
+  background: var(--t-bg);
+  color: var(--t-ink);
+}
+
+.human {
+  border-style: solid;
+  border-color: var(--color-human);
+}
+
+.ai {
+  border-style: dashed;
+  border-color: var(--color-ai-border);
+}
+
+.tag {
+  flex: none;
+  padding-top: 1px;
+}
+
+.content {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  font: 600 14px/20px var(--font-sans);
+}
+
+.reasons {
+  padding-left: var(--space-4);
+  font: var(--text-body);
+}

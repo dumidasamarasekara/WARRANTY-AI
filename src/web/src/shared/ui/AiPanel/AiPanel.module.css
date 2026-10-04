@@ -1,0 +1,40 @@
+.panel {
+  border: 1px dashed var(--color-ai-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px dashed var(--color-ai-border);
+  background: var(--tone-ai-bg);
+  color: var(--tone-ai-ink);
+}
+
+.title {
+  font: var(--text-card-title);
+  color: var(--tone-ai-ink);
+}
+
+.full .title {
+  font: var(--text-section-title);
+}
+
+.meta {
+  margin-left: auto;
+  color: var(--tone-ai-ink);
+  font: var(--text-mono);
+}
+
+.compact .body {
+  padding: var(--space-4);
+}
+
+.full .body {
+  padding: var(--space-5);
+}

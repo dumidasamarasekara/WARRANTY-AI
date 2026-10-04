@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--radius-sm);
+  background: var(--t-bg);
+  color: var(--t-ink);
+  font: 500 12px/16px var(--font-sans);
+  white-space: nowrap;
+}
+
+.mono {
+  font: var(--text-mono);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--t-fill);
+  flex: none;
+}
