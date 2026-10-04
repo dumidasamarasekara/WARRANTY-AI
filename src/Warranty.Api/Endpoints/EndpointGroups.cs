@@ -14,7 +14,8 @@ public static class EndpointGroups
     /// <summary>Claimant channel: tenant from the request Host.</summary>
     public static RouteGroupBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api/public").WithTags("Public")
-            .MapPublicClaimRoutes();
+            .MapPublicClaimRoutes()
+            .MapClaimantRoutes();
 
     public static RouteGroupBuilder MapClaimEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization()
