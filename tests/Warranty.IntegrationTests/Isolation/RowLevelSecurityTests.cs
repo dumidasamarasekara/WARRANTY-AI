@@ -135,7 +135,11 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
     public async Task Claim_jobs_of_another_tenant_are_hidden_and_the_dequeue_function_returns_only_the_job_header()
     {
         await using var owner = await OpenOwnerAsync();
-        var claimId = await ScalarAsync<Guid>(owner, "select id from claims.claims where tenant_id = @aurora order by serial_number limit 1");
+        // A claim without a round-1 job: claims submitted by other tests already have one (unique per claim and round).
+        var claimId = await ScalarAsync<Guid>(
+            owner,
+            "select c.id from claims.claims c where c.tenant_id = @aurora " +
+            "and not exists (select 1 from claims.claim_jobs j where j.claim_id = c.id and j.round = 1) order by c.serial_number limit 1");
         var jobId = Guid.CreateVersion7();
 
         // Due tomorrow, so the running worker never leases it.
