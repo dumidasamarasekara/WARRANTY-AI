@@ -50,5 +50,45 @@ public static class CoverageWindowCalculator
         string? component,
         DateOnly purchaseDate,
         DateOnly claimDate)
-        => throw new NotImplementedException("Pending T053.");
+    {
+        if (terms is null || !terms.StandardCoverageMonths.TryGetValue(region, out var standardMonths))
+        {
+            return Undetermined;
+        }
+
+        var standardEndDate = purchaseDate.AddMonths(standardMonths);
+        var coverageEndDate = TryGetComponentMonths(terms, component, out var componentMonths)
+            ? purchaseDate.AddMonths(componentMonths)
+            : standardEndDate;
+
+        return new CoverageWindowResult(
+            CoverageWindowOutcome.Determined,
+            coverageEndDate,
+            WithinStandardCoverage: claimDate <= standardEndDate,
+            WithinComponentCoverage: claimDate <= coverageEndDate);
+    }
+
+    private static readonly CoverageWindowResult Undetermined =
+        new(CoverageWindowOutcome.NoApplicablePolicy, null, null, null);
+
+    private static bool TryGetComponentMonths(CoverageTerms terms, string? component, out int months)
+    {
+        months = 0;
+        var key = component?.Trim();
+        if (string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        foreach (var (name, value) in terms.ComponentCoverageMonths)
+        {
+            if (string.Equals(name.Trim(), key, StringComparison.OrdinalIgnoreCase))
+            {
+                months = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

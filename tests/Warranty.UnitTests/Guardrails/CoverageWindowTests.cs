@@ -10,8 +10,6 @@ namespace Warranty.UnitTests.Guardrails;
 /// </summary>
 public sealed class CoverageWindowTests
 {
-    private const string Pending = "Pending T053";
-
     /// <summary>AUR-WP v1: 12 months NA / 24 months EU, battery 6 months.</summary>
     private static CoverageTerms AuroraV1Terms(int batteryMonths = 6) => new(
         new Dictionary<Region, int> { [Region.NA] = 12, [Region.EU] = 24 },
@@ -21,7 +19,7 @@ public sealed class CoverageWindowTests
 
     private static DateOnly D(int year, int month, int day) => new(year, month, day);
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(Region.NA, 2026, 3, 10)]
     [InlineData(Region.EU, 2027, 3, 10)]
     public void Standard_window_uses_the_months_of_the_claim_region(Region region, int endYear, int endMonth, int endDay)
@@ -34,7 +32,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(Region.NA, false)]
     [InlineData(Region.EU, true)]
     public void Same_dates_can_be_covered_in_one_region_and_expired_in_another(Region region, bool covered)
@@ -45,7 +43,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(covered);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Battery_claim_after_component_months_is_outside_component_but_inside_standard_coverage()
     {
         var result = CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.NA, "BATTERY", D(2025, 3, 10), D(2025, 11, 1));
@@ -56,7 +54,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(false);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Battery_claim_within_component_months_is_covered()
     {
         var result = CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.EU, "BATTERY", D(2025, 3, 10), D(2025, 8, 1));
@@ -66,7 +64,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Battery_months_follow_the_terms_of_the_version_passed_in()
     {
         // AUR-WP v2 raises the battery period to 12 months.
@@ -76,7 +74,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("battery")]
     [InlineData("Battery")]
     [InlineData(" BATTERY ")]
@@ -84,7 +82,7 @@ public sealed class CoverageWindowTests
         => CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.NA, component, D(2025, 3, 10), D(2025, 4, 1))
             .CoverageEndDate.ShouldBe(D(2025, 9, 10));
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("SCREEN")]
     [InlineData("UNKNOWN")]
@@ -97,7 +95,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Component_months_longer_than_standard_extend_the_component_window()
     {
         var terms = AuroraV1Terms(batteryMonths: 36);
@@ -109,7 +107,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(2025, 8, 31, null, 2026, 8, 31)]      // 12 months NA, no clamping needed
     [InlineData(2025, 8, 31, "BATTERY", 2026, 2, 28)] // 6 months lands in February
     [InlineData(2023, 8, 31, "BATTERY", 2024, 2, 29)] // ... of a leap year
@@ -125,7 +123,7 @@ public sealed class CoverageWindowTests
         result.CoverageEndDate.ShouldBe(D(endYear, endMonth, endDay));
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null, 2026, 3, 10)]
     [InlineData("BATTERY", 2025, 9, 10)]
     public void Claim_on_the_last_covered_day_is_covered(string? component, int endYear, int endMonth, int endDay)
@@ -138,14 +136,14 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null, 2026, 3, 11)]
     [InlineData("BATTERY", 2025, 9, 11)]
     public void Claim_the_day_after_the_last_covered_day_is_not_covered(string? component, int year, int month, int day)
         => CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.NA, component, D(2025, 3, 10), D(year, month, day))
             .WithinComponentCoverage.ShouldBe(false);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Month_end_purchase_is_covered_on_the_clamped_last_day_and_not_after()
     {
         var purchase = D(2025, 8, 31);
@@ -156,7 +154,7 @@ public sealed class CoverageWindowTests
             .WithinComponentCoverage.ShouldBe(false);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Claim_on_the_purchase_date_is_covered()
     {
         var result = CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.NA, "BATTERY", D(2025, 3, 10), D(2025, 3, 10));
@@ -165,7 +163,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void No_applicable_policy_leaves_the_window_undetermined()
     {
         var result = CoverageWindowCalculator.Calculate(null, Region.NA, "BATTERY", D(2025, 3, 10), D(2025, 4, 1));
@@ -176,7 +174,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBeNull();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Terms_without_months_for_the_claim_region_leave_the_window_undetermined()
     {
         var naOnly = AuroraV1Terms() with { StandardCoverageMonths = new Dictionary<Region, int> { [Region.NA] = 12 } };
