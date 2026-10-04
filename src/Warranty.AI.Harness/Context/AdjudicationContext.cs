@@ -1,3 +1,4 @@
+using Warranty.AI.Harness.Agents.Risk;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Adjudication;
@@ -76,5 +77,11 @@ public sealed record PolicyResult(
     PolicyAssessment? Assessment,
     PolicyVersion? Version);
 
-/// <summary>Decision step output: the recommendation, valid or not.</summary>
-public sealed record RecommendationResult(Recommendation Recommendation);
+/// <summary>Decision step output: the recommendation, valid or not, and what the model reported about risk.</summary>
+/// <param name="Recommendation">The stored recommendation (<c>adjudication.recommendations</c>).</param>
+/// <param name="Risk">
+/// The decision output's <c>risk.level</c> and <c>risk.signals</c> as AI-sourced signals; <see cref="AiRiskReading.None"/>
+/// when the output did not match the schema. The runner adds the evidence-derived AI signals before
+/// calling <see cref="IRiskAssessor.AssessFullAsync"/>.
+/// </param>
+public sealed record RecommendationResult(Recommendation Recommendation, AiRiskReading Risk);
