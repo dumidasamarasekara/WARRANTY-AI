@@ -86,6 +86,24 @@ explainability and auditability."
   append-only and never changed or deleted; auditors can view their own tenant's security events
   in the app; events not attributable to a tenant are visible only to platform operators.
 
+### Session 2026-10-04 (guardrails checklist review)
+
+- Q: What does the 0–100 confidence score mean? → A: The AI's own stated certainty that its
+  recommendation is correct, used as reported (not calibrated) in the PoC and compared only with
+  the tenant's minimum confidence.
+- Q: May personal data appear in logs and traces of AI processing? → A: Only in the same redacted
+  form that is sent to the AI provider.
+- Q: Must photo metadata (e.g., GPS location, device details) be kept? → A: No. It is removed from
+  uploaded photos before they are stored or sent to an AI provider; file types are judged by file
+  content.
+- Q: Which characters are ignored when matching serial numbers and model codes? → A: Case, spaces,
+  dashes, underscores and dots (supersedes "case, spaces and dashes" above).
+- Q: Which ambiguous-policy situations escalate? → A: No applicable policy, more than one
+  applicable policy version, and an undetermined coverage determination.
+- Q: How does the 2-minute target relate to the run time limit? → A: The submitter sees "Under
+  Evaluation" until the outcome; a run not finished within 4 minutes counts as AI analysis that
+  could not be completed (FR-031).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### Actors
@@ -385,8 +403,10 @@ happened.
 - **FR-006a**: Before any data is sent to an external AI provider, the customer's name, email
   address, phone number and street address MUST be replaced with placeholders, and email
   addresses and phone numbers found in free text MUST be masked. Product, serial number, dates,
-  region, the problem description and the evidence files MAY be sent as submitted. The AI
-  provider MUST NOT use submitted data to train models.
+  region, the problem description and the evidence files MAY be sent as submitted, except that
+  location, device and other embedded metadata MUST be removed from uploaded photos before they
+  are stored or sent. The AI provider MUST NOT use submitted data to train models. Logs, traces and
+  decision-trail records of AI processing MUST contain personal data only in this redacted form.
 
 #### Claim intake, extraction and validation
 
@@ -398,10 +418,10 @@ happened.
   documents, including invoice details (purchase date, seller, product, price) and, where visible,
   identifiers shown in photos (e.g., serial labels).
 - **FR-009**: System MUST validate, using deterministic rules, that all required information is
-  present and valid: required fields completed, at least one photo, an invoice present and
-  legible, supported file types, purchase date not in the future and not after the claim date. A
-  stated purchase date that fails the date checks MUST be rejected at submission, before a claim is
-  created.
+  present and valid: required fields completed, at least one photo, an invoice present and legible,
+  supported file types (judged by file content, not by file name or declared type), purchase date
+  not in the future and not after the claim date. A stated purchase date that fails the date checks
+  MUST be rejected at submission, before a claim is created.
 - **FR-010**: When required information is missing or invalid, and no escalation condition that
   can be determined without that information holds (see FR-028), system MUST set the claim to
   "Pending Information", tell the submitter specifically which items are missing or invalid, and
@@ -430,9 +450,9 @@ happened.
   identifiers with the claimed product and serial number.
 - **FR-016**: System MUST cross-check consistency of product, serial number, purchase date, price
   and seller across the claim form, invoice and photos. A difference counts as conflicting evidence
-  only when: serial number or model code differ after ignoring case, spaces and dashes; the
-  purchase dates differ; the price differs by more than 1% or 1 currency unit, whichever is
-  larger; or the seller names differ after ignoring case, punctuation and legal suffixes (e.g.,
+  only when: serial number or model code differ after ignoring case, spaces, dashes, underscores and
+  dots; the purchase dates differ; the price differs by more than 1% or 1 currency unit, whichever
+  is larger; or the seller names differ after ignoring case, punctuation and legal suffixes (e.g.,
   Inc., Ltd., GmbH).
 - **FR-017**: System MUST assess risk as low, medium or high and list the specific risk signals
   found, covering at minimum: inconsistencies between sources; product/serial not in the tenant's
@@ -455,7 +475,9 @@ happened.
 - **FR-021**: Each recommendation MUST contain, in a consistent structured form: coverage
   determination (covered / not covered / undetermined); confidence score from 0 to 100; risk level
   and risk signals; the evidence items relied upon; the policy references relied upon; any missing
-  information; and a plain-language reasoning summary.
+  information; and a plain-language reasoning summary. The confidence score is the AI's own stated
+  certainty that its recommendation is correct; in the PoC it is used as reported, without
+  calibration, and is compared only with the tenant's minimum confidence.
 - **FR-022**: Every policy reference cited in a recommendation MUST be one retrieved for that claim
   from its own tenant's library. A recommendation citing any other reference MUST be treated as
   invalid.
@@ -491,11 +513,13 @@ happened.
 - **FR-028**: A claim MUST be routed to human review when any of the following holds: claim value
   above the tenant's auto-approval limit; confidence below the tenant's minimum; a product category
   the tenant always routes to a human; risk medium or high; conflicting evidence; disagreement
-  between the AI recommendation and an independent check; invalid recommendation; AI recommends
-  HUMAN_REVIEW; a reviewer has previously requested more information on the claim; or information
-  is still incomplete after two automatic requests (FR-010). Claim value, product category,
-  deterministic risk conditions and the automatic-request count are evaluated even when required
-  information is missing; if any of them holds, human review takes precedence over FR-010.
+  between the AI recommendation and an independent check; invalid recommendation; no applicable
+  policy content (FR-014); more than one policy version could apply; coverage determination
+  undetermined; AI recommends HUMAN_REVIEW; a reviewer has previously requested more information on
+  the claim; or information is still incomplete after two automatic requests (FR-010). Claim value,
+  product category, deterministic risk conditions and the automatic-request count are evaluated even
+  when required information is missing; if any of them holds, human review takes precedence over
+  FR-010.
 - **FR-029**: When the AI recommends REQUEST_MORE_INFORMATION and no escalation condition applies,
   system MUST request the specific missing items from the submitter.
 - **FR-030**: System MUST record each guardrail check (the check, the values compared, pass/fail)
@@ -630,7 +654,9 @@ happened.
 ### Measurable Outcomes
 
 - **SC-001**: Clear-cut claims (complete, consistent, low-risk, within limits) receive a final
-  automated decision visible to the submitter within 2 minutes of submission.
+  automated decision visible to the submitter within 2 minutes of submission. Until then the
+  submitter sees "Under Evaluation"; a run not finished within 4 minutes is treated as AI analysis
+  that could not be completed (FR-031).
 - **SC-002**: In every seeded "same claim, different tenant" scenario, the two tenants reach the
   outcomes their policies dictate, and each explanation cites only its own tenant's policy.
 - **SC-003**: Zero instances of one tenant's data appear in another tenant's retrieval results,
@@ -639,7 +665,10 @@ happened.
 - **SC-004**: 100% of claims meeting any FR-028 escalation condition, or whose AI analysis is
   unavailable (FR-031), are routed to human review; none is finalized automatically.
 - **SC-005**: On a labeled evaluation set of at least 20 claims per tenant, the recommendation
-  matches the expected outcome for at least 85% of claims.
+  matches the expected outcome for at least 85% of claims. Each tenant's set contains at least 4
+  claims of each expected recommendation (APPROVE, REJECT, REQUEST_MORE_INFORMATION,
+  HUMAN_REVIEW); expected outcomes are labeled from the tenant's policy before any AI run and
+  never taken from AI output.
 - **SC-006**: 100% of recommendations cite at least one specific evidence item and at least one
   policy reference (document, section, version) belonging to the claim's tenant.
 - **SC-007**: 100% of finalized claims have a complete decision trail, and an auditor unfamiliar
@@ -651,7 +680,9 @@ happened.
   missing items or, when an FR-028 condition applies (including the two-request limit in FR-010),
   are routed to human review; none is automatically approved.
 - **SC-010**: 100% of test claims containing manipulative instructions are flagged and none is
-  automatically approved.
+  automatically approved. The test set contains, in English, at least one claim with the
+  instructions in the problem description, one in the invoice text and one in text visible in a
+  photo.
 
 ## Assumptions
 
@@ -680,4 +711,14 @@ happened.
 - Single language (English); common image formats and PDF invoices are supported.
 - Volume is demonstration scale (tens to hundreds of claims per tenant), consistent with the
   PoC-first principle; production scale, availability and data-retention policies are deferred.
-- All customer data used in the PoC is synthetic; no real personal data is used.
+- All customer data used in the PoC is synthetic; no real personal data is used. Because of this,
+  retention of submitted data by the AI provider follows the provider's standard commercial terms
+  (no training, FR-006a), and encryption at rest beyond disk level and redaction of photo content
+  are deferred.
+- Duplicate and reused-evidence checks never span tenants (FR-018), so the same fraud attempted at
+  two tenants (e.g., one photo claimed at both) is not detectable by design; this is an accepted
+  consequence of strict isolation.
+- Platform operators (staff of the warranty administrator who seed data, index knowledge and
+  support the platform) are not users of the application and hold no tenant role; in the PoC they
+  act only through the database, telemetry and the seeding tooling, which is also where security
+  events not attributable to a tenant are read (FR-041a).

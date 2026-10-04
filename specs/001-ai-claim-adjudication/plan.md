@@ -247,6 +247,8 @@ The SPA implements the **WarrantyOS design system** (Claude Design prototype in
 | Operator view of tenant-less and cross-tenant security events via the database / telemetry only | Platform operator console with its own role and audit |
 | Fixed exclusion ↔ photo damage-type map; `UNAUTHORIZED_REPAIR` always reviewed | Per-tenant evidence rules; tamper-detection evidence type |
 | Disk-level encryption only; Azurite unencrypted | Managed storage encryption, column-level encryption for PII |
+| AI provider retention under its standard commercial API terms (no training, R28); no zero-data-retention agreement | Zero-data-retention terms, or a regional/self-hosted provider behind `IModelProvider` |
+| Uploads sanitized (magic bytes, photo metadata stripped, risky PDFs rejected — R11) but not malware-scanned | Malware scanning step in `UploadSanitizer` |
 | Single region, single language (English) | Localization of claimant explanations, multi-region data residency |
 | Tenant marker colours mapped from the display name in the SPA (`tenantTheme.ts`) | Branding fields in tenant settings, served by `/api/public/tenant` and `/api/me` |
 

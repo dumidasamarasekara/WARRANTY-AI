@@ -232,8 +232,16 @@ treated as fixed inputs; the research below chooses *within* them.
   integration in emulator mode), behind `IDocumentStore`. One container per tenant
   (`tenant-aurora`, …) plus `knowledge-sources`. Blob path:
   `claims/{claimId}/{round}/{evidenceId}{ext}`. Files are never exposed by public URL; the API
-  streams them after an authorization + tenant check. A SHA-256 content hash is computed at
-  upload for reused-evidence detection (FR-017/018, within tenant only).
+  streams them after an authorization + tenant check. A SHA-256 content hash of the sanitized file
+  (below) is computed at upload for reused-evidence detection (FR-017/018, within tenant only), so
+  a photo re-uploaded with different metadata still matches.
+- **Upload sanitizing** (FR-006a, FR-009; checklist CHK010): `UploadSanitizer` runs before
+  storage. It checks the file's magic bytes against the allowed types (the file name and declared
+  content type are not trusted); re-encodes photos after applying the EXIF orientation, which
+  drops all embedded metadata (EXIF incl. GPS location and device data, XMP, IPTC, comments); and
+  rejects encrypted PDFs and PDFs containing JavaScript, launch actions or embedded files. Only
+  the sanitized bytes are stored, hashed and sent to a model. Malware scanning is a production
+  extension (see plan, PoC simplifications).
 - Uploads: max 10 files per submission, 15 MB per file; allowed types JPEG, PNG, WebP and PDF.
   HEIC is rejected with a message asking for JPEG or PNG (conversion deferred). Photos are
   downscaled (long edge ≈1,500 px) by the AI Gateway before being sent to a model.
@@ -298,7 +306,9 @@ treated as fixed inputs; the research below chooses *within* them.
 - **Decision**: The context builder sends models only what a step needs: customer name, email,
   phone and street address are replaced by placeholders (`[CUSTOMER]`, `[EMAIL]`, …); region and
   country are kept. A regex-based redactor additionally scrubs emails and phone numbers found in
-  free text before it leaves the system. Prompts and responses are logged **after** redaction.
+  free text before it leaves the system. Prompts and responses are logged **after** redaction;
+  the same redacted form is the only one written to traces, `aiops` call records and the decision
+  trail (FR-006a).
   Photos are not redacted in the PoC (documented simplification). All PoC data is synthetic.
   Since 2026-10-03 this is a spec requirement (FR-006a); the checked guarantees and the provider
   no-training condition are in R28.
@@ -348,7 +358,15 @@ treated as fixed inputs; the research below chooses *within* them.
 - **Decision**: `tests/Warranty.Evaluation` is a separate console app — never referenced by
   production code — that runs the harness in-process against an isolated evaluation database and
   a golden dataset (`seed/golden/`, ≥20 labeled claims per tenant per SC-005). Two modes:
-  `--replay` (deterministic, CI) and `--live` (real models, opt-in, costs money). Metrics:
+  `--replay` (deterministic, CI) and `--live` (real models, opt-in, costs money).
+- **Golden set composition** (SC-005; checklist CHK029): per tenant at least 4 cases of each
+  expected recommendation (`APPROVE`, `REJECT`, `REQUEST_MORE_INFORMATION`, `HUMAN_REVIEW`).
+  Expected recommendation, disposition and cited clause keys are labeled by the case author from
+  the tenant's seeded policy text before any model run, reviewed in the pull request that adds the
+  case, and never copied from model output (a live run that disagrees is a finding, not a relabel).
+- **Manipulation cases** (SC-010; checklist CHK030): English only; at least one case per placement
+  — problem description (S8), invoice text (S8-invoice) and text visible in a photo (S8-photo).
+- Metrics:
   extraction field accuracy, retrieval recall@k of expected clause keys, recommendation and
   disposition accuracy, confidence calibration (Brier score, accuracy by confidence band),
   unsupported-claim rate (citations not issued for the run, evidence IDs that don't exist), and
