@@ -125,7 +125,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         ShouldContainNoRiskData(view);
     }
 
-    [Fact(Skip = "Pending T069")] // the claim must also be adjudicated (T068)
+    [Fact]
     public async Task The_trace_of_S1_lists_every_step_in_order_ending_with_the_automatic_approval()
     {
         var claimId = await SubmitOnceAsync(GoldenScenario.Load("S1"));
@@ -162,6 +162,77 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         steps[steps.IndexOf("GuardrailsEvaluated") + 1].ShouldBe("AutoApproved");
         steps.IndexOf("PolicyRetrieved").ShouldBeLessThan(steps.IndexOf("CoverageAssessed"));
         steps.IndexOf("EvidenceAnalyzed").ShouldBeLessThan(steps.IndexOf("RiskEvaluated"));
+    }
+
+    [Fact]
+    public async Task A_reviewer_sees_the_S1_trace_with_correlation_ids_resolved_references_and_no_customer_identifiers()
+    {
+        var scenario = GoldenScenario.Load("S1");
+        var claimId = await SubmitOnceAsync(scenario);
+        (await WaitUntilSettledAsync(claimId)).ShouldBe(ClaimStatus.Approved);
+        using var client = fixture.CreateStaffClient(TestStaffUsers.ReviewerAurora);
+
+        using var response = await client.GetAsync($"/api/claims/{claimId}/trace", Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var trace = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        var entries = trace.GetProperty("entries").EnumerateArray().ToList();
+        entries.ShouldAllBe(e => !string.IsNullOrWhiteSpace(e.GetProperty("correlationId").GetString()));
+        entries.ShouldAllBe(e => !string.IsNullOrWhiteSpace(e.GetProperty("actor").GetString()));
+
+        // The submission and the job that adjudicated it share the submitting request's correlation ID.
+        entries.Select(e => e.GetProperty("correlationId").GetString()).Distinct().Count().ShouldBe(1);
+
+        var recommendation = entries.Single(e => e.GetProperty("step").GetString() == "AiRecommended").GetProperty("details");
+        recommendation.GetProperty("reasoningSummary").GetString().ShouldNotBeNullOrWhiteSpace();
+        var policyRefs = recommendation.GetProperty("policyRefs").EnumerateArray().ToList();
+        policyRefs.ShouldNotBeEmpty();
+        policyRefs.ShouldAllBe(r => r.GetProperty("resolved").GetBoolean());
+        policyRefs.Select(r => r.GetProperty("clauseKey").GetString()).ShouldBe(scenario.ExpectedClauseKeys, ignoreOrder: true);
+        recommendation.GetProperty("evidence").EnumerateArray().ShouldAllBe(e => e.GetProperty("resolved").GetBoolean());
+
+        var guardrails = entries.Single(e => e.GetProperty("step").GetString() == "GuardrailsEvaluated").GetProperty("details");
+        var checks = guardrails.GetProperty("checks").EnumerateArray().ToList();
+        checks.ShouldNotBeEmpty();
+        foreach (var check in checks)
+        {
+            check.GetProperty("passed").GetBoolean().ShouldBeTrue();
+            check.TryGetProperty("expected", out _).ShouldBeTrue();
+            check.TryGetProperty("actual", out _).ShouldBeTrue();
+        }
+
+        var customer = await CustomerOfAsync(claimId);
+        var text = trace.GetRawText();
+        foreach (var identifier in new[] { scenario.ContactEmail, customer.FullName, customer.Phone, customer.AddressLine }.OfType<string>())
+        {
+            text.ShouldNotContain(identifier, Case.Insensitive);
+        }
+    }
+
+    [Fact]
+    public async Task Only_reviewers_and_auditors_of_the_claims_tenant_can_read_its_trace()
+    {
+        var claimId = await SubmitOnceAsync(GoldenScenario.Load("S1"));
+        var path = $"/api/claims/{claimId}/trace";
+
+        using var agent = fixture.CreateStaffClient(TestStaffUsers.AgentAurora);
+        using var asAgent = await agent.GetAsync(path, Ct);
+        asAgent.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        using var anonymous = fixture.CreateClient(WarrantyAppFixture.StaffHost);
+        using var asAnonymous = await anonymous.GetAsync(path, Ct);
+        asAnonymous.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Another tenant's claim and an unknown ID look the same: not found, with no trail data.
+        using var borealis = fixture.CreateStaffClient(TestStaffUsers.AuditorBorealis);
+        using var otherTenant = await borealis.GetAsync(path, Ct);
+        using var unknown = await borealis.GetAsync($"/api/claims/{Guid.CreateVersion7()}/trace", Ct);
+        foreach (var response in new[] { otherTenant, unknown })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+            (await response.Content.ReadAsStringAsync(Ct)).ShouldNotContain("entries");
+        }
     }
 
     [Fact]
@@ -336,6 +407,19 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         return document.RootElement.EnumerateArray().ToDictionary(c => c.GetProperty("code").GetString()!, c => c.GetProperty("passed").GetBoolean());
     }
 
+    /// <summary>The claim's customer master data, to check the trace never repeats it.</summary>
+    private async Task<CustomerRow> CustomerOfAsync(Guid claimId)
+    {
+        await using var connection = await OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "select full_name, phone, address_line from crm.customers where id = (select customer_id from claims.claims where id = @id)",
+            connection);
+        command.Parameters.AddWithValue("id", claimId);
+        await using var reader = await command.ExecuteReaderAsync(Ct);
+        (await reader.ReadAsync(Ct)).ShouldBeTrue($"claim {claimId} has no customer");
+        return new CustomerRow(reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2));
+    }
+
     private Task<long> CountAsync(string sql, object value) => ScalarAsync<long>(sql, value);
 
     /// <summary>Runs <paramref name="sql"/> with <paramref name="value"/> as <c>@value</c> and returns the single result.</summary>
@@ -359,6 +443,8 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         string Reference, ClaimChannel Channel, FinalOutcome? FinalOutcome, DecidedBy? FinalDecidedBy, string? FinalExplanation, DateTimeOffset? FinalizedAt);
 
     private sealed record RunRow(Guid Id, Disposition? Disposition);
+
+    private sealed record CustomerRow(string FullName, string? Phone, string? AddressLine);
 
     private sealed record PolicyRefRow(string RefId, string ClauseKey, string DocumentTitle, int Version, DateOnly? EffectiveFrom, DateOnly? EffectiveTo);
 }

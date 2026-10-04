@@ -1,6 +1,16 @@
+using Warranty.Domain.Audit;
 using Warranty.Domain.Common;
 
 namespace Warranty.Application.Abstractions.Audit;
+
+/// <summary>A claim's decision trail as stored, ordered by <c>seq</c>, with the result of re-verifying its hash chain.</summary>
+public sealed record DecisionTrailSnapshot(IReadOnlyList<DecisionTrailEntry> Entries, bool HashChainValid);
+
+/// <summary>Reads the decision trail of a claim of the current tenant (FR-041) and re-verifies its hash chain (FR-039).</summary>
+public interface IDecisionTrailReader
+{
+    Task<DecisionTrailSnapshot> ReadAsync(Guid claimId, CancellationToken ct);
+}
 
 /// <summary>
 /// Appends hash-chained entries to a claim's decision trail of the current tenant (FR-038, FR-039).
