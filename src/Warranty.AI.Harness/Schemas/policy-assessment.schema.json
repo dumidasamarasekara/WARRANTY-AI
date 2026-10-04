@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "warranty-ai/policy-assessment/v1",
+  "title": "PolicyAssessment",
+  "description": "Policy Agent output, 'policy-reasoning' route. The agent may only cite clause references issued for this run ('POL-n'). Coverage-window date arithmetic is computed deterministically and supplied by the warranty_lookup tool; the agent interprets which clauses apply.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["applicableClauses", "coverageAssessment", "confidence", "relevantExclusions", "ambiguity", "summary"],
+  "properties": {
+    "applicableClauses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "applies", "effect", "note"],
+        "properties": {
+          "ref": { "type": "string", "description": "e.g. 'POL-3'." },
+          "applies": { "type": "boolean" },
+          "effect": {
+            "type": "string",
+            "enum": ["GRANTS_COVERAGE", "EXCLUDES", "DEFINES_PERIOD", "SERVICE_RULE", "CONTEXT"]
+          },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "coverageAssessment": {
+      "type": "string",
+      "enum": ["COVERED", "NOT_COVERED", "UNDETERMINED"]
+    },
+    "confidence": {
+      "type": "integer",
+      "description": "0-100 confidence in coverageAssessment (constitution Principle III). Validated range; values outside make the output invalid."
+    },
+    "relevantExclusions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["ACCIDENTAL_DAMAGE", "LIQUID_DAMAGE", "COSMETIC_DAMAGE", "UNAUTHORIZED_REPAIR", "OTHER"]
+      }
+    },
+    "ambiguity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isAmbiguous", "explanation"],
+      "properties": {
+        "isAmbiguous": { "type": "boolean" },
+        "explanation": { "type": "string" }
+      }
+    },
+    "summary": { "type": "string", "description": "Max 800 characters (validated)." }
+  }
+}

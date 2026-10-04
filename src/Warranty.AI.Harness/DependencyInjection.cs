@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Execution;
+using Warranty.AI.Harness.Schemas;
 using Warranty.AI.Harness.Tools;
 
 namespace Warranty.AI.Harness;
@@ -17,6 +18,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ITraceWriter, ActivityTraceWriter>();
         services.AddSingleton<AgentTurnLoop>();
         services.AddSingleton<ContextBuilder>();
+        services.AddSingleton<SchemaValidator>();
 
         // Tools are scoped (they read tenant data through scoped repositories); implementations
         // register as ITool and are picked up by the registry.
