@@ -8,9 +8,8 @@ namespace Warranty.UnitTests.Harness;
 public sealed class RiskAssessorTests
 {
     private const int DefaultThreshold = 60;
-    private const string Pending = "Pending T064";
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void No_signal_is_low_with_score_zero()
     {
         var result = RiskAssessor.Compute([], AiRiskReading.None, DefaultThreshold);
@@ -20,7 +19,7 @@ public sealed class RiskAssessorTests
         result.Signals.ShouldBeEmpty();
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RiskSignalCode.ProductNotInCatalog)]
     [InlineData(RiskSignalCode.DuplicateSerialClaim)]
     [InlineData(RiskSignalCode.EvidenceReused)]
@@ -36,7 +35,7 @@ public sealed class RiskAssessorTests
         result.Signals.Single().Code.ShouldBe(code);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RiskSignalCode.DamageInconsistentWithDescription)]
     [InlineData(RiskSignalCode.Other)]
     [InlineData(RiskSignalCode.SourceInconsistency)]
@@ -51,14 +50,14 @@ public sealed class RiskAssessorTests
         result.Signals.Single().Code.ShouldBe(code);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RiskSeverity.Low, 10)]
     [InlineData(RiskSeverity.Medium, 25)]
     [InlineData(RiskSeverity.High, 40)]
     public void Severity_weights_are_10_25_40(RiskSeverity severity, int weight)
         => RiskAssessor.WeightOf(severity).ShouldBe(weight);
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RiskSignalCode.ManipulationAttempt, RiskSeverity.High)]
     [InlineData(RiskSignalCode.EvidenceReused, RiskSeverity.High)]
     [InlineData(RiskSignalCode.SerialMismatchPhoto, RiskSeverity.High)]
@@ -72,7 +71,7 @@ public sealed class RiskAssessorTests
         RiskAssessor.SeverityOf(code, RiskSignalSource.Ai).ShouldBe(RiskSeverity.Medium);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Weights_are_summed()
     {
         var result = RiskAssessor.Compute(
@@ -85,7 +84,7 @@ public sealed class RiskAssessorTests
         result.Signals.Count.ShouldBe(3);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Score_is_capped_at_100()
     {
         var result = RiskAssessor.Compute(
@@ -102,7 +101,7 @@ public sealed class RiskAssessorTests
         result.Level.ShouldBe(RiskLevel.High);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(0, false, RiskLevel.Low)]
     [InlineData(25, true, RiskLevel.Medium)]
     [InlineData(59, true, RiskLevel.Medium)]
@@ -111,7 +110,7 @@ public sealed class RiskAssessorTests
     public void Level_is_high_exactly_at_the_threshold(int score, bool anySignal, RiskLevel level)
         => RiskAssessor.LevelFor(score, anySignal, DefaultThreshold).ShouldBe(level);
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(65, RiskLevel.High)]
     [InlineData(66, RiskLevel.Medium)]
     public void Computed_level_uses_the_tenant_threshold(int threshold, RiskLevel level)
@@ -126,7 +125,7 @@ public sealed class RiskAssessorTests
         result.Level.ShouldBe(level);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_code_raised_by_both_sources_is_counted_once_with_the_deterministic_severity()
     {
         var result = RiskAssessor.Compute(
@@ -141,7 +140,7 @@ public sealed class RiskAssessorTests
         signal.Severity.ShouldBe(RiskSeverity.High);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void An_ai_duplicate_of_a_medium_deterministic_code_does_not_raise_its_weight()
     {
         var result = RiskAssessor.Compute(
@@ -153,7 +152,7 @@ public sealed class RiskAssessorTests
         result.Signals.ShouldHaveSingleItem().Severity.ShouldBe(RiskSeverity.Medium);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RiskLevel.High)]
     [InlineData(RiskLevel.Medium)]
     public void The_model_level_does_not_raise_risk_without_signals(RiskLevel modelLevel)
@@ -164,7 +163,7 @@ public sealed class RiskAssessorTests
         result.Score.ShouldBe(0);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void The_model_level_does_not_lower_risk_with_signals()
     {
         var oneSignal = RiskAssessor.Compute(

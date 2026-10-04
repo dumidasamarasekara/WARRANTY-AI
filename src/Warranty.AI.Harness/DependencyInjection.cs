@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Warranty.AI.Harness.Agents.Risk;
 using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Execution;
 using Warranty.AI.Harness.Schemas;
@@ -36,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<ITool>(sp => sp.GetRequiredService<ClaimHistoryLookupTool>());
         services.AddScoped<ITool, SearchPolicyKnowledgeTool>();
         services.AddScoped<ITool, SearchGlobalKnowledgeTool>();
+
+        // The risk capability (scoped: it reads the tenant's claim history and settings).
+        services.AddScoped<IRiskAssessor, RiskAssessor>();
 
         // Agents and the AdjudicationRunner (T068) register here.
         return services;
