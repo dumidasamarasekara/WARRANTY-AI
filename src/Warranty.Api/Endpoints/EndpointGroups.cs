@@ -1,3 +1,6 @@
+using Warranty.Api.Endpoints.Claims;
+using Warranty.Api.Endpoints.Public;
+
 namespace Warranty.Api.Endpoints;
 
 /// <summary>
@@ -10,10 +13,12 @@ public static class EndpointGroups
 {
     /// <summary>Claimant channel: tenant from the request Host.</summary>
     public static RouteGroupBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api/public").WithTags("Public");
+        => app.MapGroup("/api/public").WithTags("Public")
+            .MapPublicClaimRoutes();
 
     public static RouteGroupBuilder MapClaimEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization();
+        => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization()
+            .MapClaimRoutes();
 
     /// <summary><c>/api/review-queue</c> and <c>/api/claims/{claimId}/review-decisions</c>.</summary>
     public static RouteGroupBuilder MapReviewEndpoints(this IEndpointRouteBuilder app)
