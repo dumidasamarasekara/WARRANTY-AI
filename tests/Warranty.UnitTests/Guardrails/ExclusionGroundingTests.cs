@@ -15,7 +15,6 @@ namespace Warranty.UnitTests.Guardrails;
 public sealed class ExclusionGroundingTests
 {
     private const string PendingEngine = "Pending T066";
-    private const string PendingMap = "Pending T124";
 
     /// <summary>Every damage type of photo-analysis.schema.json.</summary>
     private static readonly string[] AllDamageTypes =
@@ -187,12 +186,12 @@ public sealed class ExclusionGroundingTests
         return data;
     }
 
-    [Theory(Skip = PendingMap)]
+    [Theory]
     [MemberData(nameof(MappingTable))]
     public void The_map_supports_exactly_the_R26_damage_types(ExclusionCode code, string damageType, bool expected)
         => ExclusionEvidenceMap.IsSupported(code, [damageType]).ShouldBe(expected);
 
-    [Theory(Skip = PendingMap)]
+    [Theory]
     [InlineData(ExclusionCode.AccidentalDamage)]
     [InlineData(ExclusionCode.LiquidDamage)]
     [InlineData(ExclusionCode.CosmeticDamage)]
@@ -200,11 +199,11 @@ public sealed class ExclusionGroundingTests
     public void No_photo_damage_type_supports_no_exclusion(ExclusionCode code)
         => ExclusionEvidenceMap.IsSupported(code, []).ShouldBeFalse();
 
-    [Fact(Skip = PendingMap)]
+    [Fact]
     public void One_matching_type_among_others_is_enough()
         => ExclusionEvidenceMap.IsSupported(ExclusionCode.AccidentalDamage, ["NONE_VISIBLE", "COSMETIC_WEAR", "DENTS_OR_IMPACT"]).ShouldBeTrue();
 
-    [Fact(Skip = PendingMap)]
+    [Fact]
     public void Unauthorized_repair_is_unsupported_even_with_every_damage_type()
         => ExclusionEvidenceMap.IsSupported(ExclusionCode.UnauthorizedRepair, AllDamageTypes).ShouldBeFalse();
 
