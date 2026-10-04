@@ -6,7 +6,6 @@ export interface StaffSession {
   /** Display name from the ID token (falls back to the username). */
   name: string
   roles: StaffRole[]
-  accessToken: string
   signOut: () => Promise<void>
 }
 
@@ -20,7 +19,6 @@ export function useStaffSession(): StaffSession | null {
     return {
       name: user.profile.name ?? user.profile.preferred_username ?? user.profile.sub,
       roles: rolesFromAccessToken(user.access_token),
-      accessToken: user.access_token,
       signOut: () => auth.signoutRedirect(),
     }
   }, [auth, user])

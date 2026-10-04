@@ -60,8 +60,8 @@ function renderShell(path: string) {
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (path: string) =>
-      path === '/api/me'
+    vi.fn(async (request: Request) =>
+      new URL(request.url).pathname === '/api/me'
         ? Response.json({ sub: 'u-1', name: 'Riley Reviewer', tenantDisplayName: 'Aurora Electronics', tenantCurrency: 'USD', roles })
         : Response.json([{}, {}, {}]),
     ),
