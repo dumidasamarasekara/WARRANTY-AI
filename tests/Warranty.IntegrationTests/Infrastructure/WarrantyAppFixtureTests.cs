@@ -102,7 +102,11 @@ public sealed class WarrantyAppFixtureTests(WarrantyAppFixture fixture)
     [Fact]
     public async Task Waiting_for_a_claim_status_returns_once_it_is_reached_and_times_out_otherwise()
     {
-        var seededClaimId = await ScalarAsync<Guid>("select id from claims.claims order by serial_number limit 1");
+        // A seeded history claim (finalized by the seed, marked seededHistory): claims submitted by other
+        // tests share the claims table and may still be adjudicating or settle in review.
+        var seededClaimId = await ScalarAsync<Guid>(
+            "select c.id from claims.claims c where exists (select 1 from audit.decision_trail_entries t " +
+            "where t.claim_id = c.id and (t.payload::jsonb ->> 'seededHistory') = 'true') order by c.serial_number limit 1");
 
         var status = await fixture.WaitForClaimStatusAsync(seededClaimId, ClaimStatus.Approved, ClaimStatus.Rejected);
         status.IsFinal().ShouldBeTrue();
