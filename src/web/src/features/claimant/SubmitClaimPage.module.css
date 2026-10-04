@@ -1,0 +1,86 @@
+/* Claimant submission page — ui-design.md §6.6. */
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lead {
+  color: var(--color-text-secondary);
+}
+
+.success {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--tone-ok-border);
+  border-radius: var(--radius-md);
+  background: var(--tone-ok-bg);
+  color: var(--color-text);
+}
+
+.symbol {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  color: var(--color-ink-inverse);
+  font: 600 16px/1 var(--font-sans);
+}
+
+.successBody {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.successTitle {
+  color: var(--tone-ok-ink);
+}
+
+.successTitle:focus {
+  outline: none;
+}
+
+.successTitle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.referenceLabel {
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+}
+
+.reference code {
+  font: 500 28px/36px var(--font-mono);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.contacts {
+  padding-left: var(--space-5);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .success {
+    flex-direction: column;
+    padding: var(--space-4);
+  }
+
+  .checkStatus {
+    width: 100%;
+  }
+}

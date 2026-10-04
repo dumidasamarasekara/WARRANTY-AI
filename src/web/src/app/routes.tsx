@@ -1,6 +1,7 @@
 import { Navigate, Outlet, createBrowserRouter, type RouteObject } from 'react-router'
 import { AccessClaimPage } from '../features/claimant/AccessClaimPage'
 import { ClaimStatusPage } from '../features/claimant/ClaimStatusPage'
+import { SubmitClaimPage } from '../features/claimant/SubmitClaimPage'
 import { AuthProvider } from './AuthProvider'
 import { ClaimantLayout } from './ClaimantLayout'
 import { Layout } from './Layout'
@@ -68,7 +69,7 @@ const staffRoutes: RouteObject = {
 const claimantRoutes: RouteObject = {
   element: <ClaimantLayout />,
   children: [
-    { index: true, element: <PlaceholderPage title="Submit a warranty claim" /> },
+    { index: true, element: <SubmitClaimPage /> },
     { path: 'claims/access', element: <AccessClaimPage /> },
     { path: 'claims/:reference', element: <ClaimStatusPage /> },
     { path: '*', element: <NotFoundPage home="/" /> },
