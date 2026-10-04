@@ -192,7 +192,7 @@ public sealed class PolicyAgentTests : IAsyncDisposable
     // ---- POL-n issuance -----------------------------------------------------------------------------
 
     [Fact]
-    public async Task Period_and_exclusion_clauses_come_first_in_clause_key_order_then_the_others_by_score()
+    public async Task Period_and_exclusion_clauses_come_first_in_clause_key_order_then_coverage_then_the_others_by_score()
     {
         _model.Enqueue(ScriptedModelProvider.Completed(ValidAssessment));
 
@@ -204,6 +204,22 @@ public sealed class PolicyAgentTests : IAsyncDisposable
             ("POL-6", "AUR-WP-3.3"), ("POL-7", "AUR-WP-3.4"), ("POL-8", "AUR-WP-1.1"), ("POL-9", "AUR-WP-4.1"), ("POL-10", "AUR-WP-1.2"),
             ("POL-11", "AUR-WP-4.2"),
         ]);
+    }
+
+    [Fact]
+    public void Coverage_clauses_follow_the_decisive_ones_in_clause_key_order_whatever_their_score()
+    {
+        // Hash embeddings (integration tests) rank the definitions and service rules above the coverage grant.
+        var order = PolicyAgent.IssueOrder(
+        [
+            Chunk("AUR-WP-1.2", ClauseType.Definition, score: 0.48),
+            Chunk("AUR-WP-4.2", ClauseType.ServiceRule, score: 0.42),
+            Chunk("AUR-WP-1.1", ClauseType.Coverage, score: 0.40),
+            Chunk("AUR-WP-2.1", ClauseType.Period, score: 0.15),
+            Chunk("AUR-WP-4.1", ClauseType.ServiceRule, score: 0.30),
+        ]);
+
+        order.Select(c => c.ClauseKey).ShouldBe(["AUR-WP-2.1", "AUR-WP-1.1", "AUR-WP-1.2", "AUR-WP-4.2", "AUR-WP-4.1"]);
     }
 
     [Fact]

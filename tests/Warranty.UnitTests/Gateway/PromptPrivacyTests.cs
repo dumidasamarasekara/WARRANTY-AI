@@ -80,7 +80,7 @@ public sealed partial class PromptPrivacyTests
     private readonly Customer _customer = Customer.Create(
         CustomerId, TenantId, CustomerName, CustomerEmail, "US", CustomerPhone, StreetAddress, "Sausalito", "94965");
 
-    [Fact(Skip = "Pending T068")]
+    [Fact]
     public async Task No_customer_identifier_reaches_any_model_request_of_a_full_run()
     {
         var model = ScriptedModel();
