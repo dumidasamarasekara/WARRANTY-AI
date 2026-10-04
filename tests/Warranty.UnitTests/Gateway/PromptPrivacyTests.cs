@@ -60,7 +60,7 @@ public sealed partial class PromptPrivacyTests
     private static readonly DateOnly PurchaseDate = new(2026, 3, 14);
     private static readonly DateTimeOffset SubmittedAt = new(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
 
-    private static readonly string[] Agents = ["intake", "evidence", "policy", "decision"];
+    private static readonly string[] Agents = ["intake", "evidence-invoice", "evidence-photo", "policy", "decision"];
     private static readonly string[] Placeholders =
     [
         CaseCustomerView.NamePlaceholder, CaseCustomerView.EmailPlaceholder, CaseCustomerView.PhonePlaceholder, CaseCustomerView.AddressPlaceholder,
