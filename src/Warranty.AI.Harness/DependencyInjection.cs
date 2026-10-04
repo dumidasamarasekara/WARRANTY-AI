@@ -1,11 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Agents.Risk;
 using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Execution;
 using Warranty.AI.Harness.Schemas;
 using Warranty.AI.Harness.Tools;
 using Warranty.AI.Harness.Tools.Implementations;
+using Warranty.Application.Abstractions.Knowledge;
+using Warranty.Domain.Adjudication;
 
 namespace Warranty.AI.Harness;
 
@@ -41,7 +44,11 @@ public static class DependencyInjection
         // The risk capability (scoped: it reads the tenant's claim history and settings).
         services.AddScoped<IRiskAssessor, RiskAssessor>();
 
-        // Agents and the AdjudicationRunner (T068) register here.
+        // Agents are scoped (they persist through the scoped adjudication repository); each resolves as
+        // itself and as its IAgent<TInput, TOutput>. The AdjudicationRunner (T068) registers here too.
+        services.AddScoped<IntakeAgent>();
+        services.AddScoped<IAgent<CaseContext, IntakeResult>>(sp => sp.GetRequiredService<IntakeAgent>());
+
         return services;
     }
 }
