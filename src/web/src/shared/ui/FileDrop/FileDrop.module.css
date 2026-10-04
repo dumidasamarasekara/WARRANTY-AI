@@ -1,0 +1,133 @@
+.fileDrop {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: var(--color-text);
+  font: 500 13px/16px var(--font-sans);
+}
+
+.zone {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-4);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text-soft);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-hover) var(--easing-standard),
+    background-color var(--duration-hover) var(--easing-standard);
+}
+
+.zone:hover,
+.dragOver {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.zone:focus-within {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.invalid {
+  border-color: var(--color-error);
+}
+
+.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prompt {
+  font: 500 14px/20px var(--font-sans);
+}
+
+.browse {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.errorMessage {
+  color: var(--tone-err-ink);
+  font: 500 12px/16px var(--font-sans);
+}
+
+.files {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSize {
+  color: var(--color-text-secondary);
+  font: var(--text-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.fileStatus {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.done .fileStatus {
+  color: var(--tone-ok-ink);
+}
+
+.error.file {
+  border-color: var(--tone-err-border);
+}
+
+.error .fileStatus {
+  color: var(--tone-err-ink);
+}
+
+.remove {
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: 500 12px/16px var(--font-sans);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+@media (max-width: 639px) {
+  .remove {
+    min-height: var(--touch-target);
+  }
+}

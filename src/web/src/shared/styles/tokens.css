@@ -1,0 +1,118 @@
+/*
+ * WarrantyOS design tokens (ui-design.md §3). Components use var(--…), never literal values.
+ * Light theme only.
+ */
+:root {
+  /* §3.1 Colour */
+  --color-bg: #fafaf8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f2f1ed;
+  --color-border: #e3e1da;
+  --color-border-strong: #cdcac0;
+  --color-text: #1c1f1c;
+  --color-text-soft: #43473f;
+  --color-text-secondary: #5f635c;
+  --color-text-muted: #8b8f87;
+  --color-text-disabled: #a2a69d;
+  --color-primary: #1f6f4a;
+  --color-primary-hover: #175a3b;
+  --color-primary-active: #124a31;
+  --color-primary-soft: #e6f1ea;
+  --color-success: #3f7d58;
+  --color-warning: #c08a2e;
+  --color-error: #a03428;
+  --color-info: #2f5d8c;
+  --color-ai: #6b4e8c;
+  --color-ai-border: #bfa8d6;
+  --color-human: #2f5d8c;
+  --color-system: #5f635c;
+  --color-ink-inverse: #ffffff;
+  --color-chrome: #1c1f1c;
+  --color-scrim: rgba(28, 31, 28, 0.4);
+
+  /* Tones: one bg / ink / border triple per meaning */
+  --tone-ok-bg: #e6f1ea;
+  --tone-ok-ink: #175a3b;
+  --tone-ok-border: #bfdccb;
+  --tone-warn-bg: #faf2e0;
+  --tone-warn-ink: #7a520c;
+  --tone-warn-border: #e8d5a6;
+  --tone-err-bg: #f8e9e6;
+  --tone-err-ink: #8a2b20;
+  --tone-err-border: #e8c2bb;
+  --tone-ai-bg: #f0ebf5;
+  --tone-ai-ink: #563b75;
+  --tone-ai-border: #d9cde6;
+  --tone-human-bg: #e8eff6;
+  --tone-human-ink: #244b73;
+  --tone-human-border: #c5d6e8;
+  --tone-system-bg: #f2f1ed;
+  --tone-system-ink: #43473f;
+  --tone-system-border: #dad7cd;
+  --tone-pending-bg: #ffffff;
+  --tone-pending-ink: #5f635c;
+  --tone-pending-border: #cdcac0;
+
+  /* Tenant markers: tenant strip, tenant dot and claimant tile only — never status */
+  --color-tenant-aurora: #c08a2e;
+  --color-tenant-borealis: #1e6f7a;
+  --color-tenant-unknown: #5f635c;
+
+  /* §3.2 Typography */
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --text-display: 600 40px/48px var(--font-display);
+  --text-page-title: 600 32px/40px var(--font-display);
+  --text-entity-title: 600 24px/32px var(--font-display);
+  --text-section-title: 600 20px/28px var(--font-display);
+  --text-card-title: 600 16px/24px var(--font-sans);
+  --text-body: 400 14px/20px var(--font-sans);
+  --text-small: 400 12px/16px var(--font-sans);
+  --text-label: 500 12px/16px var(--font-sans);
+  --text-label-tracking: 0.04em;
+  --text-data: 400 13px/20px var(--font-sans);
+  --text-metric: 600 22px/28px var(--font-sans);
+  --text-mono: 400 12px/16px var(--font-mono);
+
+  /* §3.3 Space, shape, elevation, motion */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+  --shadow-raised: 0 1px 2px rgba(28, 31, 28, 0.05);
+  --shadow-overlay: 0 4px 12px rgba(28, 31, 28, 0.12);
+  --shadow-modal: 0 16px 40px rgba(28, 31, 28, 0.2);
+  --duration-hover: 120ms;
+  --duration-enter: 180ms;
+  --duration-fill: 240ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Control heights: 36 px staff, 40 px claimant, 44 px minimum touch target below 640 px */
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --touch-target: 44px;
+
+  /* Layout. Breakpoints (media queries cannot read custom properties): sm 640 · md 1024 · lg 1280 · xl 1536 */
+  --layout-staff-max-width: 1440px;
+  --layout-claimant-max-width: 720px;
+  --layout-dialog-width: 520px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-hover: 0ms;
+    --duration-enter: 0ms;
+    --duration-fill: 0ms;
+  }
+}

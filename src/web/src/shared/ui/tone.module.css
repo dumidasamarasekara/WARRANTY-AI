@@ -1,0 +1,52 @@
+/*
+ * One class per tone. Each sets the local --t-bg / --t-ink / --t-border triple (ui-design.md §3.1) and
+ * --t-fill, the solid colour for dots, bars and filled tags.
+ */
+.ok {
+  --t-bg: var(--tone-ok-bg);
+  --t-ink: var(--tone-ok-ink);
+  --t-border: var(--tone-ok-border);
+  --t-fill: var(--color-success);
+}
+
+.warn {
+  --t-bg: var(--tone-warn-bg);
+  --t-ink: var(--tone-warn-ink);
+  --t-border: var(--tone-warn-border);
+  --t-fill: var(--color-warning);
+}
+
+.err {
+  --t-bg: var(--tone-err-bg);
+  --t-ink: var(--tone-err-ink);
+  --t-border: var(--tone-err-border);
+  --t-fill: var(--color-error);
+}
+
+.ai {
+  --t-bg: var(--tone-ai-bg);
+  --t-ink: var(--tone-ai-ink);
+  --t-border: var(--tone-ai-border);
+  --t-fill: var(--color-ai);
+}
+
+.human {
+  --t-bg: var(--tone-human-bg);
+  --t-ink: var(--tone-human-ink);
+  --t-border: var(--tone-human-border);
+  --t-fill: var(--color-human);
+}
+
+.system {
+  --t-bg: var(--tone-system-bg);
+  --t-ink: var(--tone-system-ink);
+  --t-border: var(--tone-system-border);
+  --t-fill: var(--color-system);
+}
+
+.pending {
+  --t-bg: var(--tone-pending-bg);
+  --t-ink: var(--tone-pending-ink);
+  --t-border: var(--tone-pending-border);
+  --t-fill: var(--color-border-strong);
+}

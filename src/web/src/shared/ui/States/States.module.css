@@ -1,0 +1,53 @@
+.state {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.message {
+  max-width: 480px;
+  color: var(--color-text-secondary);
+  font: var(--text-body);
+}
+
+.title {
+  color: var(--tone-err-ink);
+  font: var(--text-card-title);
+}
+
+.problem {
+  border: 1px solid var(--tone-err-border);
+  border-radius: var(--radius-md);
+  background: var(--tone-err-bg);
+}
+
+.problem .message {
+  color: var(--tone-err-ink);
+}
+
+.correlation {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.mono {
+  font: var(--text-mono);
+  color: var(--color-text);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
