@@ -1,0 +1,117 @@
+/* Claim submission form — ui-design.md §6.6 and §7. */
+.claimForm {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.stepper {
+  margin-bottom: var(--space-1);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-5);
+  padding: calc(var(--space-4) + var(--space-1));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.stepTitle {
+  font: var(--text-section-title);
+}
+
+.stepTitle:focus {
+  outline: none;
+}
+
+.stepTitle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.lead {
+  color: var(--color-text-secondary);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.evidence {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.note {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.problemList {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.correlation {
+  margin-top: var(--space-1);
+  font: var(--text-small);
+}
+
+.correlation code {
+  font: var(--text-mono);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (max-width: 639px) {
+  .form {
+    padding: var(--space-4);
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .action {
+    width: 100%;
+  }
+}
