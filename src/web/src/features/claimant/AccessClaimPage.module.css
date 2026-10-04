@@ -1,0 +1,37 @@
+/* Claimant access — ui-design.md §6.6. */
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.lead {
+  color: var(--color-text-soft);
+  font: 400 15px/22px var(--font-sans);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.reference input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 639px) {
+  .submit {
+    width: 100%;
+  }
+}
