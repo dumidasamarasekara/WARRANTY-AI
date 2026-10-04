@@ -61,13 +61,14 @@ internal sealed partial class ReplayModelProvider(
 
         var path = Path.Combine(
             ReplayPaths.Resolve(options.Value.Replay.RecordingsPath), scenario, $"{context.Agent}-{counter.Next(context)}.json");
+        var variables = await scenarios.GetFixtureVariablesAsync(context, ct);
 
         return options.Value.Replay.Record
-            ? await RecordAsync(request, path, ct)
-            : await ReplayAsync(path, model, ct);
+            ? await RecordAsync(request, path, variables, ct)
+            : await ReplayAsync(path, model, variables, ct);
     }
 
-    private async Task<AiTurnResult> ReplayAsync(string path, string model, CancellationToken ct)
+    private async Task<AiTurnResult> ReplayAsync(string path, string model, IReadOnlyDictionary<string, string> variables, CancellationToken ct)
     {
         if (!File.Exists(path))
         {
@@ -75,22 +76,24 @@ internal sealed partial class ReplayModelProvider(
             return Failure(model, $"Replay fixture '{Path.GetFileName(Path.GetDirectoryName(path))}/{Path.GetFileName(path)}' does not exist.");
         }
 
-        await using var stream = File.OpenRead(path);
-        var recording = await JsonSerializer.DeserializeAsync<ReplayRecording>(stream, ReplayRecording.JsonOptions, ct)
+        // Placeholders such as {{claim.purchaseDate}} take the claim's values (ReplayFixtureVariables).
+        var json = ReplayFixtureVariables.Apply(await File.ReadAllTextAsync(path, ct), variables);
+        var recording = JsonSerializer.Deserialize<ReplayRecording>(json, ReplayRecording.JsonOptions)
                         ?? throw new InvalidDataException($"Replay fixture '{path}' is empty.");
         return recording.ToResult(ProviderName, model);
     }
 
-    private async Task<AiTurnResult> RecordAsync(ResolvedTurnRequest request, string path, CancellationToken ct)
+    private async Task<AiTurnResult> RecordAsync(
+        ResolvedTurnRequest request, string path, IReadOnlyDictionary<string, string> variables, CancellationToken ct)
     {
         var live = recordFrom ?? throw new InvalidOperationException("Replay recording needs a live provider.");
         var result = await live.CompleteAsync(request, ct);
 
+        // The claim's dates are written back as placeholders, so the fixture replays on any day.
+        var json = ReplayFixtureVariables.Templatize(
+            JsonSerializer.Serialize(ReplayRecording.FromResult(result), ReplayRecording.JsonOptions), variables);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await using (var stream = File.Create(path))
-        {
-            await JsonSerializer.SerializeAsync(stream, ReplayRecording.FromResult(result), ReplayRecording.JsonOptions, ct);
-        }
+        await File.WriteAllTextAsync(path, json, ct);
 
         logger.LogInformation("Recorded {Route} turn to {Path}.", request.Route.Name, path);
         return result;

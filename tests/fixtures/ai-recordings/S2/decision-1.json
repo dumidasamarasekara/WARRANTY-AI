@@ -1,0 +1,44 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "REJECT",
+    "coverage": "NOT_COVERED",
+    "confidence": 95,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0002, 450.00 USD, dated on the stated purchase date about 18 months before the claim."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: black, unlit screen; no visible damage."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: serial label shows AT10-24-0002, matching the claim."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-1",
+        "relevance": "SUPPORTS_REJECTION"
+      },
+      {
+        "ref": "POL-8",
+        "relevance": "CONTEXT"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The evidence is consistent: the invoice (EV-1) matches the claimed seller, model, serial, price and purchase date, and the photos (EV-2, EV-3) show the claimed unit without physical damage. The product was purchased in North America about 18 months before the claim; POL-1 limits coverage to 12 months from purchase, and warranty_lookup confirms the claim date is outside standard coverage. The power failure would otherwise be a covered defect (POL-8), but the warranty period has ended. Recommend rejection.",
+    "claimantExplanation": "Thank you for your claim for your Aurora Tab 10. The Aurora Limited Warranty covers products purchased in North America for 12 months from the purchase date. Your tablet was purchased about 18 months ago, so the warranty period has ended and this repair is not covered. An Aurora service center can still offer a paid repair.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7796,
+    "outputTokens": 498
+  }
+}

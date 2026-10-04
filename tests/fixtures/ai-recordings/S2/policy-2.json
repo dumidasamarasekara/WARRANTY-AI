@@ -1,0 +1,43 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "Purchased in North America: 12-month warranty period. warranty_lookup reports the claim date outside standard coverage; the period ended before the claim."
+      },
+      {
+        "ref": "POL-8",
+        "applies": false,
+        "effect": "GRANTS_COVERAGE",
+        "note": "A power failure is the kind of defect this clause covers, but only during the warranty period, which has ended."
+      },
+      {
+        "ref": "POL-4",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No drop, impact or screen damage reported or visible."
+      },
+      {
+        "ref": "POL-5",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact reported or visible."
+      }
+    ],
+    "coverageAssessment": "NOT_COVERED",
+    "confidence": 95,
+    "relevantExclusions": [],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Not covered: the product was purchased in North America about 18 months before the claim, so the 12-month warranty period of POL-1 has ended, as confirmed by warranty_lookup. The defect itself would fall under POL-8 if it had appeared within the period. No exclusion is relevant."
+  },
+  "usage": {
+    "inputTokens": 5362,
+    "outputTokens": 398
+  }
+}

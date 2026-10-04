@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 89,
+    "observations": "Front of a dark tablet on a wooden table. The screen is black and unlit; the glass and frame show no cracks, dents or liquid marks."
+  },
+  "usage": {
+    "inputTokens": 1638,
+    "outputTokens": 124
+  }
+}
