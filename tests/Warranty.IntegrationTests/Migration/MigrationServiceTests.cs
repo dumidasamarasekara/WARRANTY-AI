@@ -1,12 +1,8 @@
-extern alias migration;
-
 using Azure.Storage.Blobs;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using migration::Warranty.MigrationService.Seeding;
 using Npgsql;
 using Testcontainers.Azurite;
 using Testcontainers.PostgreSql;
+using Warranty.IntegrationTests.Infrastructure;
 
 namespace Warranty.IntegrationTests.Migration;
 
@@ -114,28 +110,9 @@ public sealed class MigrationServiceTests : IAsyncLifetime
         names.ShouldContain("tenant-aurora/policies/AUR-WP-v1.md");
     }
 
-    private async Task<int> RunMigrationServiceAsync()
-    {
-        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:warranty"] = Owner("warranty"),
-            ["ConnectionStrings:knowledge"] = Owner("knowledge"),
-            ["ConnectionStrings:blobs"] = _azurite.GetConnectionString(),
-            ["Database:AppRolePassword"] = AppRolePassword,
-            ["AiGateway:Mode"] = "live",
-            ["AiGateway:Routes:embedding:Provider"] = "hash",
-            ["AiGateway:Routes:embedding:Model"] = "hash-embedding",
-            ["AiGateway:Routes:embedding:Dimensions"] = "768",
-            [MigrationServiceExtensions.SeedPathKey] = SeedRoot(),
-        });
-        builder.AddMigrationService();
-
-        using var host = builder.Build();
-        Environment.ExitCode = -1;
-        await host.RunAsync(TestContext.Current.CancellationToken);
-        return Environment.ExitCode;
-    }
+    private Task<int> RunMigrationServiceAsync()
+        => MigrationRunner.RunAsync(
+            Owner("warranty"), Owner("knowledge"), _azurite.GetConnectionString(), AppRolePassword, TestContext.Current.CancellationToken);
 
     private async Task<Dictionary<string, long>> CountsAsync()
     {
@@ -185,17 +162,4 @@ public sealed class MigrationServiceTests : IAsyncLifetime
     }
 
     private string Owner(string database) => new NpgsqlConnectionStringBuilder(_postgres.GetConnectionString()) { Database = database }.ConnectionString;
-
-    private static string SeedRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Warranty.slnx")))
-            {
-                return Path.Combine(dir.FullName, "seed");
-            }
-        }
-
-        throw new InvalidOperationException("Repository root (Warranty.slnx) not found.");
-    }
 }
