@@ -1,22 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Outlet } from 'react-router'
+import { api, unwrap } from '../shared/api/client'
 import { LoadingState, ProblemState } from '../shared/ui'
 import { tenantInitials, tenantMarkerColor } from './tenantTheme'
 import styles from './ClaimantLayout.module.css'
-
-interface PublicTenantInfo {
-  displayName: string
-}
 
 /** The tenant behind this channel host; the API resolves it from the Host header (research R9). */
 function usePublicTenant() {
   return useQuery({
     queryKey: ['public-tenant'],
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/api/public/tenant', { signal })
-      if (!response.ok) throw Object.assign(new Error('Tenant not resolved'), { status: response.status })
-      return (await response.json()) as PublicTenantInfo
-    },
+    queryFn: ({ signal }) => unwrap(api.GET('/api/public/tenant', { signal })),
     staleTime: Infinity,
   })
 }
