@@ -1,0 +1,71 @@
+{
+  "$comment": "Synthetic evidence for the scenarios in seed/golden/scenarios.json, rendered by tools/Warranty.EvidenceGenerator: `dotnet run --project tools/Warranty.EvidenceGenerator -- generate --spec seed/evidence/evidence.json [--only S1,S2] [--as-of yyyy-MM-dd]`. Paths are relative to this file. Invoice dates given as purchaseDateOffsetMonths are computed from --as-of (default: today), so the committed invoices show the date of their generation day; replay fixtures never depend on the printed date (they use {{claim.purchaseDate}}). Each file is seeded by its name and variant, so no two files share a hash unless a scenario copies one on purpose.",
+  "files": [
+    {
+      "scenario": "S1",
+      "path": "S1/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-104233",
+      "purchaseDateOffsetMonths": -4,
+      "productName": "Aurora Tab 10",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0001",
+      "amount": 450.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S1",
+      "path": "S1/photo-1.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-TAB10"
+    },
+    {
+      "scenario": "S1",
+      "path": "S1/photo-2.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "back",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0001"
+    },
+    {
+      "scenario": "S2",
+      "path": "S2/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2025-031782",
+      "purchaseDateOffsetMonths": -18,
+      "productName": "Aurora Tab 10",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0002",
+      "amount": 450.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S2",
+      "path": "S2/photo-1.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-TAB10",
+      "variant": 2
+    },
+    {
+      "scenario": "S2",
+      "path": "S2/photo-2.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "back",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0002",
+      "variant": 2
+    }
+  ]
+}
