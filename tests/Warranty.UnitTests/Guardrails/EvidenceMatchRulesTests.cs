@@ -7,14 +7,14 @@ public sealed class EvidenceMatchRulesTests
 {
     // ---- Serial number and model code ----
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData(" sn-48_21.33 77 ", "SN48213377")]
     [InlineData("tab-x10", "TABX10")]
     [InlineData("AB12", "AB12")]
     public void NormalizeIdentifier_upper_cases_and_removes_spaces_dashes_underscores_and_dots(string identifier, string expected) =>
         EvidenceMatchRules.NormalizeIdentifier(identifier).ShouldBe(expected);
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData("SN-4821-3377", "sn 4821 3377")]
     [InlineData("SN_48213377", "sn.4821.3377")]
     [InlineData("TAB-X10", "tabx10")]
@@ -22,7 +22,7 @@ public sealed class EvidenceMatchRulesTests
     public void Identifiers_match_ignoring_case_spaces_dashes_underscores_and_dots(string claimed, string evidence) =>
         EvidenceMatchRules.IdentifiersMatch(claimed, evidence).ShouldBe(EvidenceMatch.Match);
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData("SN-48213377", "SN-48213378")]
     [InlineData("SN48213377", "SN482133770")]
     [InlineData("SN48213377", "SN/48213377")]
@@ -33,7 +33,7 @@ public sealed class EvidenceMatchRulesTests
 
     // ---- Purchase date ----
 
-    [Fact(Skip = "Pending T122")]
+    [Fact]
     public void Dates_match_only_on_the_exact_calendar_date()
     {
         var purchased = new DateOnly(2026, 3, 14);
@@ -62,22 +62,30 @@ public sealed class EvidenceMatchRulesTests
         { 50.00m, 48.99m, EvidenceMatch.Mismatch },
     };
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [MemberData(nameof(Prices))]
     public void Prices_match_within_one_percent_or_one_unit_whichever_is_larger(decimal claim, decimal invoice, EvidenceMatch expected) =>
         EvidenceMatchRules.PriceMatches(claim, invoice).ShouldBe(expected);
 
     // ---- Seller ----
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData("AURORA STORE, Inc.", "aurora store")]
     [InlineData("Aurora-Store Ltd.", "aurora store")]
     [InlineData("  Nordic   Electronics GmbH ", "nordic electronics")]
     [InlineData("Aurora Store", "aurora store")]
+    // Repeated trailing suffixes are all dropped; the first word never is.
+    [InlineData("Aurora Store Co. Ltd.", "aurora store")]
+    [InlineData("Co.", "co")]
+    // Dotted suffixes: a trailing run of single letters spelling a suffix is dropped.
+    [InlineData("Aurora Store S.A.", "aurora store")]
+    [InlineData("Aurora Store B.V.", "aurora store")]
+    [InlineData("Nordic Electronics G.m.b.H.", "nordic electronics")]
+    [InlineData("Aurora Store X", "aurora store x")]
     public void NormalizeSeller_lower_cases_strips_punctuation_collapses_spaces_and_drops_legal_suffixes(string seller, string expected) =>
         EvidenceMatchRules.NormalizeSeller(seller).ShouldBe(expected);
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData("AURORA STORE, Inc.")]
     [InlineData("Aurora-Store Ltd.")]
     [InlineData("aurora store")]
@@ -92,19 +100,22 @@ public sealed class EvidenceMatchRulesTests
     [InlineData("Aurora Store Co.")]
     [InlineData("Aurora Store Corp.")]
     [InlineData("Aurora Store Corporation")]
+    [InlineData("Aurora Store S.A.")]
+    [InlineData("Aurora Store B.V.")]
     public void Sellers_match_ignoring_case_punctuation_and_legal_suffixes(string invoiceSeller) =>
         EvidenceMatchRules.SellersMatch("Aurora Store", invoiceSeller).ShouldBe(EvidenceMatch.Match);
 
-    [Theory(Skip = "Pending T122")]
+    [Theory]
     [InlineData("Aurora Stores")]
     [InlineData("Borealis Store")]
     [InlineData("Aurora Co Store")]
+    [InlineData("Aurora S.A. Store")]
     public void Sellers_mismatch_on_other_differences(string invoiceSeller) =>
         EvidenceMatchRules.SellersMatch("Aurora Store", invoiceSeller).ShouldBe(EvidenceMatch.Mismatch);
 
     // ---- Missing evidence ----
 
-    [Fact(Skip = "Pending T122")]
+    [Fact]
     public void A_null_invoice_field_is_not_compared_and_never_a_mismatch()
     {
         EvidenceMatchRules.IdentifiersMatch("SN-48213377", null).ShouldBe(EvidenceMatch.NotCompared);
