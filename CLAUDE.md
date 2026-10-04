@@ -37,14 +37,24 @@ The `speckit` workflow (`.specify/workflows/speckit/workflow.yml`) chains specif
 
 ## Git workflow: one branch and one pull request per task
 
-Never commit or push directly to `master` (a PreToolUse hook in `.claude/settings.json` denies `git commit`/`git push` on `master`/`main` and any push targeting them). During `/speckit-implement`, handle **every task in `tasks.md` order, one at a time** (tasks marked `[P]` too — each gets its own branch):
+Never commit or push directly to `master` (a PreToolUse hook in `.claude/settings.json` denies `git commit`/`git push` on `master`/`main` and any push targeting them; branch protection isn't available on this private free-plan repo, so human developers must follow the same rule by convention). Every task in `tasks.md` (tasks marked `[P]` too) gets its own branch and PR:
 
-1. `pwsh -NoProfile -File scripts/git/task-flow.ps1 start T0xx` — requires a clean tree; updates `master` and creates/switches to `task/T0xx-<slug>`.
+1. `pwsh -NoProfile -File scripts/git/task-flow.ps1 start T0xx` — requires a clean tree; branches `task/T0xx-<slug>` from the latest `origin/master` in the current checkout. Add `-Worktree` to create it in a new git worktree at `.worktrees/T0xx` instead (any tree state; gitignored). `start` refuses a task that is already `[X]` on `origin/master`, has a pushed task branch, or whose GitHub issue is assigned to someone else, and self-assigns the issue (`-Force` overrides).
 2. Implement the task and mark it `[X]` in `tasks.md` on that branch.
 3. Commit with a message starting with the task ID, e.g. `T012: Declare Application ports`.
-4. `pwsh -NoProfile -File scripts/git/task-flow.ps1 finish T0xx` — pushes, opens a PR titled `T0xx: …` against `master` (pass the PR attribution line via `-ExtraBody`), squash-merges it, deletes the branch and returns to an up-to-date `master`. With `-NoMerge` the PR stays open for review; wait for it to be merged before starting the next task.
+4. `pwsh -NoProfile -File scripts/git/task-flow.ps1 finish T0xx` — rebases onto `origin/master` (conflicts that are only `tasks.md` checkboxes from parallel tasks are resolved automatically; any other conflict aborts the rebase for you to resolve and rerun), pushes, opens a PR titled `T0xx: …` that closes the task's issue (pass the PR attribution line via `-ExtraBody`), waits for CI (`.github/workflows/ci.yml`; `-SkipChecks` to skip), squash-merges and deletes the branch. The main checkout returns to an up-to-date `master`; a worktree is left detached at `origin/master`, ready for the next `start` or for `task-flow.ps1 cleanup T0xx` (run from the main checkout). With `-NoMerge` the PR stays open for review.
 
-If a task fails or its tests don't pass, stop on its branch and report — don't start the next task on top of an unmerged one. Non-task changes (docs, tooling, spec edits) use a `chore/<slug>` or `docs/<slug>` branch and a PR as well. `task-flow.ps1 name T0xx` prints a task's branch name without changing anything.
+If a task fails or its tests don't pass, stop on its branch and report — don't start a task that depends on an unmerged one. Non-task changes (docs, tooling, spec edits) use a `chore/<slug>` or `docs/<slug>` branch and a PR as well. `task-flow.ps1 name T0xx` prints a task's branch name without changing anything.
+
+### Working in parallel (from Phase 3 on)
+
+Several developers — people on their own clones and Claude Code sessions/agents on one machine — can work on Phase 3+ tasks at the same time:
+
+- **Claiming work**: each remaining task has a GitHub issue titled `T0xx: …` (created with `/speckit-taskstoissues`). Pick an open, unassigned issue whose dependencies are merged (see the issue body and "Dependencies & Execution Order" / "Parallel Opportunities" in `tasks.md`); `start` assigns it to you and `finish` closes it through the PR. Prefer whole stories per developer after US1, as in tasks.md's "Parallel Team Strategy".
+- **One task per checkout**: a Claude session working alongside others uses `start T0xx -Worktree` and then works only inside `.worktrees/T0xx`; an agent spawned with `isolation: "worktree"` already has its own worktree and runs plain `start T0xx` there. Never run two tasks in the same checkout at once.
+- **Order still matters**: `[P]` only means "different files"; a task that depends on another must wait until that one is merged to `master` (start from a fresh `origin/master`).
+- **Shared hot spots**: EF Core migrations (`src/Warranty.Infrastructure/Persistence/Migrations/`) can't be merged textually — if `finish` reports a conflict in the model snapshot, drop your migration, rebase, and regenerate it. Expect small manual conflicts in DI registration and endpoint mapping files; resolve, rerun the tests, rerun `finish`.
+- **Local resources**: integration tests use Testcontainers with random ports, so they run in parallel worktrees; `aspire run` uses fixed ports — run it from one checkout at a time.
 
 ## Key conventions and mechanics
 
