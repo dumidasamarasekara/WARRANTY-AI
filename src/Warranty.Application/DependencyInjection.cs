@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Adjudication;
+using Warranty.Application.Claims;
 
 namespace Warranty.Application;
 
@@ -14,6 +15,7 @@ public static class DependencyInjection
     {
         // Use cases are registered here as they are implemented (user story phases).
         services.AddScoped<ICaseKnowledgeProvider, CaseKnowledgeProvider>();
+        services.AddScoped<SubmitClaim>();
         return services;
     }
 }
