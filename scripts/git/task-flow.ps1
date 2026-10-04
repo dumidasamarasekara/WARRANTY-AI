@@ -107,11 +107,20 @@ $mainRoot = Split-Path -Parent $commonDir
 $isLinkedWorktree = $gitDir -ne $commonDir
 $worktreePath = Join-Path $mainRoot ".worktrees/$TaskId"
 
+# .specify/feature.json is per-developer state that Spec Kit keeps out of git, so a fresh clone or a
+# new worktree may not have it: fall back to the main checkout's copy, then to the newest feature.
+$featureJson = @((Join-Path $repoRoot '.specify/feature.json'), (Join-Path $mainRoot '.specify/feature.json')) |
+    Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $TasksFile) {
-    $featureJson = Join-Path $repoRoot '.specify/feature.json'
-    if (-not (Test-Path -LiteralPath $featureJson)) { throw "Pass -TasksFile; $featureJson does not exist" }
-    $featureDir = (Get-Content -LiteralPath $featureJson -Raw | ConvertFrom-Json).feature_directory
-    $TasksFile = Join-Path (Join-Path $repoRoot $featureDir) 'tasks.md'
+    if ($featureJson) {
+        $featureDir = (Get-Content -LiteralPath $featureJson -Raw | ConvertFrom-Json).feature_directory
+        $TasksFile = Join-Path (Join-Path $repoRoot $featureDir) 'tasks.md'
+    }
+    else {
+        $TasksFile = Get-ChildItem -Path (Join-Path $repoRoot 'specs/*/tasks.md') -ErrorAction SilentlyContinue |
+            Sort-Object { $_.Directory.Name } | Select-Object -Last 1 -ExpandProperty FullName
+        if (-not $TasksFile) { throw "Pass -TasksFile; no .specify/feature.json and no specs/*/tasks.md found" }
+    }
 }
 $TasksFile = (Resolve-Path -LiteralPath $TasksFile).Path
 
@@ -172,6 +181,10 @@ switch ($Action) {
             $worktreeArgs = if ($hasLocalBranch) { @('worktree', 'add', $worktreePath, $branch) }
                             else { @('worktree', 'add', '--no-track', '-b', $branch, $worktreePath, "origin/$Base") }
             Invoke-Native git $worktreeArgs | Out-Null
+            # Spec Kit commands (/speckit-implement etc.) locate the feature through this ignored file.
+            if ($featureJson) {
+                Copy-Item -LiteralPath $featureJson -Destination (Join-Path $worktreePath '.specify/feature.json')
+            }
         }
         elseif ($hasLocalBranch) {
             Invoke-Native git @('switch', $branch) | Out-Null
