@@ -187,7 +187,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
     }
 
-    [Fact(Skip = "Pending T057")]
+    [Fact]
     public async Task A_submission_with_a_future_purchase_date_is_a_validation_problem_and_creates_no_claim()
     {
         var scenario = GoldenScenario.Load("S1");
