@@ -1,0 +1,343 @@
+/* Staff shell — ui-design.md §6.1 and §7. */
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 240px;
+  height: 100vh;
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  transition: width var(--duration-enter) var(--easing-standard);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  margin-bottom: var(--space-5);
+  padding: 0 var(--space-1);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--color-text);
+}
+
+.brandMark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-chrome);
+  color: var(--color-ink-inverse);
+  font: 600 16px/1 var(--font-display);
+}
+
+.brandName {
+  font: 600 16px/24px var(--font-display);
+}
+
+.nav {
+  flex: 1;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--color-text-soft);
+  font: var(--text-body);
+  text-decoration: none;
+  transition: background var(--duration-hover) var(--easing-standard);
+}
+
+.navItem:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.navItemCurrent,
+.navItemCurrent:hover {
+  background: var(--color-primary-soft);
+  color: var(--tone-ok-ink);
+  font-weight: 500;
+}
+
+.navTile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font: 600 10px/1 var(--font-sans);
+  letter-spacing: 0.02em;
+}
+
+.navItemCurrent .navTile {
+  background: var(--color-primary);
+  color: var(--color-ink-inverse);
+}
+
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navCount {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--color-human);
+  color: var(--color-ink-inverse);
+  font: 600 11px/20px var(--font-sans);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.collapse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.collapse:hover {
+  background: var(--color-surface-muted);
+}
+
+.collapse > span:first-child {
+  display: grid;
+  width: 28px;
+  place-items: center;
+}
+
+/* Rail: collapsed by the user, or always below 1280 px (the collapse control is then hidden). */
+.collapsed .sidebar {
+  width: 64px;
+}
+
+.collapsed .brandName,
+.collapsed .navCount {
+  display: none;
+}
+
+/* Labels stay in the accessibility tree on the rail; the title attribute shows them on hover. */
+.collapsed .navLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.collapsed .navItem,
+.collapsed .collapse {
+  justify-content: center;
+  padding: 0;
+}
+
+@media (max-width: 1279px) {
+  .sidebar {
+    width: 64px;
+  }
+
+  .brandName,
+  .navCount {
+    display: none;
+  }
+
+  .navLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .navItem {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .collapse {
+    display: none;
+  }
+}
+
+.column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tenantStrip {
+  flex: none;
+  height: 3px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: 56px;
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.breadcrumbs {
+  min-width: 0;
+}
+
+.headerActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tenantChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font: 500 13px/20px var(--font-sans);
+}
+
+.tenantDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.userMenu {
+  position: relative;
+}
+
+.userButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.userButton:hover {
+  background: var(--color-surface-muted);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--tone-human-bg);
+  color: var(--tone-human-ink);
+  font: 600 11px/1 var(--font-sans);
+}
+
+.userName {
+  font: 500 13px/20px var(--font-sans);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.menuName {
+  font: var(--text-card-title);
+}
+
+.menuRoles {
+  margin-bottom: var(--space-3);
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.menuItem {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--color-surface-muted);
+}
+
+.main {
+  width: 100%;
+  max-width: var(--layout-staff-max-width);
+  padding: var(--space-5);
+}
+
+@media (min-width: 1024px) {
+  .main {
+    padding: var(--space-6);
+  }
+}
+
+@media (min-width: 1536px) {
+  .main {
+    padding: var(--space-7);
+  }
+}

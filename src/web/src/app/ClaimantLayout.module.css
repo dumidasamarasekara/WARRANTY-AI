@@ -1,0 +1,51 @@
+/* Claimant portal — ui-design.md §6.6 and §7. */
+.portal {
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 56px;
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-inverse);
+  font: 600 12px/1 var(--font-display);
+}
+
+.tenantName {
+  font: 600 16px/24px var(--font-display);
+}
+
+.product {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.main {
+  width: 100%;
+  max-width: var(--layout-claimant-max-width);
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+
+@media (max-width: 639px) {
+  .header {
+    padding: 0 var(--space-4);
+  }
+
+  .main {
+    padding: var(--space-5);
+  }
+}
