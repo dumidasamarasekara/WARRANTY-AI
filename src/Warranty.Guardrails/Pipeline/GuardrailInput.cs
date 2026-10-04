@@ -2,6 +2,7 @@ using Warranty.Domain.Adjudication;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Policies;
 using Warranty.Domain.Tenancy;
+using Warranty.Guardrails.Rules;
 
 namespace Warranty.Guardrails.Pipeline;
 
@@ -50,14 +51,14 @@ public sealed record PhotoFinding(string EvidenceRef, IReadOnlyList<string> Dama
 /// <summary>
 /// Policy step facts: the version outcome, the applicable version (with its structured terms), the
 /// issued <c>POL-n</c> clauses and the deterministic coverage window for the claim's region and
-/// component. The window fields are null when no version applies.
+/// component, computed by <see cref="CoverageWindowCalculator"/> (its <c>WithinComponentCoverage</c>
+/// is the deciding flag).
 /// </summary>
 public sealed record PolicyFacts(
     PolicyVersionOutcome VersionOutcome,
     PolicyVersion? Version,
     IReadOnlyList<RetrievedPolicyRef> Clauses,
-    DateOnly? CoverageEndDate,
-    bool? WithinCoverageWindow);
+    CoverageWindowResult CoverageWindow);
 
 /// <summary>Who triggered the evaluation; automatic runs are performed by the adjudication worker.</summary>
 public sealed record ActorInfo(string Subject, bool IsAutomation)
