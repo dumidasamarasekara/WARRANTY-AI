@@ -57,11 +57,11 @@ public sealed class IntakeAgent(
     private static readonly IReadOnlyDictionary<string, string> PromptVariables =
         new Dictionary<string, string>(StringComparer.Ordinal) { [UntrustedContent.PreambleVariable] = UntrustedContent.Preamble };
 
-    private static readonly IReadOnlySet<string> InvoiceTypes =
-        new HashSet<string>(["application/pdf", "image/jpeg", "image/png", "image/webp"], StringComparer.Ordinal);
+    /// <summary>An invoice may be any accepted type (PDF or image); a photo must be an image.</summary>
+    private static readonly IReadOnlySet<string> InvoiceTypes = ClaimEvidence.AllowedContentTypes;
 
     private static readonly IReadOnlySet<string> PhotoTypes =
-        new HashSet<string>(["image/jpeg", "image/png", "image/webp"], StringComparer.Ordinal);
+        ClaimEvidence.AllowedContentTypes.Where(t => t.StartsWith("image/", StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
 
     public AgentDescriptor Descriptor => Agent;
 

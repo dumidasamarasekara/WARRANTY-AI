@@ -249,9 +249,10 @@ public sealed class IntakeAgentTests : IAsyncDisposable
 
         var check = Single(validation, "REQUIRED_FIELDS");
         check.Passed.ShouldBeFalse();
-        check.Detail!.ShouldContain("purchase.place");
-        check.Detail.ShouldContain("purchase.price");
-        check.Detail.ShouldContain("problemDescription");
+        var detail = check.Detail.ShouldNotBeNull();
+        detail.ShouldContain("purchase.place");
+        detail.ShouldContain("purchase.price");
+        detail.ShouldContain("problemDescription");
         missing.Select(m => m.Item).ShouldBe(["PROBLEM_DETAILS", "OTHER"], ignoreOrder: true);
         missing.Single(m => m.Item == "OTHER").Reason.ShouldContain("purchase.place");
         validation.Where(v => v.Check != "REQUIRED_FIELDS").ShouldAllBe(v => v.Passed);
