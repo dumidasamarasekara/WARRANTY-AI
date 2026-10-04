@@ -5,7 +5,7 @@ namespace Warranty.UnitTests.Guardrails;
 /// <summary>Claimant-facing text screen (research R25, guardrail check <c>CLAIMANT_TEXT_SAFE</c>).</summary>
 public sealed class ClaimantTextScreenTests
 {
-    [Theory(Skip = "Pending T120")]
+    [Theory]
     [InlineData("This claim looks like fraud.", "fraud")]
     [InlineData("FRAUD was not proven.", "FRAUD")]
     [InlineData("Several frauds were reported.", "frauds")]
@@ -25,7 +25,7 @@ public sealed class ClaimantTextScreenTests
         result.OffendingTerm.ShouldBe(expected);
     }
 
-    [Theory(Skip = "Pending T120")]
+    [Theory]
     [InlineData("SOURCE_INCONSISTENCY")]
     [InlineData("PRODUCT_NOT_IN_CATALOG")]
     [InlineData("SERIAL_MISMATCH_PHOTO")]
@@ -42,7 +42,7 @@ public sealed class ClaimantTextScreenTests
         result.OffendingTerm.ShouldBe(code);
     }
 
-    [Theory(Skip = "Pending T120")]
+    [Theory]
     [InlineData("See EV-3 for the details.", "EV-3")]
     [InlineData("This follows clause POL-12 of your terms.", "POL-12")]
     [InlineData("Rule GLB-1 applies here.", "GLB-1")]
@@ -54,7 +54,7 @@ public sealed class ClaimantTextScreenTests
         result.OffendingTerm.ShouldBe(expected);
     }
 
-    [Theory(Skip = "Pending T120")]
+    [Theory]
     [InlineData("Your tablet is covered for manufacturing defects for 12 months")]
     [InlineData("accidental damage is not covered")]
     [InlineData("Your claim is approved. No other parts of the device are affected.")]
@@ -69,7 +69,7 @@ public sealed class ClaimantTextScreenTests
         result.OffendingTerm.ShouldBeNull();
     }
 
-    [Theory(Skip = "Pending T120")]
+    [Theory]
     [InlineData("Reused photos suggest fraud (EV-3).", "Reused")]
     [InlineData("EV-3 shows signs of fraud.", "EV-3")]
     [InlineData("We see a risk of DUPLICATE_SERIAL_CLAIM.", "risk")]
