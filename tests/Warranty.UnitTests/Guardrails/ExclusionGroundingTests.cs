@@ -14,8 +14,6 @@ namespace Warranty.UnitTests.Guardrails;
 /// </summary>
 public sealed class ExclusionGroundingTests
 {
-    private const string PendingEngine = "Pending T066";
-
     /// <summary>Every damage type of photo-analysis.schema.json.</summary>
     private static readonly string[] AllDamageTypes =
     [
@@ -54,7 +52,7 @@ public sealed class ExclusionGroundingTests
 
     // ── GROUNDED_IN_CLAUSE through the engine ───────────────────────────────────────────────────
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void A_cited_listed_accidental_damage_exclusion_with_a_cracked_screen_photo_is_grounded()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(GuardrailScenario.AccidentalExclusion, "CRACKED_SCREEN");
@@ -65,7 +63,7 @@ public sealed class ExclusionGroundingTests
         outcome.Disposition.ShouldBe(Disposition.AutoReject);
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(GuardrailScenario.AccidentalExclusion, "DENTS_OR_IMPACT")]
     [InlineData(GuardrailScenario.LiquidExclusion, "LIQUID_INDICATORS")]
     [InlineData(GuardrailScenario.LiquidExclusion, "CORROSION")]
@@ -77,18 +75,18 @@ public sealed class ExclusionGroundingTests
         outcome.Disposition.ShouldBe(Disposition.AutoReject);
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData("CRACKED_SCREEN")]
     [InlineData("NONE_VISIBLE")]
     [InlineData("OTHER")]
     public void A_liquid_exclusion_without_a_liquid_damage_photo_is_not_grounded(string damageType)
         => ShouldNotBeGrounded(GuardrailScenario.RejectOnExclusion(GuardrailScenario.LiquidExclusion, damageType));
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void An_exclusion_without_any_photo_damage_type_is_not_grounded()
         => ShouldNotBeGrounded(GuardrailScenario.RejectOnExclusion(GuardrailScenario.AccidentalExclusion));
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void An_exclusion_whose_code_is_not_in_the_versions_terms_is_not_grounded()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(GuardrailScenario.UnlistedCosmeticExclusion, "COSMETIC_WEAR");
@@ -97,7 +95,7 @@ public sealed class ExclusionGroundingTests
         ShouldNotBeGrounded(scenario);
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void An_exclusion_clause_of_another_policy_version_is_not_grounded()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(GuardrailScenario.OtherVersionAccidentalExclusion, "CRACKED_SCREEN");
@@ -109,16 +107,16 @@ public sealed class ExclusionGroundingTests
 
     public static TheoryData<string> EveryDamageType => new(AllDamageTypes);
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [MemberData(nameof(EveryDamageType))]
     public void An_unauthorized_repair_exclusion_is_never_grounded(string damageType)
         => ShouldNotBeGrounded(GuardrailScenario.RejectOnExclusion(GuardrailScenario.UnauthorizedRepairExclusion, damageType));
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void An_unauthorized_repair_exclusion_is_not_grounded_even_with_every_damage_type_reported()
         => ShouldNotBeGrounded(GuardrailScenario.RejectOnExclusion(GuardrailScenario.UnauthorizedRepairExclusion, AllDamageTypes));
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void An_exclusion_cited_only_as_context_does_not_ground_a_rejection()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(GuardrailScenario.AccidentalExclusion, "CRACKED_SCREEN");
@@ -128,7 +126,7 @@ public sealed class ExclusionGroundingTests
         ShouldNotBeGrounded(scenario);
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void One_grounded_citation_is_enough_when_another_cited_exclusion_is_not_evidenced()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(GuardrailScenario.LiquidExclusion, "CRACKED_SCREEN");
@@ -140,7 +138,7 @@ public sealed class ExclusionGroundingTests
         outcome.Disposition.ShouldBe(Disposition.AutoReject);
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void A_period_clause_is_grounded_when_the_deterministic_window_confirms_expiry()
     {
         var scenario = GuardrailScenario.ClearReject();
@@ -152,7 +150,7 @@ public sealed class ExclusionGroundingTests
         outcome.Disposition.ShouldBe(Disposition.AutoReject);
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void A_period_clause_is_not_grounded_when_the_claim_is_inside_the_deterministic_window()
     {
         var scenario = GuardrailScenario.ClearReject();

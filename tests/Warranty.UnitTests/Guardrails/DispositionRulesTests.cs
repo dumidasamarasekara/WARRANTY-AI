@@ -10,8 +10,6 @@ namespace Warranty.UnitTests.Guardrails;
 /// </summary>
 public sealed class DispositionRulesTests
 {
-    private const string PendingEngine = "Pending T066";
-
     [Theory]
     [InlineData(AiDecision.Approve)]
     [InlineData(AiDecision.Reject)]
@@ -32,7 +30,7 @@ public sealed class DispositionRulesTests
 
     // ── AutoApprove (FR-026) ────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void A_claim_meeting_every_FR026_condition_is_auto_approved()
     {
         var scenario = GuardrailScenario.ClearApprove();
@@ -62,7 +60,7 @@ public sealed class DispositionRulesTests
         { "claimant-text-unsafe", GuardrailCheckCode.ClaimantTextSafe, EscalationReason.UnsafeClaimantText },
     };
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [MemberData(nameof(ApproveConditionFlips))]
     public void Flipping_any_FR026_condition_prevents_auto_approval(
         string flip, GuardrailCheckCode? failedCheck, EscalationReason? reason)
@@ -87,7 +85,7 @@ public sealed class DispositionRulesTests
 
     // ── AutoReject (FR-027) ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void A_claim_meeting_every_FR027_condition_is_auto_rejected()
     {
         var scenario = GuardrailScenario.ClearReject();
@@ -117,7 +115,7 @@ public sealed class DispositionRulesTests
         { "claimant-text-unsafe", GuardrailCheckCode.ClaimantTextSafe, EscalationReason.UnsafeClaimantText },
     };
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [MemberData(nameof(RejectConditionFlips))]
     public void Flipping_any_FR027_condition_prevents_auto_rejection(
         string flip, GuardrailCheckCode? failedCheck, EscalationReason? reason)
@@ -142,7 +140,7 @@ public sealed class DispositionRulesTests
 
     // ── Boundaries ──────────────────────────────────────────────────────────────────────────────
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve, Disposition.AutoApprove)]
     [InlineData(AiDecision.Reject, Disposition.AutoReject)]
     public void A_claim_value_equal_to_the_limit_is_within_it(AiDecision decision, Disposition expected)
@@ -156,7 +154,7 @@ public sealed class DispositionRulesTests
         ShouldPass(outcome, GuardrailCheckCode.ClaimValueWithinLimit);
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve)]
     [InlineData(AiDecision.Reject)]
     public void A_claim_value_one_cent_above_the_limit_goes_to_review(AiDecision decision)
@@ -171,7 +169,7 @@ public sealed class DispositionRulesTests
         outcome.Reasons.ShouldContain(EscalationReason.ValueAboveLimit);
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve, Disposition.AutoApprove)]
     [InlineData(AiDecision.Reject, Disposition.AutoReject)]
     public void A_confidence_equal_to_the_minimum_is_allowed(AiDecision decision, Disposition expected)
@@ -185,7 +183,7 @@ public sealed class DispositionRulesTests
         ShouldPass(outcome, GuardrailCheckCode.ConfidenceAtOrAboveMin);
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve)]
     [InlineData(AiDecision.Reject)]
     public void A_confidence_one_below_the_minimum_goes_to_review(AiDecision decision)
@@ -202,7 +200,7 @@ public sealed class DispositionRulesTests
 
     // ── Tenant switches ─────────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void With_auto_approve_disabled_a_clear_approval_goes_to_review()
     {
         var scenario = GuardrailScenario.ClearApprove();
@@ -215,7 +213,7 @@ public sealed class DispositionRulesTests
         outcome.Reasons.ShouldNotBeEmpty();
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void With_auto_reject_disabled_a_clear_rejection_goes_to_review()
     {
         var scenario = GuardrailScenario.ClearReject();
@@ -228,7 +226,7 @@ public sealed class DispositionRulesTests
         outcome.Reasons.ShouldNotBeEmpty();
     }
 
-    [Fact(Skip = PendingEngine)]
+    [Fact]
     public void Each_switch_only_governs_its_own_decision()
     {
         var approve = GuardrailScenario.ClearApprove();
@@ -259,7 +257,7 @@ public sealed class DispositionRulesTests
         return data;
     }
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [MemberData(nameof(EverySingleSignal))]
     public void Exactly_one_risk_signal_of_any_code_or_source_prevents_automatic_finalization_even_if_the_AI_says_LOW(
         AiDecision decision, RiskSignalCode code, RiskSignalSource source)
@@ -278,7 +276,7 @@ public sealed class DispositionRulesTests
 
     // ── Reviewer loop (R24) ─────────────────────────────────────────────────────────────────────
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve)]
     [InlineData(AiDecision.Reject)]
     [InlineData(AiDecision.RequestMoreInformation)]
@@ -297,7 +295,7 @@ public sealed class DispositionRulesTests
 
     // ── Claimant text (R25) ─────────────────────────────────────────────────────────────────────
 
-    [Theory(Skip = PendingEngine)]
+    [Theory]
     [InlineData(AiDecision.Approve, "We found no fraud indicators, so your tablet will be repaired under warranty.")]
     [InlineData(AiDecision.Approve, "Your invoice EV-1 confirms the purchase, so the repair is covered.")]
     [InlineData(AiDecision.Reject, "Your warranty ended before the claim date as stated in POL-2, so it is not covered.")]
