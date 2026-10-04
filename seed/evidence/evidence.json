@@ -66,6 +66,64 @@
       "modelCode": "AUR-TAB10",
       "serial": "AT10-24-0002",
       "variant": 2
+    },
+    {
+      "scenario": "S1-agent",
+      "path": "S1-agent/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-104871",
+      "purchaseDateOffsetMonths": -4,
+      "productName": "Aurora Tab 10",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0020",
+      "amount": 450.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S1-agent",
+      "path": "S1-agent/photo-1.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-TAB10",
+      "variant": 3
+    },
+    {
+      "scenario": "S1-agent",
+      "path": "S1-agent/photo-2.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "back",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0020",
+      "variant": 3
+    },
+    {
+      "scenario": "US1-claimant-access",
+      "path": "US1/claimant-access-invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-105112",
+      "purchaseDateOffsetMonths": -4,
+      "productName": "Aurora Tab 10",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0021",
+      "amount": 450.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "US1-claimant-access",
+      "path": "US1/claimant-access-photo-1.jpg",
+      "kind": "photo",
+      "device": "tablet",
+      "view": "back",
+      "modelCode": "AUR-TAB10",
+      "serial": "AT10-24-0021",
+      "variant": 4
     }
   ]
 }

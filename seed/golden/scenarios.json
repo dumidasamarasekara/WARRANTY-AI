@@ -124,6 +124,64 @@
         "passedGuardrails": ["COVERAGE_WINDOW_AGREES", "GROUNDED_IN_CLAUSE"],
         "lastTrailEntries": ["GuardrailsEvaluated", "AutoRejected"]
       }
+    },
+    {
+      "scenarioId": "S1-agent",
+      "story": "US1",
+      "title": "S1 submitted by a claims agent (POST /api/claims) on the customer's behalf; its own serial and evidence so it trips no duplicate or reuse signal",
+      "tenant": "aurora",
+      "channel": "agent",
+      "serial": "AT10-24-0020",
+      "purchaseDateOffsetMonths": -4,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-1",
+          "email": "na1.customer@aurora.example.com",
+          "phone": "+1 555 010 0001",
+          "addressLine": "100 Example Avenue",
+          "city": "Springfield",
+          "postalCode": "00001",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0020"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "Customer reports on the phone that the Aurora Tab 10 stopped turning on: black screen, no reaction to the power button and no charging light. No drop and no liquid contact according to the customer."
+      },
+      "evidence": {
+        "invoice": "S1-agent/invoice.pdf",
+        "photos": ["S1-agent/photo-1.jpg", "S1-agent/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
     }
   ]
 }
