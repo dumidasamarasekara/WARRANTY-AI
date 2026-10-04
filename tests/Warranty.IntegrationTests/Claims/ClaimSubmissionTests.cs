@@ -1,16 +1,13 @@
-using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Azure.Storage.Blobs;
 using Npgsql;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.IntegrationTests.Infrastructure;
+using static Warranty.IntegrationTests.Claims.SyntheticClaims;
 
 namespace Warranty.IntegrationTests.Claims;
 
@@ -234,61 +231,6 @@ public sealed class ClaimSubmissionTests(WarrantyAppFixture fixture)
         response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
     }
 
-    private static string NewSerial() => $"IT-{Guid.NewGuid():N}"[..20].ToUpperInvariant();
-
-    /// <summary>A valid Aurora submission for <paramref name="serial"/>; one fresh PDF invoice and one fresh JPEG photo unless given.</summary>
-    private static MultipartFormDataContent Submission(
-        string serial, Action<JsonObject>? adjust = null, IReadOnlyList<EvidenceFile>? invoices = null, IReadOnlyList<EvidenceFile>? photos = null)
-    {
-        invoices ??= [Pdf()];
-        photos ??= [Jpeg()];
-        var purchaseDate = DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-3).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var claim = new JsonObject
-        {
-            ["customer"] = new JsonObject
-            {
-                ["fullName"] = "Synthetic Submitter",
-                ["email"] = "synthetic.submitter@example.test",
-                ["phone"] = "+1 555 010 9999",
-                ["country"] = "US",
-            },
-            ["product"] = new JsonObject { ["modelCode"] = "AUR-TAB10", ["serialNumber"] = serial },
-            ["purchase"] = new JsonObject
-            {
-                ["date"] = purchaseDate,
-                ["place"] = "Aurora Store",
-                ["price"] = 450.00m,
-                ["currency"] = "USD",
-                ["country"] = "US",
-            },
-            ["problemDescription"] = "The tablet stopped turning on and shows no charging light.",
-        };
-        adjust?.Invoke(claim);
-
-        var form = new MultipartFormDataContent();
-        var json = new StringContent(claim.ToJsonString(), Encoding.UTF8);
-        json.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        form.Add(json, "claim");
-        foreach (var file in invoices)
-        {
-            form.Add(file.Content(), "invoice", file.Name);
-        }
-
-        foreach (var file in photos)
-        {
-            form.Add(file.Content(), "photos", file.Name);
-        }
-
-        return form;
-    }
-
-    // Random bodies after real signatures: unique hashes, so no other claim sees reused evidence.
-    private static EvidenceFile Pdf() => new("invoice.pdf", [.. "%PDF-1.4\n"u8, .. RandomNumberGenerator.GetBytes(256)], "application/pdf");
-
-    private static EvidenceFile Jpeg() => new("photo-1.jpg", [0xFF, 0xD8, 0xFF, 0xE0, .. RandomNumberGenerator.GetBytes(256)], "image/jpeg");
-
-    private static EvidenceFile Png() => new("photo-2.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. RandomNumberGenerator.GetBytes(256)], "image/png");
-
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     private static async Task<IReadOnlyList<string>> ErrorKeysAsync(HttpResponseMessage response)
@@ -347,16 +289,6 @@ public sealed class ClaimSubmissionTests(WarrantyAppFixture fixture)
         var connection = new NpgsqlConnection(fixture.OwnerConnectionString());
         await connection.OpenAsync(Ct);
         return connection;
-    }
-
-    private sealed record EvidenceFile(string Name, byte[] Bytes, string ContentType)
-    {
-        public ByteArrayContent Content()
-        {
-            var content = new ByteArrayContent(Bytes);
-            content.Headers.ContentType = new MediaTypeHeaderValue(ContentType);
-            return content;
-        }
     }
 
     private sealed record ClaimRow(Guid Id, Guid TenantId, string Reference, ClaimChannel Channel, string SubmittedBy, Guid? ProductId, string? Region);

@@ -107,7 +107,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         ShouldContainNoRiskData(view);
     }
 
-    [Fact(Skip = "Pending T058")]
+    [Fact]
     public async Task Claimant_access_with_the_reference_and_email_returns_the_claim_without_risk_data()
     {
         // A claim of its own; its serial has no replay scenario, so whatever its outcome it touches no other test.
