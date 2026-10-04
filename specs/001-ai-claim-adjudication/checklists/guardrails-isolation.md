@@ -10,61 +10,61 @@
 
 ## Requirement Completeness
 
-- [ ] CHK001 - Is "consequential business action" enumerated in the spec (which actions the AI must never trigger directly), or does the closed list exist only in the plan's ActionExecutor design? [Completeness, Spec §FR-024, Contracts: agents-and-tools]
-- [ ] CHK002 - Are the criteria for each risk level (low / medium / high) defined, including how individual signals combine into a level? The data model sets score thresholds 30/60, but no signal weights are specified. [Gap, Spec §FR-017, Data Model §risk_assessments]
-- [ ] CHK003 - Is the meaning of the 0–100 confidence score defined (what it represents, who produces it, whether it is model self-reported or adjusted), so that tenant minimum-confidence thresholds are meaningful? [Gap, Spec §FR-021, Plan §PoC simplifications]
-- [ ] CHK004 - Does the spec define the source and required content of the claimant-facing explanation when the final outcome comes from a reviewer rather than the AI? [Gap, Spec §FR-037, Spec §FR-036]
-- [ ] CHK005 - Are requirements defined to prevent AI-generated claimant explanations from disclosing risk or fraud indicators, beyond the instruction in the output schema? [Gap, Spec §FR-037, Contracts: decision-recommendation.schema.json]
-- [ ] CHK006 - Is a role-to-permission matrix specified (e.g., whether claims agents may see risk signals, whether auditors may open evidence files, which roles can see AI reasoning)? [Gap, Spec §Actors, Spec §FR-005]
-- [ ] CHK007 - Are requirements specified for what tenant data and personal data may be sent to an external AI provider, and for how that provider may retain it? [Gap, Constitution §I, Plan §R15]
-- [ ] CHK008 - Are personal-data handling requirements (which fields reach AI models, logs, traces and each staff role) stated in the spec rather than only as plan-level redaction rules? [Gap, Plan §R15, Contracts: ai-gateway]
-- [ ] CHK009 - Are requirements defined for security events: required content, who can view them, retention, and whether they are immutable like the decision trail? [Gap, Spec §FR-005, Spec §FR-037a, Spec §FR-039]
-- [ ] CHK010 - Are requirements for uploaded evidence files defined beyond file type and size (content-type spoofing, malicious files, location metadata embedded in photos)? [Gap, Spec §FR-009, Plan §R11]
+- [x] CHK001 - Is "consequential business action" enumerated in the spec (which actions the AI must never trigger directly), or does the closed list exist only in the plan's ActionExecutor design? [Completeness, Spec §FR-024, Contracts: agents-and-tools]
+- [x] CHK002 - Are the criteria for each risk level (low / medium / high) defined, including how individual signals combine into a level? The data model sets score thresholds 30/60, but no signal weights are specified. [Gap, Spec §FR-017, Data Model §risk_assessments]
+- [x] CHK003 - Is the meaning of the 0–100 confidence score defined (what it represents, who produces it, whether it is model self-reported or adjusted), so that tenant minimum-confidence thresholds are meaningful? [Gap, Spec §FR-021, Plan §PoC simplifications]
+- [x] CHK004 - Does the spec define the source and required content of the claimant-facing explanation when the final outcome comes from a reviewer rather than the AI? [Gap, Spec §FR-037, Spec §FR-036]
+- [x] CHK005 - Are requirements defined to prevent AI-generated claimant explanations from disclosing risk or fraud indicators, beyond the instruction in the output schema? [Gap, Spec §FR-037, Contracts: decision-recommendation.schema.json]
+- [x] CHK006 - Is a role-to-permission matrix specified (e.g., whether claims agents may see risk signals, whether auditors may open evidence files, which roles can see AI reasoning)? [Gap, Spec §Actors, Spec §FR-005]
+- [x] CHK007 - Are requirements specified for what tenant data and personal data may be sent to an external AI provider, and for how that provider may retain it? [Gap, Constitution §I, Plan §R15]
+- [x] CHK008 - Are personal-data handling requirements (which fields reach AI models, logs, traces and each staff role) stated in the spec rather than only as plan-level redaction rules? [Gap, Plan §R15, Contracts: ai-gateway]
+- [x] CHK009 - Are requirements defined for security events: required content, who can view them, retention, and whether they are immutable like the decision trail? [Gap, Spec §FR-005, Spec §FR-037a, Spec §FR-039]
+- [x] CHK010 - Are requirements for uploaded evidence files defined beyond file type and size (content-type spoofing, malicious files, location metadata embedded in photos)? [Gap, Spec §FR-009, Plan §R11]
 
 ## Requirement Clarity
 
-- [ ] CHK011 - Is "suspicious signal" in FR-026 defined as a closed set of signals, and is it the same set the data model says forces risk to at least Medium? [Clarity, Spec §FR-026, Data Model §risk_assessments]
-- [ ] CHK012 - Is "conflicting evidence" defined with explicit matching tolerances (e.g., price rounding, date formats, seller-name variants), so harmless differences don't trigger escalation? [Ambiguity, Spec §FR-016, Spec §FR-028]
-- [ ] CHK013 - Is "prior claims for the same serial number" defined precisely (time window, which prior statuses count, whether a resubmission after rejection counts)? [Ambiguity, Spec §FR-017]
-- [ ] CHK014 - Is the counting basis for Tenant B's "one accidental-damage incident" specified (per serial, per customer, per policy term), along with what happens when the limit is reached? [Clarity, Spec §Assumptions, Data Model §policy_versions.terms]
-- [ ] CHK015 - Is "grounded in at least one cited policy clause" for automatic rejection defined objectively (e.g., the clause must be an Exclusion or Period clause of the applicable version)? [Clarity, Spec §FR-027, Contracts: agents-and-tools §Disposition rules]
-- [ ] CHK016 - Is "ambiguous policy interpretation" (from the user's escalation list) defined as specific, checkable conditions in the requirements: coverage UNDETERMINED, more than one applicable version, or the agent's ambiguity flag? [Clarity, Spec §FR-028, Plan §R13]
-- [ ] CHK017 - Is what constitutes a tenant "submission channel" specified, including how an unrecognized channel is handled and recorded? [Clarity, Spec §FR-002, Plan §R9]
-- [ ] CHK018 - Are claimant contact-matching rules specified (email case-insensitivity, phone number formatting, which contact applies when both were given)? [Clarity, Spec §FR-037a]
+- [x] CHK011 - Is "suspicious signal" in FR-026 defined as a closed set of signals, and is it the same set the data model says forces risk to at least Medium? [Clarity, Spec §FR-026, Data Model §risk_assessments]
+- [x] CHK012 - Is "conflicting evidence" defined with explicit matching tolerances (e.g., price rounding, date formats, seller-name variants), so harmless differences don't trigger escalation? [Ambiguity, Spec §FR-016, Spec §FR-028]
+- [x] CHK013 - Is "prior claims for the same serial number" defined precisely (time window, which prior statuses count, whether a resubmission after rejection counts)? [Ambiguity, Spec §FR-017]
+- [x] CHK014 - Is the counting basis for Tenant B's "one accidental-damage incident" specified (per serial, per customer, per policy term), along with what happens when the limit is reached? [Clarity, Spec §Assumptions, Data Model §policy_versions.terms]
+- [x] CHK015 - Is "grounded in at least one cited policy clause" for automatic rejection defined objectively (e.g., the clause must be an Exclusion or Period clause of the applicable version)? [Clarity, Spec §FR-027, Contracts: agents-and-tools §Disposition rules]
+- [x] CHK016 - Is "ambiguous policy interpretation" (from the user's escalation list) defined as specific, checkable conditions in the requirements: coverage UNDETERMINED, more than one applicable version, or the agent's ambiguity flag? [Clarity, Spec §FR-028, Plan §R13]
+- [x] CHK017 - Is what constitutes a tenant "submission channel" specified, including how an unrecognized channel is handled and recorded? [Clarity, Spec §FR-002, Plan §R9]
+- [x] CHK018 - Are claimant contact-matching rules specified (email case-insensitivity, phone number formatting, which contact applies when both were given)? [Clarity, Spec §FR-037a]
 
 ## Requirement Consistency
 
-- [ ] CHK019 - Do FR-026 and FR-027 apply the same signal conditions? FR-026 forbids "conflict or suspicious signal" for approval, but FR-027 forbids only "conflict" for rejection. [Consistency, Spec §FR-026, Spec §FR-027]
-- [ ] CHK020 - Do FR-010 and FR-028 conflict when a claim is both missing information and high-value or suspicious? The spec mandates both "Pending Information" and "human review"; only the plan defines which takes precedence. [Conflict, Spec §FR-010, Spec §FR-028, Plan §R13]
-- [ ] CHK021 - Does FR-006 ("information made available to AI MUST originate only from that claim and its own tenant's data") conflict with the plan's use of the platform-owned global knowledge namespace in AI context? [Conflict, Spec §FR-006, Contracts: rag §Knowledge tiers]
-- [ ] CHK022 - Is the tenant "always-review categories" rule, present in the plan, data model and contracts, reflected in the spec's escalation requirements and success criteria? [Consistency, Spec §FR-028, Data Model §tenant_settings]
-- [ ] CHK023 - Is FR-023 ("invalid recommendation → human review") consistent with the plan's single corrective retry for invalid output and its retry with a larger output limit after truncation? [Consistency, Spec §FR-023, Contracts: ai-gateway §Failure semantics]
-- [ ] CHK024 - Is the spec's statement that an approved outcome is "a recorded decision only" with notifications out of scope consistent with the plan creating simulated repair requests and customer notifications on approval? [Conflict, Spec §Assumptions, Plan §Adjudication workflow]
-- [ ] CHK025 - Do the escalation conditions listed in SC-004 match the full set in FR-028 and the plan? SC-004 omits AI-recommended HUMAN_REVIEW, AI-vs-deterministic disagreement, no or ambiguous policy, and always-review categories. [Consistency, Spec §SC-004, Spec §FR-028]
-- [ ] CHK026 - Is the "do not reveal whether the target exists" rule applied consistently across every denial path: staff APIs (404), claimant access (generic 401), supplements, evidence downloads and review decisions? [Consistency, Spec §FR-005, Spec §FR-037a, Contracts: rest-api.openapi.yaml]
-- [ ] CHK027 - Are retrieval access rules (document classification, allowed roles), introduced only in the plan and contracts, reflected in the spec's tenant-isolation or access requirements? [Consistency, Contracts: rag §Retrieval rules, Spec §FR-011]
+- [x] CHK019 - Do FR-026 and FR-027 apply the same signal conditions? FR-026 forbids "conflict or suspicious signal" for approval, but FR-027 forbids only "conflict" for rejection. [Consistency, Spec §FR-026, Spec §FR-027]
+- [x] CHK020 - Do FR-010 and FR-028 conflict when a claim is both missing information and high-value or suspicious? The spec mandates both "Pending Information" and "human review"; only the plan defines which takes precedence. [Conflict, Spec §FR-010, Spec §FR-028, Plan §R13]
+- [x] CHK021 - Does FR-006 ("information made available to AI MUST originate only from that claim and its own tenant's data") conflict with the plan's use of the platform-owned global knowledge namespace in AI context? [Conflict, Spec §FR-006, Contracts: rag §Knowledge tiers]
+- [x] CHK022 - Is the tenant "always-review categories" rule, present in the plan, data model and contracts, reflected in the spec's escalation requirements and success criteria? [Consistency, Spec §FR-028, Data Model §tenant_settings]
+- [x] CHK023 - Is FR-023 ("invalid recommendation → human review") consistent with the plan's single corrective retry for invalid output and its retry with a larger output limit after truncation? [Consistency, Spec §FR-023, Contracts: ai-gateway §Failure semantics]
+- [x] CHK024 - Is the spec's statement that an approved outcome is "a recorded decision only" with notifications out of scope consistent with the plan creating simulated repair requests and customer notifications on approval? [Conflict, Spec §Assumptions, Plan §Adjudication workflow]
+- [x] CHK025 - Do the escalation conditions listed in SC-004 match the full set in FR-028 and the plan? SC-004 omits AI-recommended HUMAN_REVIEW, AI-vs-deterministic disagreement, no or ambiguous policy, and always-review categories. [Consistency, Spec §SC-004, Spec §FR-028]
+- [x] CHK026 - Is the "do not reveal whether the target exists" rule applied consistently across every denial path: staff APIs (404), claimant access (generic 401), supplements, evidence downloads and review decisions? [Consistency, Spec §FR-005, Spec §FR-037a, Contracts: rest-api.openapi.yaml]
+- [x] CHK027 - Are retrieval access rules (document classification, allowed roles), introduced only in the plan and contracts, reflected in the spec's tenant-isolation or access requirements? [Consistency, Contracts: rag §Retrieval rules, Spec §FR-011]
 
 ## Acceptance Criteria Quality
 
-- [ ] CHK028 - Is the composition of the "full isolation test set" in SC-003 defined (which surfaces: API, retrieval, tools, blobs, traces, AI context), so zero leakage can be measured objectively? [Measurability, Spec §SC-003]
-- [ ] CHK029 - Is the labeled evaluation set behind SC-005 specified (who labels expected outcomes, required mix of approve/reject/info/review cases per tenant), so the 85% target cannot be met by an unrepresentative set? [Measurability, Spec §SC-005, Plan §R19]
-- [ ] CHK030 - Are criteria defined for what counts as "manipulative instructions" in SC-010's test claims (languages, placement in description vs invoice vs image text)? [Measurability, Spec §SC-010, Spec §FR-019]
-- [ ] CHK031 - Is SC-001's 2-minute target reconciled with the 4-minute run deadline in the contracts, and is the claimant-facing behavior defined for runs that exceed 2 minutes? [Consistency, Spec §SC-001, Contracts: agents-and-tools §Budgets]
+- [x] CHK028 - Is the composition of the "full isolation test set" in SC-003 defined (which surfaces: API, retrieval, tools, blobs, traces, AI context), so zero leakage can be measured objectively? [Measurability, Spec §SC-003]
+- [x] CHK029 - Is the labeled evaluation set behind SC-005 specified (who labels expected outcomes, required mix of approve/reject/info/review cases per tenant), so the 85% target cannot be met by an unrepresentative set? [Measurability, Spec §SC-005, Plan §R19]
+- [x] CHK030 - Are criteria defined for what counts as "manipulative instructions" in SC-010's test claims (languages, placement in description vs invoice vs image text)? [Measurability, Spec §SC-010, Spec §FR-019]
+- [x] CHK031 - Is SC-001's 2-minute target reconciled with the 4-minute run deadline in the contracts, and is the claimant-facing behavior defined for runs that exceed 2 minutes? [Consistency, Spec §SC-001, Contracts: agents-and-tools §Budgets]
 
 ## Scenario & Edge Case Coverage
 
-- [ ] CHK032 - Are requirements defined for partial AI failure within one run (e.g., one photo analysis fails while the others succeed): does the whole run escalate, or does it continue with the remaining evidence? [Coverage, Exception Flow, Spec §FR-031]
-- [ ] CHK033 - Is a limit defined on repeated "request more information" cycles before a claim must go to a human reviewer? [Gap, Recovery Flow, Spec §FR-010, Spec §FR-029]
-- [ ] CHK034 - Is it specified whether a claim that a reviewer sent back for more information may be finalized automatically after the supplement, or must return to a reviewer? [Gap, Alternate Flow, Spec §FR-034, Spec §FR-010]
-- [ ] CHK035 - Are requirements defined for two reviewers deciding the same escalated claim at the same time? [Gap, Spec §FR-034]
-- [ ] CHK036 - Is separation of duties addressed, e.g., whether the claims agent who submitted a claim may also be its reviewer, or a user may hold both roles? [Gap, Spec §Actors]
-- [ ] CHK037 - Is automatic rejection on an exclusion ground (e.g., accidental damage) intentionally left without independent deterministic verification, given that FR-027 requires independent confirmation only for expired coverage? [Coverage, Spec §FR-027, Spec §FR-025]
+- [x] CHK032 - Are requirements defined for partial AI failure within one run (e.g., one photo analysis fails while the others succeed): does the whole run escalate, or does it continue with the remaining evidence? [Coverage, Exception Flow, Spec §FR-031]
+- [x] CHK033 - Is a limit defined on repeated "request more information" cycles before a claim must go to a human reviewer? [Gap, Recovery Flow, Spec §FR-010, Spec §FR-029]
+- [x] CHK034 - Is it specified whether a claim that a reviewer sent back for more information may be finalized automatically after the supplement, or must return to a reviewer? [Gap, Alternate Flow, Spec §FR-034, Spec §FR-010]
+- [x] CHK035 - Are requirements defined for two reviewers deciding the same escalated claim at the same time? [Gap, Spec §FR-034]
+- [x] CHK036 - Is separation of duties addressed, e.g., whether the claims agent who submitted a claim may also be its reviewer, or a user may hold both roles? [Gap, Spec §Actors]
+- [x] CHK037 - Is automatic rejection on an exclusion ground (e.g., accidental damage) intentionally left without independent deterministic verification, given that FR-027 requires independent confirmation only for expired coverage? [Coverage, Spec §FR-027, Spec §FR-025]
 
 ## Dependencies & Assumptions
 
-- [ ] CHK038 - Is the accepted consequence of strict isolation documented: fraud across tenants (e.g., the same photo claimed at two tenants) is undetectable by design? [Assumption, Spec §US2 Scenario 5, Spec §FR-018]
-- [ ] CHK039 - Are platform-level operator roles (staff of the warranty administrator who run seeding, indexing or support across tenants) addressed, given the requirement that every staff user belongs to exactly one tenant? [Assumption, Spec §FR-005, Plan §MigrationService]
-- [ ] CHK040 - Is the plan's deferral of encryption at rest and of photo redaction recorded as an accepted requirements exception, bounded by the synthetic-data assumption? [Assumption, Plan §PoC simplifications, Spec §Assumptions]
+- [x] CHK038 - Is the accepted consequence of strict isolation documented: fraud across tenants (e.g., the same photo claimed at two tenants) is undetectable by design? [Assumption, Spec §US2 Scenario 5, Spec §FR-018]
+- [x] CHK039 - Are platform-level operator roles (staff of the warranty administrator who run seeding, indexing or support across tenants) addressed, given the requirement that every staff user belongs to exactly one tenant? [Assumption, Spec §FR-005, Plan §MigrationService]
+- [x] CHK040 - Is the plan's deferral of encryption at rest and of photo redaction recorded as an accepted requirements exception, bounded by the synthetic-data assumption? [Assumption, Plan §PoC simplifications, Spec §Assumptions]
 
 ## Notes
 
