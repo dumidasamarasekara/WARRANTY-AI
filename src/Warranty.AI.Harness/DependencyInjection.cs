@@ -48,6 +48,8 @@ public static class DependencyInjection
         // itself and as its IAgent<TInput, TOutput>. The AdjudicationRunner (T068) registers here too.
         services.AddScoped<IntakeAgent>();
         services.AddScoped<IAgent<CaseContext, IntakeResult>>(sp => sp.GetRequiredService<IntakeAgent>());
+        services.AddScoped<PolicyAgent>();
+        services.AddScoped<IAgent<PolicyInput, PolicyResult>>(sp => sp.GetRequiredService<PolicyAgent>());
         services.AddScoped<DecisionAgent>();
         services.AddScoped<IAgent<DecisionInput, RecommendationResult>>(sp => sp.GetRequiredService<DecisionAgent>());
 
