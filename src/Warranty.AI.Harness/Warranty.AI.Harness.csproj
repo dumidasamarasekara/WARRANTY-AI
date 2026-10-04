@@ -16,4 +16,9 @@
     <PackageReference Include="JsonSchema.Net" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Byte-for-byte copies of specs/001-ai-claim-adjudication/contracts/schemas (a unit test guards against drift). -->
+    <EmbeddedResource Include="Schemas\*.schema.json" LogicalName="Warranty.AI.Harness.Schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

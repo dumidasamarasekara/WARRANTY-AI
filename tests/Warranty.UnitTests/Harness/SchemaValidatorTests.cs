@@ -11,8 +11,6 @@ namespace Warranty.UnitTests.Harness;
 /// </summary>
 public sealed class SchemaValidatorTests
 {
-    private const string Pending = "Pending T054";
-
     private readonly SchemaValidator _validator = new();
 
     private static JsonObject Intake() => new()
@@ -115,7 +113,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Embedded schemas -------------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.IntakeExtraction)]
     [InlineData(SchemaValidator.InvoiceExtraction)]
     [InlineData(SchemaValidator.PhotoAnalysis)]
@@ -129,12 +127,45 @@ public sealed class SchemaValidatorTests
         schema.Schema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
     }
 
-    [Fact(Skip = Pending)]
+    [Theory]
+    [InlineData(SchemaValidator.IntakeExtraction)]
+    [InlineData(SchemaValidator.InvoiceExtraction)]
+    [InlineData(SchemaValidator.PhotoAnalysis)]
+    [InlineData(SchemaValidator.PolicyAssessment)]
+    [InlineData(SchemaValidator.DecisionRecommendation)]
+    public void Embedded_schema_is_identical_to_the_contract_file(string schemaId)
+    {
+        var resourceName = $"Warranty.AI.Harness.Schemas.{schemaId}.schema.json";
+        using var stream = typeof(SchemaValidator).Assembly.GetManifestResourceStream(resourceName);
+        stream.ShouldNotBeNull($"embedded resource '{resourceName}' is missing");
+        using var embedded = new MemoryStream();
+        stream.CopyTo(embedded);
+
+        var contract = File.ReadAllBytes(Path.Combine(
+            RepositoryRoot(), "specs", "001-ai-claim-adjudication", "contracts", "schemas", $"{schemaId}.schema.json"));
+
+        embedded.ToArray().ShouldBe(contract, "src/Warranty.AI.Harness/Schemas must be a byte-for-byte copy of contracts/schemas");
+    }
+
+    private static string RepositoryRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Warranty.slnx")))
+            {
+                return dir.FullName;
+            }
+        }
+
+        throw new InvalidOperationException("Repository root (Warranty.slnx) not found.");
+    }
+
+    [Fact]
     public void Output_schema_can_be_looked_up_by_its_full_id()
         => _validator.GetOutputSchema("warranty-ai/decision-recommendation/v1")
             .Schema.GetProperty("title").GetString().ShouldBe("DecisionRecommendation");
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("claim-summary")]
     [InlineData("warranty-ai/decision-recommendation/v2")]
     [InlineData("")]
@@ -146,7 +177,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Valid outputs -----------------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.IntakeExtraction)]
     [InlineData(SchemaValidator.InvoiceExtraction)]
     [InlineData(SchemaValidator.PhotoAnalysis)]
@@ -160,7 +191,7 @@ public sealed class SchemaValidatorTests
         result.Errors.ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Valid_decision_with_risk_signals_and_missing_information_is_valid()
     {
         var output = Decision("REQUEST_MORE_INFORMATION");
@@ -183,7 +214,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Schema violations -------------------------------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Missing_required_property_is_a_violation()
     {
         var output = Decision();
@@ -192,7 +223,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "coverage");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Additional_property_is_a_violation()
     {
         var output = Decision();
@@ -201,7 +232,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "tenantId");
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("decision", "AUTO_APPROVE")]
     [InlineData("coverage", "PARTIAL")]
     public void Value_outside_the_enum_is_a_violation(string property, string value)
@@ -212,7 +243,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), property);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Wrong_type_is_a_violation()
     {
         var output = Decision();
@@ -221,7 +252,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "confidence");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Fractional_confidence_is_a_violation()
     {
         var output = Policy();
@@ -230,7 +261,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.PolicyAssessment, output), "confidence");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Violation_in_a_nested_object_is_reported()
     {
         var output = Decision();
@@ -244,7 +275,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "code");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Unknown_photo_damage_type_is_a_violation()
     {
         var output = Photo();
@@ -253,7 +284,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.PhotoAnalysis, output), "damageTypes");
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("[]")]
     [InlineData("\"APPROVE\"")]
     [InlineData("null")]
@@ -266,7 +297,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Confidence range --------------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.PhotoAnalysis, -1)]
     [InlineData(SchemaValidator.PhotoAnalysis, 101)]
     [InlineData(SchemaValidator.PolicyAssessment, -1)]
@@ -282,7 +313,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(schemaId, output), "confidence");
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.PhotoAnalysis, 0)]
     [InlineData(SchemaValidator.PhotoAnalysis, 100)]
     [InlineData(SchemaValidator.PolicyAssessment, 0)]
@@ -299,7 +330,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Text lengths ------------------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.IntakeExtraction, "summary", 400)]
     [InlineData(SchemaValidator.PhotoAnalysis, "observations", 600)]
     [InlineData(SchemaValidator.PolicyAssessment, "summary", 800)]
@@ -313,7 +344,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(schemaId, output), property);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(SchemaValidator.IntakeExtraction, "summary", 400)]
     [InlineData(SchemaValidator.PhotoAnalysis, "observations", 600)]
     [InlineData(SchemaValidator.PolicyAssessment, "summary", 800)]
@@ -327,7 +358,7 @@ public sealed class SchemaValidatorTests
         Validate(schemaId, output).IsValid.ShouldBeTrue();
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(8, true)]
     [InlineData(9, false)]
     public void Intake_allows_at_most_eight_symptoms(int count, bool valid)
@@ -346,7 +377,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Formats -----------------------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("2026-03-01", true)]
     [InlineData("UNKNOWN", true)]
     [InlineData("2026-13-01", false)]
@@ -369,7 +400,7 @@ public sealed class SchemaValidatorTests
         }
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("USD", true)]
     [InlineData("EUR", true)]
     [InlineData("UNKNOWN", true)]
@@ -392,7 +423,7 @@ public sealed class SchemaValidatorTests
 
     // ---- Required references -----------------------------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("APPROVE")]
     [InlineData("REJECT")]
     [InlineData("REQUEST_MORE_INFORMATION")]
@@ -405,7 +436,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "evidenceRefs");
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("APPROVE")]
     [InlineData("REJECT")]
     public void Approve_or_reject_without_policy_refs_is_invalid(string decision)
@@ -416,7 +447,7 @@ public sealed class SchemaValidatorTests
         ShouldBeInvalidAt(Validate(SchemaValidator.DecisionRecommendation, output), "policyRefs");
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("REQUEST_MORE_INFORMATION")]
     [InlineData("HUMAN_REVIEW")]
     public void Request_information_or_human_review_may_have_no_policy_refs(string decision)
@@ -427,7 +458,7 @@ public sealed class SchemaValidatorTests
         Validate(SchemaValidator.DecisionRecommendation, output).IsValid.ShouldBeTrue();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Reject_citing_a_policy_clause_is_valid()
     {
         var output = Decision("REJECT");
@@ -437,7 +468,7 @@ public sealed class SchemaValidatorTests
         Validate(SchemaValidator.DecisionRecommendation, output).IsValid.ShouldBeTrue();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Whether_a_reference_was_issued_is_not_checked_by_the_schema_validator()
     {
         var output = Decision();
@@ -446,7 +477,7 @@ public sealed class SchemaValidatorTests
         Validate(SchemaValidator.DecisionRecommendation, output).IsValid.ShouldBeTrue();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Every_violation_is_reported()
     {
         var output = Decision("APPROVE");
