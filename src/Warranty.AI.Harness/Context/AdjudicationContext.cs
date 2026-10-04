@@ -68,7 +68,11 @@ public sealed class AdjudicationContext
 public sealed record EvidenceResult(
     IReadOnlyList<EvidenceFinding> Findings,
     IReadOnlyList<ConsistencyCheck> ConsistencyChecks,
-    IReadOnlyList<RequestedItem> MissingItems);
+    IReadOnlyList<RequestedItem> MissingItems)
+{
+    /// <summary>The FR-009 checks judged by the Evidence step: <c>INVOICE_LEGIBLE</c> when an invoice was read.</summary>
+    public IReadOnlyList<ValidationCheck> Validation { get; init; } = [];
+}
 
 /// <summary>Policy step output: the version outcome, the issued clauses, the model's assessment and the version's terms.</summary>
 public sealed partial record PolicyResult(
