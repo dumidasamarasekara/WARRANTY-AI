@@ -101,3 +101,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# ---- Git worktrees for parallel tasks (scripts/git/task-flow.ps1 start -Worktree) ----
+.worktrees/
