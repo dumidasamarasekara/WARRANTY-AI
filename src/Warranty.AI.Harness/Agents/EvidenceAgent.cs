@@ -254,19 +254,53 @@ public sealed class EvidenceAgent(
 
     /// <summary><c>INVOICE_LEGIBLE</c>, when at least one invoice was read: passed when any invoice is legible.</summary>
     private static IReadOnlyList<ValidationCheck> Legibility(IReadOnlyList<FileOutcome> outcomes)
+        => Legibility(outcomes.Where(o => o.Invoice is not null).Select(o => (o.File.Ref, o.Invoice!)).ToList());
+
+    /// <summary><c>INVOICE_LEGIBLE</c> for the invoices that were read (reference and extraction); none when no invoice was read.</summary>
+    internal static IReadOnlyList<ValidationCheck> Legibility(IReadOnlyList<(string Ref, InvoiceExtractionOutput Invoice)> read)
     {
-        var read = outcomes.Where(o => o.Invoice is not null).ToList();
         if (read.Count == 0)
         {
             return [];
         }
 
-        var legible = read.Where(o => o.Invoice!.Legible).Select(o => o.File.Ref).ToList();
+        var legible = read.Where(r => r.Invoice.Legible).Select(r => r.Ref).ToList();
         var detail = legible.Count > 0
             ? $"Legible: {string.Join(", ", legible)}."
-            : $"Not legible: {string.Join(", ", read.Select(o => o.File.Ref))}.";
+            : $"Not legible: {string.Join(", ", read.Select(r => r.Ref))}.";
         return [new ValidationCheck(ValidationCheckCodes.InvoiceLegible, legible.Count > 0, detail)];
     }
+
+    /// <summary>
+    /// The Evidence step output rebuilt from its stored findings, for a resumed run: findings in <c>EV-n</c>
+    /// order, their consistency checks, the missing items and <c>INVOICE_LEGIBLE</c>, computed by the same
+    /// rules as <see cref="RunAsync"/>.
+    /// </summary>
+    internal static EvidenceResult Restore(IReadOnlyList<EvidenceFinding> findings, ReferenceRegistry references)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+        ArgumentNullException.ThrowIfNull(references);
+        var refs = references.Entries.Where(e => e.Kind == ReferenceKind.Evidence).ToDictionary(e => e.TargetId, e => e.Id);
+        var ordered = findings
+            .OrderBy(f => refs.TryGetValue(f.EvidenceId, out var reference) ? NumberOf(reference) : int.MaxValue)
+            .ThenBy(f => f.EvidenceId)
+            .ToList();
+        var invoices = ordered
+            .Select(f => (Ref: refs.GetValueOrDefault(f.EvidenceId) ?? f.EvidenceId.ToString(), Invoice: InvoiceExtractionOutput.From(f)))
+            .Where(x => x.Invoice is not null)
+            .Select(x => (x.Ref, Invoice: x.Invoice!))
+            .ToList();
+        var photos = ordered.Select(PhotoAnalysisOutput.From).OfType<PhotoAnalysisOutput>().ToList();
+        return new EvidenceResult(ordered, [.. ordered.SelectMany(f => f.Consistency)], MissingItems([.. invoices.Select(i => i.Invoice)], photos))
+        {
+            Validation = Legibility(invoices),
+        };
+    }
+
+    private static int NumberOf(string reference)
+        => int.TryParse(reference.AsSpan(reference.IndexOf('-', StringComparison.Ordinal) + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+            ? number
+            : int.MaxValue;
 
     private async Task<FileOutcome> ReadInvoiceAsync(CaseContext @case, CaseEvidence evidence, string reference, AgentExecutionContext ctx, CancellationToken ct)
     {

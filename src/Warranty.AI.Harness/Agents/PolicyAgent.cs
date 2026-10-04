@@ -26,8 +26,8 @@ public sealed record PolicyInput(CaseContext Case, IntakeResult Intake);
 /// text is built from the intake extraction (component, problem, symptoms, summary), never from the raw
 /// claimant description, and the filters are those of <c>search_policy_knowledge</c> and
 /// <c>warranty_lookup</c> (<see cref="SearchPolicyKnowledgeTool.ApplicabilityFor"/>). The clauses are issued
-/// as <c>POL-n</c> — <c>Period</c> and <c>Exclusion</c> clauses first in clause-key order, then the others by
-/// score — and the coverage window is computed with <see cref="CoverageWindowCalculator"/>. The model part
+/// as <c>POL-n</c> — <c>Period</c> and <c>Exclusion</c> clauses first in clause-key order, then <c>Coverage</c>
+/// clauses in clause-key order, then the others by score (<see cref="IssueOrder"/>) — and the coverage window is computed with <see cref="CoverageWindowCalculator"/>. The model part
 /// runs on the <c>policy-reasoning</c> route with <c>warranty_lookup</c>, <c>search_policy_knowledge</c> and
 /// <c>search_global_knowledge</c> and returns a <c>policy-assessment</c>.
 /// </summary>
@@ -180,8 +180,11 @@ public sealed class PolicyAgent(
 
     /// <summary>
     /// The order <c>POL-n</c> are issued in: <c>Period</c> and <c>Exclusion</c> clauses first in clause-key
-    /// order (natural: <c>2.9</c> before <c>2.10</c>), then the other clauses by descending score. Ties fall back
-    /// to clause key and chunk ID, so the numbering is deterministic (replay fixtures depend on it).
+    /// order (natural: <c>2.9</c> before <c>2.10</c>), then <c>Coverage</c> clauses in clause-key order, then the
+    /// other clauses by descending score. Ties fall back to clause key and chunk ID, so the numbering is
+    /// deterministic (replay fixtures depend on it). The clauses a decision is grounded in — the period, the
+    /// exclusions and the coverage grant an approval cites — never depend on similarity scores, which differ
+    /// between embedding models (Ollama in the app, hash embeddings in the integration tests).
     /// </summary>
     public static IReadOnlyList<RetrievedChunk> IssueOrder(IEnumerable<RetrievedChunk> chunks)
     {
@@ -191,15 +194,19 @@ public sealed class PolicyAgent(
             .OrderBy(c => c.ClauseKey, ClauseKeyComparer.Instance)
             .ThenByDescending(c => c.Score)
             .ThenBy(c => c.ChunkId);
-        var others = distinct.Where(c => !IsDecisive(c))
+        var coverage = distinct.Where(c => c.ClauseType == ClauseType.Coverage)
+            .OrderBy(c => c.ClauseKey, ClauseKeyComparer.Instance)
+            .ThenByDescending(c => c.Score)
+            .ThenBy(c => c.ChunkId);
+        var others = distinct.Where(c => !IsDecisive(c) && c.ClauseType != ClauseType.Coverage)
             .OrderByDescending(c => c.Score)
             .ThenBy(c => c.ClauseKey, ClauseKeyComparer.Instance)
             .ThenBy(c => c.ChunkId);
-        return [.. decisive, .. others];
+        return [.. decisive, .. coverage, .. others];
     }
 
-    /// <summary>The intake component (upper-case wire value); <c>UNKNOWN</c> without an extraction.</summary>
-    private static string ComponentOf(IntakeExtraction? extraction)
+    /// <summary>The intake component (upper-case wire value) the coverage window is computed for; <c>UNKNOWN</c> without an extraction.</summary>
+    internal static string ComponentOf(IntakeExtraction? extraction)
         => string.IsNullOrWhiteSpace(extraction?.Component) ? "UNKNOWN" : extraction.Component.Trim().ToUpperInvariant();
 
     private static bool IsDecisive(RetrievedChunk chunk) => chunk.ClauseType is ClauseType.Period or ClauseType.Exclusion;

@@ -36,7 +36,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    [Fact(Skip = "Pending T068")]
+    [Fact]
     public async Task S1_a_clear_defect_within_the_period_is_approved_by_the_system_citing_the_coverage_clause()
     {
         var scenario = GoldenScenario.Load("S1");
@@ -76,7 +76,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         ShouldContainNoRiskData(view);
     }
 
-    [Fact(Skip = "Pending T068")]
+    [Fact]
     public async Task S2_a_claim_after_the_period_is_rejected_by_the_system_with_the_coverage_window_confirmed()
     {
         var scenario = GoldenScenario.Load("S2");
@@ -164,7 +164,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         steps.IndexOf("EvidenceAnalyzed").ShouldBeLessThan(steps.IndexOf("RiskEvaluated"));
     }
 
-    [Fact(Skip = "Pending T068")]
+    [Fact]
     public async Task A_claims_agent_submission_reaches_the_same_automatic_approval()
     {
         var scenario = GoldenScenario.Load("S1-agent");

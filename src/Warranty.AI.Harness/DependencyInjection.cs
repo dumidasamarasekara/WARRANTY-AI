@@ -7,6 +7,7 @@ using Warranty.AI.Harness.Execution;
 using Warranty.AI.Harness.Schemas;
 using Warranty.AI.Harness.Tools;
 using Warranty.AI.Harness.Tools.Implementations;
+using Warranty.Application.Abstractions.Adjudication;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Adjudication;
 
@@ -45,7 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IRiskAssessor, RiskAssessor>();
 
         // Agents are scoped (they persist through the scoped adjudication repository); each resolves as
-        // itself and as its IAgent<TInput, TOutput>. The AdjudicationRunner (T068) registers here too.
+        // itself and as its IAgent<TInput, TOutput>.
         services.AddScoped<IntakeAgent>();
         services.AddScoped<IAgent<CaseContext, IntakeResult>>(sp => sp.GetRequiredService<IntakeAgent>());
         services.AddScoped<EvidenceAgent>();
@@ -54,6 +55,14 @@ public static class DependencyInjection
         services.AddScoped<IAgent<PolicyInput, PolicyResult>>(sp => sp.GetRequiredService<PolicyAgent>());
         services.AddScoped<DecisionAgent>();
         services.AddScoped<IAgent<DecisionInput, RecommendationResult>>(sp => sp.GetRequiredService<DecisionAgent>());
+
+        // The run lifecycle (scoped: one run per job scope, sharing that scope's unit of work).
+        services.AddScoped(sp => new AdjudicationAgents(
+            sp.GetRequiredService<IAgent<CaseContext, IntakeResult>>(),
+            sp.GetRequiredService<IAgent<EvidenceInput, EvidenceResult>>(),
+            sp.GetRequiredService<IAgent<PolicyInput, PolicyResult>>(),
+            sp.GetRequiredService<IAgent<DecisionInput, RecommendationResult>>()));
+        services.AddScoped<IAdjudicationRunner, AdjudicationRunner>();
 
         return services;
     }
