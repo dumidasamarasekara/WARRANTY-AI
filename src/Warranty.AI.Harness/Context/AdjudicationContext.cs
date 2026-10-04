@@ -71,7 +71,7 @@ public sealed record EvidenceResult(
     IReadOnlyList<RequestedItem> MissingItems);
 
 /// <summary>Policy step output: the version outcome, the issued clauses, the model's assessment and the version's terms.</summary>
-public sealed record PolicyResult(
+public sealed partial record PolicyResult(
     RetrievalOutcome Outcome,
     IReadOnlyList<RetrievedPolicyRef> Clauses,
     PolicyAssessment? Assessment,

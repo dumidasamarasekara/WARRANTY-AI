@@ -112,8 +112,11 @@ public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogReposito
         };
     }
 
-    /// <summary><c>OTHER</c> and <c>UNKNOWN</c> are not components: they use the standard months.</summary>
-    private static string? ComponentKey(string component) => component is "OTHER" or "UNKNOWN" ? null : component.ToLowerInvariant();
+    /// <summary>
+    /// The terms key of an intake component (upper-case wire value): <c>OTHER</c> and <c>UNKNOWN</c> are not
+    /// components and use the standard months. The Policy agent computes its coverage window with the same key.
+    /// </summary>
+    internal static string? ComponentKey(string component) => component is "OTHER" or "UNKNOWN" ? null : component.ToLowerInvariant();
 }
 
 /// <summary>Result of <c>warranty_lookup</c>.</summary>
