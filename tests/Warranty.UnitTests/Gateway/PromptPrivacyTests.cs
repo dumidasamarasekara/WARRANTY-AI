@@ -102,7 +102,7 @@ public sealed partial class PromptPrivacyTests
         }
     }
 
-    [Fact(Skip = "Pending T059")]
+    [Fact]
     public async Task The_case_context_carries_placeholders_instead_of_customer_identifiers()
     {
         await using var provider = BuildPipeline(ScriptedModel());
