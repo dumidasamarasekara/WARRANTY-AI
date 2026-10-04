@@ -37,6 +37,9 @@ internal sealed class PolicyRepository(WarrantyDbContext db) : IPolicyRepository
     public Task<WarrantyPolicy?> FindPolicyByCodeAsync(string code, CancellationToken ct)
         => db.WarrantyPolicies.SingleOrDefaultAsync(p => p.Code == code, ct);
 
+    public Task<WarrantyPolicy?> GetPolicyAsync(Guid policyId, CancellationToken ct)
+        => db.WarrantyPolicies.SingleOrDefaultAsync(p => p.Id == policyId, ct);
+
     public void AddPolicy(WarrantyPolicy policy) => db.WarrantyPolicies.Add(policy);
 
     public void AddVersion(PolicyVersion version) => db.PolicyVersions.Add(version);

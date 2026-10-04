@@ -8,7 +8,11 @@ namespace Warranty.Infrastructure.Persistence.Repositories;
 
 internal sealed class ClaimRepository(WarrantyDbContext db) : IClaimRepository
 {
-    /// <summary>Another claim finalized this many days before the claim date is still a duplicate (research R25).</summary>
+    /// <summary>
+    /// Another claim finalized this many days before the claim date is still a duplicate (research R25).
+    /// Keep in line with <c>Warranty.AI.Harness.Agents.Risk.DuplicateClaimWindow</c>, the reference
+    /// definition of the rule (a unit test checks both constants).
+    /// </summary>
     public const int DuplicateClaimWindowDays = 90;
 
     public const int MaxPageSize = 100;
@@ -76,6 +80,18 @@ internal sealed class ClaimRepository(WarrantyDbContext db) : IClaimRepository
 
         return new ClaimHistoryCounts(duplicates, priorApprovedAccidental, evidenceReuse);
     }
+
+    public async Task<IReadOnlyList<Claim>> ListForSerialAsync(string serialNumber, CancellationToken ct)
+    {
+        var serial = ProductSerial.NormalizeSerial(serialNumber);
+        return await db.Claims.AsNoTracking()
+            .Where(c => c.SerialNumber == serial)
+            .OrderBy(c => c.CreatedAt).ThenBy(c => c.Id)
+            .ToListAsync(ct);
+    }
+
+    public Task<int> CountCustomerClaimsAsync(Guid customerId, DateTimeOffset createdBefore, CancellationToken ct)
+        => db.Claims.CountAsync(c => c.CustomerId == customerId && c.CreatedAt < createdBefore, ct);
 
     public async Task<ClaimPage> ListAsync(ClaimStatus? status, int page, int pageSize, CancellationToken ct)
     {

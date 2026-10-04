@@ -55,6 +55,8 @@ public interface IPolicyRepository
 
     Task<WarrantyPolicy?> FindPolicyByCodeAsync(string code, CancellationToken ct);
 
+    Task<WarrantyPolicy?> GetPolicyAsync(Guid policyId, CancellationToken ct);
+
     void AddPolicy(WarrantyPolicy policy);
 
     void AddVersion(PolicyVersion version);
@@ -79,6 +81,15 @@ public interface IClaimRepository
     /// <summary>Same-tenant history counts for the serial: open-or-90-day duplicates, accidental approvals, hash reuse.</summary>
     Task<ClaimHistoryCounts> GetHistoryCountsAsync(
         Guid claimId, string serialNumber, DateOnly claimDate, IReadOnlyCollection<string> evidenceHashes, CancellationToken ct);
+
+    /// <summary>
+    /// All claims of the current tenant with the serial number (compared in storage form), including
+    /// the asking claim; the duplicate rule itself is applied by the caller (research R25).
+    /// </summary>
+    Task<IReadOnlyList<Claim>> ListForSerialAsync(string serialNumber, CancellationToken ct);
+
+    /// <summary>Number of the customer's claims (current tenant) created before <paramref name="createdBefore"/>.</summary>
+    Task<int> CountCustomerClaimsAsync(Guid customerId, DateTimeOffset createdBefore, CancellationToken ct);
 
     Task<ClaimPage> ListAsync(ClaimStatus? status, int page, int pageSize, CancellationToken ct);
 }

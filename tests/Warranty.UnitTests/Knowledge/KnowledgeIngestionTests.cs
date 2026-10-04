@@ -323,6 +323,9 @@ public sealed class KnowledgeIngestionTests
         public Task<WarrantyPolicy?> FindPolicyByCodeAsync(string code, CancellationToken ct)
             => Task.FromResult(Policies.SingleOrDefault(p => p.Code == code));
 
+        public Task<WarrantyPolicy?> GetPolicyAsync(Guid policyId, CancellationToken ct)
+            => Task.FromResult(Policies.SingleOrDefault(p => p.Id == policyId));
+
         public void AddPolicy(WarrantyPolicy policy) => Policies.Add(policy);
 
         public void AddVersion(PolicyVersion version) => Versions.Add(version);

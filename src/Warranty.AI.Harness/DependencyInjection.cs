@@ -4,6 +4,7 @@ using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Execution;
 using Warranty.AI.Harness.Schemas;
 using Warranty.AI.Harness.Tools;
+using Warranty.AI.Harness.Tools.Implementations;
 
 namespace Warranty.AI.Harness;
 
@@ -25,7 +26,18 @@ public static class DependencyInjection
         services.AddScoped<ToolRegistry>();
         services.AddScoped<ToolInvoker>();
 
-        // Tool implementations (T060), agents and the AdjudicationRunner (T068) register here.
+        // Read-only tools (contracts/agents-and-tools.md tool catalog). claim_history_lookup is also
+        // resolvable as itself: the risk capability calls it directly.
+        services.AddScoped<ITool, CustomerLookupTool>();
+        services.AddScoped<ITool, ProductLookupTool>();
+        services.AddScoped<ITool, WarrantyLookupTool>();
+        services.AddScoped<ITool, InvoiceValidationTool>();
+        services.AddScoped<ClaimHistoryLookupTool>();
+        services.AddScoped<ITool>(sp => sp.GetRequiredService<ClaimHistoryLookupTool>());
+        services.AddScoped<ITool, SearchPolicyKnowledgeTool>();
+        services.AddScoped<ITool, SearchGlobalKnowledgeTool>();
+
+        // Agents and the AdjudicationRunner (T068) register here.
         return services;
     }
 }
