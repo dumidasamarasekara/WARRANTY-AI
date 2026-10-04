@@ -91,6 +91,7 @@ public static class DependencyInjection
 
         services.AddScoped<IDecisionTrailWriter, DecisionTrailWriter>();
         services.AddScoped<HashChainVerifier>();
+        services.AddScoped<IDecisionTrailReader, DecisionTrailReader>();
         services.AddScoped<ISecurityEventWriter, SecurityEventWriter>();
         services.TryAddSingleton<IRequestSourceAccessor, NoRequestSource>();
         return services;
