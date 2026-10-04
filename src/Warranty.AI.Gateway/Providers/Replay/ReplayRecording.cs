@@ -8,7 +8,8 @@ namespace Warranty.AI.Gateway.Providers.Replay;
 /// One recorded model turn: <c>tests/fixtures/ai-recordings/{scenarioId}/{agent}-{callIndex}.json</c>.
 /// It holds what the harness consumes from an <see cref="AiTurnResult"/> — stop kind, tool calls,
 /// structured output, usage and an optional failure — so fixtures can be written by hand. Provider
-/// blocks such as signed thinking are never recorded.
+/// blocks such as signed thinking are never recorded. The file text may contain the placeholders of
+/// <see cref="ReplayFixtureVariables"/> (e.g. <c>{{claim.purchaseDate}}</c>), replaced before parsing.
 /// </summary>
 public sealed record ReplayRecording
 {

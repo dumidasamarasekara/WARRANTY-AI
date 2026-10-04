@@ -5,6 +5,7 @@ using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.AI;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Catalog;
+using Warranty.Domain.Claims;
 
 namespace Warranty.AI.Gateway.Providers.Replay;
 
@@ -13,6 +14,10 @@ public interface IReplayScenarioSelector
 {
     /// <summary>The scenario ID (e.g. <c>S1</c>), or null when the call belongs to no known scenario.</summary>
     Task<string?> SelectScenarioAsync(AiCallContext context, CancellationToken ct);
+
+    /// <summary>Values for the fixture placeholders of the call's claim (<see cref="ReplayFixtureVariables"/>); none by default.</summary>
+    Task<IReadOnlyDictionary<string, string>> GetFixtureVariablesAsync(AiCallContext context, CancellationToken ct)
+        => Task.FromResult(ReplayFixtureVariables.None);
 }
 
 /// <summary>One entry of <c>seed/golden/scenarios.json</c>, reduced to what replay needs.</summary>
@@ -76,13 +81,34 @@ public sealed class ReplayScenarioCatalog
     }
 }
 
-/// <summary>Maps a call to its scenario through the serial number of the claim it belongs to.</summary>
+/// <summary>
+/// Maps a call to its scenario through the serial number of the claim it belongs to. The claim is loaded
+/// once per scope and the load is serialized, because an agent's model calls can run in parallel (Evidence
+/// ‖ Policy, one call per photo) while the repository's context is not thread-safe.
+/// </summary>
 internal sealed class SerialNumberScenarioSelector(
     IClaimRepository claims,
     ITenantContext tenantContext,
-    ReplayScenarioCatalog catalog) : IReplayScenarioSelector
+    ReplayScenarioCatalog catalog) : IReplayScenarioSelector, IDisposable
 {
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Dictionary<Guid, Claim?> _claims = [];
+
     public async Task<string?> SelectScenarioAsync(AiCallContext context, CancellationToken ct)
+    {
+        var claim = await LoadAsync(context, ct);
+        return claim is null ? null : catalog.Find(claim.SerialNumber, tenantContext.TenantSlug);
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetFixtureVariablesAsync(AiCallContext context, CancellationToken ct)
+    {
+        var claim = await LoadAsync(context, ct);
+        return claim is null ? ReplayFixtureVariables.None : ReplayFixtureVariables.For(claim);
+    }
+
+    public void Dispose() => _gate.Dispose();
+
+    private async Task<Claim?> LoadAsync(AiCallContext context, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (context.ClaimId is not { } claimId)
@@ -90,8 +116,21 @@ internal sealed class SerialNumberScenarioSelector(
             return null;
         }
 
-        var claim = await claims.GetAsync(claimId, ct);
-        return claim is null ? null : catalog.Find(claim.SerialNumber, tenantContext.TenantSlug);
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (!_claims.TryGetValue(claimId, out var claim))
+            {
+                claim = await claims.GetAsync(claimId, ct);
+                _claims[claimId] = claim;
+            }
+
+            return claim;
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 }
 

@@ -119,6 +119,35 @@ public sealed class ReplayProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task Fixture_placeholders_take_the_claims_dates_on_replay_and_are_restored_when_recording()
+    {
+        _selector.Variables = new Dictionary<string, string>
+        {
+            [ReplayFixtureVariables.PurchaseDate] = "2026-06-04",
+            [ReplayFixtureVariables.ClaimDate] = "2026-10-04",
+        };
+        Fixture("S1", "policy-1", """
+            {"stop":"Completed","structuredOutput":{"invoiceDate":"{{claim.purchaseDate}}","note":"claimed on {{claim.claimDate}}"}}
+            """);
+        var claimId = Guid.NewGuid();
+
+        var replayed = await Replay().CompleteAsync(Turn(claimId), TestContext.Current.CancellationToken);
+
+        replayed.StructuredOutput!.Value.GetProperty("invoiceDate").GetString().ShouldBe("2026-06-04");
+        replayed.StructuredOutput.Value.GetProperty("note").GetString().ShouldBe("claimed on 2026-10-04");
+
+        _options.Replay.Record = true;
+        var live = new ScriptedModelProvider("anthropic")
+            .Enqueue(ScriptedModelProvider.Completed("""{"invoiceDate":"2026-06-04","claimDate":"2026-10-04","other":"2026-06-05"}"""));
+        await Replay(live).CompleteAsync(Turn(claimId), TestContext.Current.CancellationToken);
+
+        var recorded = await File.ReadAllTextAsync(Path.Combine(_root, "S1", "policy-2.json"), TestContext.Current.CancellationToken);
+        recorded.ShouldContain("\"invoiceDate\": \"{{claim.purchaseDate}}\"");
+        recorded.ShouldContain("\"claimDate\": \"{{claim.claimDate}}\"");
+        recorded.ShouldContain("\"other\": \"2026-06-05\"");
+    }
+
+    [Fact]
     public async Task The_scenario_is_found_by_the_claims_serial_number_within_the_tenant()
     {
         var scenarios = Path.Combine(_root, "scenarios.json");
@@ -132,11 +161,16 @@ public sealed class ReplayProviderTests : IDisposable
         var claims = Substitute.For<IClaimRepository>();
         var claim = Claim("SHARED-001");
         claims.GetAsync(claim.Id, Arg.Any<CancellationToken>()).Returns(claim);
-        var selector = new SerialNumberScenarioSelector(claims, new FakeTenantContext(Aurora), catalog);
+        using var selector = new SerialNumberScenarioSelector(claims, new FakeTenantContext(Aurora), catalog);
 
         var scenario = await selector.SelectScenarioAsync(Context(claim.Id), TestContext.Current.CancellationToken);
+        var variables = await selector.GetFixtureVariablesAsync(Context(claim.Id), TestContext.Current.CancellationToken);
 
         scenario.ShouldBe("S12-aurora");
+        variables[ReplayFixtureVariables.PurchaseDate].ShouldBe("2026-01-10");
+        variables[ReplayFixtureVariables.ClaimDate].ShouldBe(claim.ClaimDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        await claims.Received(1).GetAsync(claim.Id, Arg.Any<CancellationToken>());
+        (await selector.GetFixtureVariablesAsync(Context(null), TestContext.Current.CancellationToken)).ShouldBeEmpty();
         catalog.Find(" AUR-TAB10-0001 ", "borealis").ShouldBe("S1");
         catalog.Find("unknown", "aurora").ShouldBeNull();
         (await selector.SelectScenarioAsync(Context(Guid.NewGuid()), TestContext.Current.CancellationToken)).ShouldBeNull();
@@ -226,6 +260,11 @@ public sealed class ReplayProviderTests : IDisposable
     {
         public string? Scenario { get; set; } = scenario;
 
+        public IReadOnlyDictionary<string, string> Variables { get; set; } = ReplayFixtureVariables.None;
+
         public Task<string?> SelectScenarioAsync(AiCallContext context, CancellationToken ct) => Task.FromResult(Scenario);
+
+        public Task<IReadOnlyDictionary<string, string>> GetFixtureVariablesAsync(AiCallContext context, CancellationToken ct)
+            => Task.FromResult(Variables);
     }
 }
