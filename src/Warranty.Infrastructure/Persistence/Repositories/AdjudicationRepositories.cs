@@ -102,31 +102,52 @@ internal sealed class AiOpsRepository(WarrantyDbContext db) : IAiOpsRepository
 
 internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
 {
-    public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw Conflict(ex);
+        }
+    }
 
     /// <summary>
     /// Runs <paramref name="work"/> and saves its changes in one transaction; joins an already open
     /// transaction instead of nesting. The connection stays open for the transaction, so it carries
-    /// the tenant set when it opened.
+    /// the tenant set when it opened. A row changed since it was read (row version) surfaces as
+    /// <see cref="ConcurrencyConflictException"/>.
     /// </summary>
     public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken ct)
     {
-        if (db.Database.CurrentTransaction is not null)
+        try
         {
-            await work(ct);
-            await db.SaveChangesAsync(ct);
-            return;
-        }
-
-        var strategy = db.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(
-            async token =>
+            if (db.Database.CurrentTransaction is not null)
             {
-                await using var transaction = await db.Database.BeginTransactionAsync(token);
-                await work(token);
-                await db.SaveChangesAsync(token);
-                await transaction.CommitAsync(token);
-            },
-            ct);
+                await work(ct);
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+
+            var strategy = db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(
+                async token =>
+                {
+                    await using var transaction = await db.Database.BeginTransactionAsync(token);
+                    await work(token);
+                    await db.SaveChangesAsync(token);
+                    await transaction.CommitAsync(token);
+                },
+                ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw Conflict(ex);
+        }
     }
+
+    private static ConcurrencyConflictException Conflict(DbUpdateConcurrencyException ex)
+        => new("A row was changed by another request since it was read; nothing was saved.", ex);
 }

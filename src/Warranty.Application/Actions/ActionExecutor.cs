@@ -4,7 +4,9 @@ using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Review;
 using Warranty.Guardrails;
+using Warranty.Guardrails.Rules;
 
 namespace Warranty.Application.Actions;
 
@@ -24,11 +26,15 @@ namespace Warranty.Application.Actions;
 /// <c>CLAIMANT_TEXT_SAFE</c>), never taken from the caller. The notification carries only a template
 /// name; the claimant reads the outcome and its explanation from the claim, so no risk data or
 /// reference ID reaches the outbox.
+/// Reviewer decisions (FR-034 – FR-036) take the same path through <see cref="ExecuteReviewerDecisionAsync"/>:
+/// the claim is finalized by <see cref="DecidedBy.Reviewer"/> with the reviewer's screened claimant
+/// explanation, or paused for the submitter as a reviewer request.
 /// </summary>
 public sealed class ActionExecutor(
     ITenantContext tenantContext,
     IClaimRepository claims,
     IAdjudicationRepository adjudication,
+    IReviewRepository reviews,
     ICatalogRepository catalog,
     IServiceNetwork serviceNetwork,
     IRepairRequestService repairRequests,
@@ -60,6 +66,19 @@ public sealed class ActionExecutor(
         var execution = ActionExecution.Executed;
         await unitOfWork.ExecuteInTransactionAsync(async token => { execution = await ApplyAsync(action, token); }, ct);
         return execution;
+    }
+
+    public async Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (!tenantContext.IsResolved || decision.TenantId != tenantContext.TenantId)
+        {
+            throw new ActionRefusedException(
+                $"Reviewer decision on claim {decision.ClaimId} does not belong to the current tenant scope.");
+        }
+
+        await unitOfWork.ExecuteInTransactionAsync(token => ApplyReviewerDecisionAsync(decision, token), ct);
     }
 
     private async Task<ActionExecution> ApplyAsync(ApprovedAction action, CancellationToken ct)
@@ -103,8 +122,8 @@ public sealed class ActionExecutor(
                 await trail.AppendAsync(
                     claim.Id, TrailStep.AutoApproved, Actor, "Claim approved automatically: every guardrail check passed.",
                     new { run.runId, run.round, outcome = nameof(FinalOutcome.Approved), decidedBy = nameof(DecidedBy.System) }, ct);
-                await CreateRepairRequestAsync(claim, ct);
-                await NotifyAsync(claim.Id, ApprovedTemplate, ct);
+                await CreateRepairRequestAsync(claim, Actor, ct);
+                await NotifyAsync(claim.Id, ApprovedTemplate, Actor, ct);
                 break;
 
             case ActionKind.FinalizeRejected:
@@ -112,7 +131,7 @@ public sealed class ActionExecutor(
                 await trail.AppendAsync(
                     claim.Id, TrailStep.AutoRejected, Actor, "Claim rejected automatically: every guardrail check passed.",
                     new { run.runId, run.round, outcome = nameof(FinalOutcome.Rejected), decidedBy = nameof(DecidedBy.System) }, ct);
-                await NotifyAsync(claim.Id, RejectedTemplate, ct);
+                await NotifyAsync(claim.Id, RejectedTemplate, Actor, ct);
                 break;
 
             case ActionKind.EscalateToReview:
@@ -140,10 +159,94 @@ public sealed class ActionExecutor(
     }
 
     /// <summary>
+    /// Applies a reviewer decision. The trail actor is the reviewer's <c>sub</c>; the decision row, the
+    /// claim's state change, the trail entries and the simulated integration rows commit together.
+    /// </summary>
+    private async Task ApplyReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct)
+    {
+        var claim = await claims.GetAsync(decision.ClaimId, ct);
+        if (claim is null || claim.TenantId != decision.TenantId)
+        {
+            throw new ActionRefusedException($"Claim {decision.ClaimId} is not visible in the current tenant.");
+        }
+
+        // Separation of duties (research R29): RecordReviewDecision refuses first; this is the last line of defense.
+        if (claim.WasSubmittedBy(decision.ReviewerSub))
+        {
+            throw new ActionRefusedException($"Reviewer {decision.ReviewerSub} submitted claim {claim.Id} and may not decide it.");
+        }
+
+        var run = await adjudication.GetLatestRunAsync(claim.Id, ct);
+        if (run is null || run.Id != decision.RunId || run.Round != claim.CurrentRound)
+        {
+            throw new ActionRefusedException($"Reviewer decision on claim {claim.Id} does not apply to the claim's latest run.");
+        }
+
+        if (decision.ClaimantExplanation is { } text && !ClaimantTextScreen.Screen(text).IsSafe)
+        {
+            throw new ActionRefusedException($"The claimant explanation of the decision on claim {claim.Id} failed the claimant text screen.");
+        }
+
+        var actor = decision.ReviewerSub;
+        var now = decision.DecidedAt;
+        switch (decision.Decision)
+        {
+            case ReviewDecisionKind.Approve:
+                claim.FinalizeApproved(decision.ClaimantExplanation!, DecidedBy.Reviewer, now);
+                break;
+            case ReviewDecisionKind.Reject:
+                claim.FinalizeRejected(decision.ClaimantExplanation!, DecidedBy.Reviewer, now);
+                break;
+            case ReviewDecisionKind.RequestInformation:
+                claim.RequestInformation(decision.RequestedItems, DecidedBy.Reviewer, now);
+                break;
+            default:
+                throw new ActionRefusedException($"Unknown review decision {decision.Decision}.");
+        }
+
+        reviews.Add(decision);
+        var items = decision.RequestedItems.Select(i => i.Item).ToArray();
+        await trail.AppendAsync(
+            claim.Id, TrailStep.ReviewerDecided, actor, ReviewerSummary(decision, items),
+            new
+            {
+                decisionId = decision.Id,
+                runId = decision.RunId,
+                round = run.Round,
+                decision = decision.Decision.ToString(),
+                overridesAi = decision.OverridesAi,
+                reviewer = decision.ReviewerName,
+                justification = decision.Justification,
+                claimantExplanation = decision.ClaimantExplanation,
+                requestedItems = items,
+                status = claim.Status.ToString(),
+            },
+            ct);
+
+        switch (decision.Decision)
+        {
+            case ReviewDecisionKind.Approve:
+                await CreateRepairRequestAsync(claim, actor, ct);
+                await NotifyAsync(claim.Id, ApprovedTemplate, actor, ct);
+                break;
+            case ReviewDecisionKind.Reject:
+                await NotifyAsync(claim.Id, RejectedTemplate, actor, ct);
+                break;
+        }
+    }
+
+    private static string ReviewerSummary(ReviewDecision decision, string[] items) => decision.Decision switch
+    {
+        ReviewDecisionKind.Approve => $"Claim approved by reviewer {decision.ReviewerName}{(decision.OverridesAi ? ", overriding the AI recommendation" : string.Empty)}.",
+        ReviewDecisionKind.Reject => $"Claim rejected by reviewer {decision.ReviewerName}{(decision.OverridesAi ? ", overriding the AI recommendation" : string.Empty)}.",
+        _ => $"Reviewer {decision.ReviewerName} requested information from the submitter: {string.Join(", ", items)}.",
+    };
+
+    /// <summary>
     /// <c>service_network_lookup</c> → <c>create_repair_request</c>. The approval stands without a
     /// matching service center; the trail then records that no repair request was created.
     /// </summary>
-    private async Task CreateRepairRequestAsync(Claim claim, CancellationToken ct)
+    private async Task CreateRepairRequestAsync(Claim claim, string actor, CancellationToken ct)
     {
         var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
         var center = claim.Region is { } region && product is not null
@@ -153,7 +256,7 @@ public sealed class ActionExecutor(
         if (center is null)
         {
             await trail.AppendAsync(
-                claim.Id, TrailStep.ActionExecuted, Actor,
+                claim.Id, TrailStep.ActionExecuted, actor,
                 "No service center matches the claim's region and product category; no repair request was created.",
                 new { action = "service_network_lookup", serviceCenterFound = false }, ct);
             return;
@@ -161,16 +264,16 @@ public sealed class ActionExecutor(
 
         var repairRequestId = await repairRequests.CreateAsync(claim.Id, center.Id, ct);
         await trail.AppendAsync(
-            claim.Id, TrailStep.ActionExecuted, Actor, $"Simulated repair request created at {center.Name}.",
+            claim.Id, TrailStep.ActionExecuted, actor, $"Simulated repair request created at {center.Name}.",
             new { action = "create_repair_request", repairRequestId, serviceCenterId = center.Id }, ct);
     }
 
     /// <summary><c>notify_customer</c>: a simulated outbox row naming the template, never the explanation text.</summary>
-    private async Task NotifyAsync(Guid claimId, string template, CancellationToken ct)
+    private async Task NotifyAsync(Guid claimId, string template, string actor, CancellationToken ct)
     {
         var notificationId = await notifications.EnqueueAsync(claimId, template, ct);
         await trail.AppendAsync(
-            claimId, TrailStep.ActionExecuted, Actor, "Simulated customer notification queued.",
+            claimId, TrailStep.ActionExecuted, actor, "Simulated customer notification queued.",
             new { action = "notify_customer", notificationId, template }, ct);
     }
 

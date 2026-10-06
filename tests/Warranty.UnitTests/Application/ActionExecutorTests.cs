@@ -386,7 +386,7 @@ public sealed class ActionExecutorTests
     }
 
     private ActionExecutor Executor(FakeTenantContext? tenant = null) => new(
-        tenant ?? new FakeTenantContext(Tenant), _claims, _adjudication, _catalog, _network, _repairs, _notifications, _trail, _unitOfWork,
+        tenant ?? new FakeTenantContext(Tenant), _claims, _adjudication, Substitute.For<IReviewRepository>(), _catalog, _network, _repairs, _notifications, _trail, _unitOfWork,
         _time);
 
     private int IntegrationCallCount()
