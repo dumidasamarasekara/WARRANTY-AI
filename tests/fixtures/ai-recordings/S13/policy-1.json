@@ -1,0 +1,16 @@
+{
+  "stop": "ToolCalls",
+  "toolCalls": [
+    {
+      "callId": "toolu_s13_policy_warranty_lookup",
+      "toolName": "warranty_lookup",
+      "arguments": {
+        "component": "HEATING"
+      }
+    }
+  ],
+  "usage": {
+    "inputTokens": 3984,
+    "outputTokens": 58
+  }
+}

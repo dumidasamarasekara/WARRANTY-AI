@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-1",
+    "legible": true,
+    "sellerName": "Aurora Store",
+    "invoiceNumber": "AS-2026-084519",
+    "invoiceDate": "{{claim.purchaseDate}}",
+    "productDescription": "Aurora Book 15",
+    "modelCodeOnInvoice": "AUR-BOOK15",
+    "serialOnInvoice": "AB15-24-0001",
+    "totalAmount": 1400.00,
+    "currency": "USD",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2362,
+    "outputTokens": 171
+  }
+}

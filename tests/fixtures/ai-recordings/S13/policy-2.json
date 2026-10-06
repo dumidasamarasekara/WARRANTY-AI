@@ -1,0 +1,49 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-5",
+        "applies": true,
+        "effect": "GRANTS_COVERAGE",
+        "note": "An oven that no longer heats during normal use is a manufacturing defect covered by this clause; Borealis appliances are covered products."
+      },
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "24-month warranty period in all regions. warranty_lookup reports the claim date within standard coverage."
+      },
+      {
+        "ref": "POL-2",
+        "applies": false,
+        "effect": "DEFINES_PERIOD",
+        "note": "The battery period does not apply; the oven has no battery and the failure is a heating fault."
+      },
+      {
+        "ref": "POL-3",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact reported or visible."
+      },
+      {
+        "ref": "POL-4",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No repair or opening by an unauthorized party is reported."
+      }
+    ],
+    "coverageAssessment": "COVERED",
+    "confidence": 91,
+    "relevantExclusions": [],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Covered: an oven that stops heating during normal use is a manufacturing defect under POL-5, and the claim is within the 24-month warranty period of POL-1 as computed by warranty_lookup. The liquid-damage and unauthorized-repair exclusions (POL-3, POL-4) do not apply."
+  },
+  "usage": {
+    "inputTokens": 5188,
+    "outputTokens": 421
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-1",
+    "legible": true,
+    "sellerName": "Borealis Store",
+    "invoiceNumber": "BS-2026-641208",
+    "invoiceDate": "{{claim.purchaseDate}}",
+    "productDescription": "Borealis Smart Oven 60",
+    "modelCodeOnInvoice": "BOR-OVEN60",
+    "serialOnInvoice": "BO60-24-0001",
+    "totalAmount": 1650.00,
+    "currency": "USD",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2367,
+    "outputTokens": 174
+  }
+}

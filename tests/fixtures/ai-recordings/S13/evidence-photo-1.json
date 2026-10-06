@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "oven",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 88,
+    "observations": "Front of a Borealis built-in oven with control knobs, a small display and a closed glass door. The door glass and housing show no cracks, scorch marks, dents or liquid marks."
+  },
+  "usage": {
+    "inputTokens": 1652,
+    "outputTokens": 136
+  }
+}

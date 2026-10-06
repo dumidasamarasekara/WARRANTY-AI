@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "HEATING_ELEMENT",
+    "component": "HEATING",
+    "symptoms": [
+      "oven does not heat",
+      "display, light and fan still work",
+      "oven stays cold after 30 minutes at 200 degrees"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The built-in oven no longer heats during normal use while its display, light and fan keep working. The claimant reports no damage, liquid contact or repair."
+  },
+  "usage": {
+    "inputTokens": 1186,
+    "outputTokens": 139
+  }
+}

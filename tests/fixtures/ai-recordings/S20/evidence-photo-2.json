@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "laptop",
+    "visibleSerial": "AB15-24-0002",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 92,
+    "observations": "Underside of a grey Aurora laptop. The serial label reads 'AURORA MODEL AUR-BOOK15' and 'S/N: AB15-24-0002'. The housing is undamaged."
+  },
+  "usage": {
+    "inputTokens": 1659,
+    "outputTokens": 137
+  }
+}
