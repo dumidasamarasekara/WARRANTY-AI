@@ -124,6 +124,17 @@ dotnet test tests/Warranty.IntegrationTests   # Testcontainers: RLS, retrieval/v
 npm --prefix src/web test                     # Vitest + RTL + MSW
 ```
 
+The Aspire smoke test (`tests/Warranty.IntegrationTests/Smoke/AppHostSmokeTests.cs`, trait
+`Category=Smoke`) boots the whole AppHost in replay mode and completes S1. It pulls every image
+(incl. Ollama and Keycloak), uses the AppHost's fixed ports and is excluded from CI; run it alone,
+with no `aspire run` active:
+
+```powershell
+$env:DOTNET_ASPIRE_CONTAINER_RUNTIME = "podman"
+dotnet test --project tests/Warranty.IntegrationTests -- --filter-trait "Category=Smoke"
+# CI and quick local runs: dotnet test --project tests/Warranty.IntegrationTests -- --filter-not-trait "Category=Smoke"
+```
+
 Expected: all green with no network access to AI providers (replay provider). The isolation suite
 must report zero cross-tenant rows/chunks/blobs (SC-003), and the prompt-privacy test must find no
 customer name, email, phone or street address in any rendered prompt (FR-006a).
