@@ -164,7 +164,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact(Skip = "Pending T086")]
+    [Fact]
     public async Task The_review_queue_of_aurora_reviewers_never_shows_a_borealis_claim()
     {
         var (_, borealis) = await SubmitClaimsAsync();

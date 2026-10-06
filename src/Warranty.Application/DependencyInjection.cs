@@ -4,6 +4,7 @@ using Warranty.Application.Actions;
 using Warranty.Application.Adjudication;
 using Warranty.Application.Claims;
 using Warranty.Application.Policies;
+using Warranty.Application.Review;
 using Warranty.Application.Trace;
 
 namespace Warranty.Application;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IActionExecutor, ActionExecutor>();
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
+        services.AddScoped<ReviewQueueQuery>();
         return services;
     }
 }
