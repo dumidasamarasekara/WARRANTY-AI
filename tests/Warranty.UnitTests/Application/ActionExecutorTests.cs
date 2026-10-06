@@ -7,6 +7,7 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Actions;
+using Warranty.Application.Claims;
 using Warranty.Domain.Adjudication;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
@@ -152,6 +153,25 @@ public sealed class ActionExecutorTests
         _entries[0].Payload.GetProperty("items").EnumerateArray().Select(i => i.GetString()).ShouldBe(["LEGIBLE_INVOICE"]);
         _entries[0].Payload.GetProperty("autoInfoRequestCount").GetInt32().ShouldBe(1);
         ShouldNotHaveCalledIntegrations();
+    }
+
+    [Fact]
+    public async Task RequestInformation_stores_claimant_facing_text_in_place_of_an_unsafe_or_blank_reason()
+    {
+        // Reasons can come from the model's missingInformation; the claim keeps only text safe to show the claimant.
+        var scenario = GuardrailScenario.ClearApprove();
+        scenario.IntakeMissingItems.Add(new RequestedItem("INVOICE", "Upload the invoice; EV-1 looks suspicious."));
+        scenario.IntakeMissingItems.Add(new RequestedItem("PHOTO_OF_DAMAGE", " "));
+        var (claim, action) = Arrange(scenario);
+        action.Kind.ShouldBe(ActionKind.RequestInformation);
+
+        await Executor().ExecuteAsync(action, Ct);
+
+        claim.RequestedItems.ShouldBe(
+        [
+            new RequestedItem("INVOICE", RequestedItemCatalog.ClaimantText("INVOICE")),
+            new RequestedItem("PHOTO_OF_DAMAGE", RequestedItemCatalog.ClaimantText("PHOTO_OF_DAMAGE")),
+        ]);
     }
 
     [Fact]

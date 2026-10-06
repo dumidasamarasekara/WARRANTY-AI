@@ -141,6 +141,24 @@ public sealed class ClaimantAccessTests : IDisposable
     }
 
     [Fact]
+    public async Task The_claimant_sees_standard_text_for_an_item_whose_stored_reason_is_not_safe_to_show()
+    {
+        _claim.StartEvaluation(SubmittedAt);
+        _claim.RequestInformation(
+            [new RequestedItem("PHOTO_OF_SERIAL_LABEL", "Serial differs from EV-2; possible fraud."), RequestedItem.Create("INVOICE", "Please add the invoice.")],
+            DecidedBy.System,
+            SubmittedAt);
+
+        var view = (await Access().GetViewAsync(_claim.Id, _claim.Reference, Ct)).ShouldNotBeNull();
+
+        view.RequestedItems.ShouldBe(
+        [
+            new ClaimantRequestedItem("PHOTO_OF_SERIAL_LABEL", "Please upload a photo of the label showing the serial number."),
+            new ClaimantRequestedItem("INVOICE", "Please add the invoice."),
+        ]);
+    }
+
+    [Fact]
     public async Task A_token_for_another_claim_or_an_unknown_reference_sees_nothing()
     {
         (await Access().GetViewAsync(Guid.CreateVersion7(), _claim.Reference, Ct)).ShouldBeNull();

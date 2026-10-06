@@ -2,6 +2,7 @@ using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Claims;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Review;
@@ -19,8 +20,8 @@ namespace Warranty.Application.Actions;
 /// <c>notify_customer</c> through the simulated integration ports.</item>
 /// <item><see cref="ActionKind.FinalizeRejected"/> → claim <c>Rejected</c>, then <c>notify_customer</c>.</item>
 /// <item><see cref="ActionKind.EscalateToReview"/> → claim <c>UnderReview</c>.</item>
-/// <item><see cref="ActionKind.RequestInformation"/> → claim <c>PendingInformation</c> with the requested items
-/// (increments <c>auto_info_request_count</c>; the domain refuses a third automatic request).</item>
+/// <item><see cref="ActionKind.RequestInformation"/> → claim <c>PendingInformation</c> with the requested items in their
+/// claimant-facing form (<see cref="RequestedItemCatalog.ForClaimant(IEnumerable{RequestedItem})"/>; increments <c>auto_info_request_count</c>; the domain refuses a third automatic request).</item>
 /// </list>
 /// The final explanation is read from the run's persisted recommendation (it already passed
 /// <c>CLAIMANT_TEXT_SAFE</c>), never taken from the caller. The notification carries only a template
@@ -143,7 +144,8 @@ public sealed class ActionExecutor(
                 break;
 
             case ActionKind.RequestInformation:
-                claim.RequestInformation(action.RequestedItems, DecidedBy.System, now);
+                // Reasons can come from the model's missingInformation: store claimant-safe text (RequestedItemCatalog).
+                claim.RequestInformation(RequestedItemCatalog.ForClaimant(action.RequestedItems), DecidedBy.System, now);
                 var items = claim.RequestedItems.Select(i => i.Item).ToArray();
                 await trail.AppendAsync(
                     claim.Id, TrailStep.InformationRequested, Actor,

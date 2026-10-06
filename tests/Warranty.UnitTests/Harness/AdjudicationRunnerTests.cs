@@ -75,6 +75,13 @@ public sealed class AdjudicationRunnerTests
     private Action<DecisionInput, AgentExecutionContext>? _onDecision;
     private CaseProduct? _caseProduct = new(ProductId, "AUR-TAB10", "Aurora Tab 10", "tablet", 450m);
     private bool _policyAmbiguous;
+    private TenantSettings _settings = TenantSettings.Create(Aurora, "USD", 500m, 80);
+    private IReadOnlyList<RiskSignal> _intakeSignals = [];
+    private bool _reviewerInfoRequested;
+    private int _autoInfoRequestCount;
+    private int _intakeRiskFailures;
+    private int _settingsFailures;
+    private readonly IAiGateway _gateway = Substitute.For<IAiGateway>();
 
     public AdjudicationRunnerTests()
     {
@@ -255,6 +262,126 @@ public sealed class AdjudicationRunnerTests
         ]);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Missing_items_without_an_escalation_condition_request_information_with_only_required_info_complete_failed(int autoInfoRequestCount)
+    {
+        _missingItems = true;
+        _autoInfoRequestCount = autoInfoRequestCount;
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        _log.ShouldBe(["intake", "risk:intake"], "no Evidence, Policy or Decision step runs");
+        _gateway.ReceivedCalls().ShouldBeEmpty();
+        _store.Committed<IntakeResult>().ShouldHaveSingleItem();
+        _store.Committed<EvidenceFinding>().ShouldBeEmpty();
+        _store.Committed<PolicyAssessment>().ShouldBeEmpty();
+        _store.Committed<Recommendation>().ShouldBeEmpty();
+
+        var evaluation = _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem();
+        evaluation.Disposition.ShouldBe(Disposition.RequestInformation);
+        evaluation.Reasons.ShouldBeEmpty();
+        evaluation.Checks.Where(c => !c.Passed).Select(c => c.Code).ShouldBe([GuardrailCheckCode.RequiredInfoComplete]);
+        evaluation.Checks.Single(c => c.Code == GuardrailCheckCode.RequiredInfoComplete).Actual!.ShouldContain(RequestedItemCodes.Invoice);
+        await _actions.Received(1).ExecuteAsync(
+            Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.RequestInformation && a.RequestedItems.Single().Item == RequestedItemCodes.Invoice),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// FR-010/FR-028 precedence (research R24): an escalation condition that can be determined without the missing
+    /// information wins over the request for information, and the AI analysis steps still do not run.
+    /// </summary>
+    [Theory]
+    [InlineData("value above limit")]
+    [InlineData("always-review category")]
+    [InlineData("intake risk signal")]
+    [InlineData("returned after reviewer request")]
+    [InlineData("two automatic requests made")]
+    public async Task Missing_items_with_an_escalation_condition_known_without_them_go_to_human_review(string condition)
+    {
+        _missingItems = true;
+        var (check, reason) = Arrange(condition);
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        _log.ShouldBe(["intake", "risk:intake"], "no Evidence, Policy or Decision step runs");
+        _gateway.ReceivedCalls().ShouldBeEmpty();
+        _store.Committed<Recommendation>().ShouldBeEmpty();
+        _store.Committed<RiskAssessment>().ShouldHaveSingleItem().Stage.ShouldBe(RiskAssessmentStage.Intake);
+
+        var run = _store.Runs.ShouldHaveSingleItem();
+        run.Disposition.ShouldBe(Disposition.HumanReview);
+        var evaluation = _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem();
+        evaluation.Reasons.ShouldBe([reason]);
+        evaluation.Checks.Where(c => !c.Passed).Select(c => c.Code).ShouldBe([GuardrailCheckCode.RequiredInfoComplete, check], ignoreOrder: true);
+        evaluation.ApprovedActionJson!.ShouldContain("EscalateToReview");
+        await _actions.Received(1).ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.EscalateToReview), Arg.Any<CancellationToken>());
+        await _actions.DidNotReceive().ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.RequestInformation), Arg.Any<CancellationToken>());
+
+        (GuardrailCheckCode Check, EscalationReason Reason) Arrange(string name)
+        {
+            switch (name)
+            {
+                case "value above limit":
+                    _settings = TenantSettings.Create(Aurora, "USD", 400m, 80);
+                    return (GuardrailCheckCode.ClaimValueWithinLimit, EscalationReason.ValueAboveLimit);
+                case "always-review category":
+                    _settings = TenantSettings.Create(Aurora, "USD", 500m, 80, alwaysReviewCategories: ["tablet"]);
+                    return (GuardrailCheckCode.CategoryNotAlwaysReview, EscalationReason.AlwaysReviewCategory);
+                case "intake risk signal":
+                    _intakeSignals = [DuplicateSerial];
+                    return (GuardrailCheckCode.RiskLow, EscalationReason.RiskMedium);
+                case "returned after reviewer request":
+                    _reviewerInfoRequested = true;
+                    return (GuardrailCheckCode.NotReturnedFromReview, EscalationReason.ReturnedAfterReviewerRequest);
+                case "two automatic requests made":
+                    _autoInfoRequestCount = GuardrailEngine.MaxAutomaticInformationRequests;
+                    return (GuardrailCheckCode.AutoInfoRequestsWithinLimit, EscalationReason.InfoIncompleteAfterTwoRequests);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(name), name, null);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_short_circuited_run_resumes_at_the_intake_risk_step_without_running_intake_again()
+    {
+        _missingItems = true;
+        _intakeRiskFailures = 1;
+
+        await Should.ThrowAsync<TimeoutException>(() => Runner().RunAsync(ClaimId, 1, Ct));
+        _store.Runs.ShouldHaveSingleItem().CurrentStep.ShouldBe(RunStep.Risk);
+        _store.Rollback();
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        _log.ShouldBe(["intake", "risk:intake!", "risk:intake"]);
+        _store.Runs.Single().Disposition.ShouldBe(Disposition.RequestInformation);
+        _store.Committed<IntakeResult>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task A_short_circuited_run_resumed_at_the_guardrails_reads_its_intake_risk_back()
+    {
+        _missingItems = true;
+        _intakeSignals = [DuplicateSerial];
+        _settingsFailures = 1;
+
+        await Should.ThrowAsync<TimeoutException>(() => Runner().RunAsync(ClaimId, 1, Ct));
+        _store.Runs.ShouldHaveSingleItem().CurrentStep.ShouldBe(RunStep.Guardrails);
+        _store.Rollback();
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        _log.ShouldBe(["intake", "risk:intake"], "neither intake nor the intake risk runs again");
+        _store.Committed<RiskAssessment>().ShouldHaveSingleItem();
+        var evaluation = _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem();
+        evaluation.Disposition.ShouldBe(Disposition.HumanReview);
+        evaluation.Reasons.ShouldBe([EscalationReason.RiskMedium]);
+    }
+
     [Fact]
     public async Task A_failed_decision_routes_the_claim_to_human_review_with_the_failure_recorded()
     {
@@ -324,17 +451,34 @@ public sealed class AdjudicationRunnerTests
         AiStepFailure.Parse("not a failure line").ShouldBeEmpty();
     }
 
+    private static readonly RiskSignal DuplicateSerial = new(
+        RiskSignalCode.DuplicateSerialClaim, RiskSignalSource.Deterministic, RiskSeverity.Medium, "Another open claim for this serial.", []);
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private AdjudicationRunner Runner()
     {
         var tenant = new FakeTenantContext(Aurora);
         var cases = Substitute.For<ICaseKnowledgeProvider>();
-        cases.GetCaseContextAsync(ClaimId, 1, Arg.Any<CancellationToken>()).Returns(Case() with { Product = _caseProduct });
+        cases.GetCaseContextAsync(ClaimId, 1, Arg.Any<CancellationToken>()).Returns(Case() with
+        {
+            Product = _caseProduct,
+            ReviewerInfoRequested = _reviewerInfoRequested,
+            AutoInfoRequestCount = _autoInfoRequestCount,
+        });
         var claims = Substitute.For<IClaimRepository>();
         claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(_claim);
         var tenants = Substitute.For<ITenantRepository>();
-        tenants.GetCurrentSettingsAsync(Arg.Any<CancellationToken>()).Returns(TenantSettings.Create(Aurora, "USD", 500m, 80));
+        tenants.GetCurrentSettingsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            if (_settingsFailures > 0)
+            {
+                _settingsFailures--;
+                throw new TimeoutException("database timeout");
+            }
+
+            return _settings;
+        });
         var redactor = Substitute.For<IPiiRedactor>();
         redactor.Redact(Arg.Any<string>()).Returns(ci => new RedactionResult(ci.Arg<string>(), 0));
         var tools = new ToolInvoker(
@@ -347,7 +491,7 @@ public sealed class AdjudicationRunnerTests
                 new FakeAgent<EvidenceInput, EvidenceResult>(AgentNames.Evidence, Evidence),
                 new FakeAgent<PolicyInput, PolicyResult>(AgentNames.Policy, Policy),
                 new FakeAgent<DecisionInput, RecommendationResult>(AgentNames.Decision, Decision)),
-            new FakeRisk(this), new GuardrailEngine(), _actions, Substitute.For<IAiGateway>(), tools, _traces, redactor, TimeProvider.System);
+            new FakeRisk(this), new GuardrailEngine(), _actions, _gateway, tools, _traces, redactor, TimeProvider.System);
     }
 
     private AgentResult<IntakeResult> Intake(CaseContext input, AgentExecutionContext ctx)
@@ -457,8 +601,17 @@ public sealed class AdjudicationRunnerTests
     {
         public Task<RiskAssessment> AssessAtIntakeAsync(CaseContext @case, IntakeResult intake, CancellationToken ct)
         {
+            if (test._intakeRiskFailures > 0)
+            {
+                test._intakeRiskFailures--;
+                test._log.Add("risk:intake!");
+                throw new TimeoutException("database timeout");
+            }
+
             test._log.Add("risk:intake");
-            var assessment = RiskAssessment.Create(intake.RunId, Aurora, RiskAssessmentStage.Intake, 0, RiskLevel.Low, []);
+            var signals = test._intakeSignals;
+            var assessment = RiskAssessment.Create(
+                intake.RunId, Aurora, RiskAssessmentStage.Intake, signals.Count == 0 ? 0 : 25, signals.Count == 0 ? RiskLevel.Low : RiskLevel.Medium, signals);
             test._store.AddRiskAssessment(assessment);
             return Task.FromResult(assessment);
         }
