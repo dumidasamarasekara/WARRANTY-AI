@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "SCREEN_PHYSICAL_DAMAGE",
+    "component": "SCREEN",
+    "symptoms": [
+      "cracked screen glass after a drop",
+      "touch input no longer responds properly"
+    ],
+    "claimedCause": "ACCIDENTAL_DROP_OR_IMPACT",
+    "mentionsAccident": true,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The claimant dropped the tablet on a tiled floor; the screen glass cracked from the impact point and touch input no longer works properly."
+  },
+  "usage": {
+    "inputTokens": 1174,
+    "outputTokens": 121
+  }
+}

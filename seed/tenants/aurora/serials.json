@@ -20,7 +20,7 @@
   { "serialNumber": "AT10-24-0019", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-04", "reservedFor": "S23b" },
   { "serialNumber": "AT10-24-0020", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-04", "reservedFor": "S1-agent (claims-agent channel)" },
   { "serialNumber": "AT10-24-0021", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-11", "reservedFor": "US1 claimant access test" },
-  { "serialNumber": "AT10-24-0022", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-11" },
+  { "serialNumber": "AT10-24-0022", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-11", "reservedFor": "US2-reuse-across-tenants (Aurora claim with a photo from a Borealis claim)" },
   { "serialNumber": "AT10-24-0023", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-18" },
   { "serialNumber": "AT10-24-0024", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-18" },
   { "serialNumber": "AT10-24-0025", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-25" },

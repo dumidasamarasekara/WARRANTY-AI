@@ -1,0 +1,22 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "POWER_FAILURE",
+    "component": "MAINBOARD",
+    "symptoms": [
+      "does not power on",
+      "no reaction to the power button",
+      "no reaction when connected to the charger",
+      "screen stays black"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The tablet stopped turning on; the screen stays black and it reacts neither to the power button nor to the charger. The claimant reports no drop, impact or liquid contact."
+  },
+  "usage": {
+    "inputTokens": 1177,
+    "outputTokens": 137
+  }
+}

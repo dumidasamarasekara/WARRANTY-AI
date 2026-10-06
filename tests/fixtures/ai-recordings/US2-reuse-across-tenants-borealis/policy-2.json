@@ -1,0 +1,43 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-5",
+        "applies": true,
+        "effect": "GRANTS_COVERAGE",
+        "note": "A tablet that no longer powers on during normal use is a manufacturing defect covered by this clause."
+      },
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "24-month warranty period in all regions. warranty_lookup reports the claim date within standard coverage."
+      },
+      {
+        "ref": "POL-2",
+        "applies": false,
+        "effect": "DEFINES_PERIOD",
+        "note": "The battery period does not apply; the reported failure is not a battery fault."
+      },
+      {
+        "ref": "POL-3",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact reported or visible."
+      }
+    ],
+    "coverageAssessment": "COVERED",
+    "confidence": 92,
+    "relevantExclusions": [],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Covered: a spontaneous power failure is a manufacturing defect under POL-5, and the claim is within the 24-month warranty period of POL-1 as computed by warranty_lookup. The liquid-damage exclusion (POL-3) does not apply."
+  },
+  "usage": {
+    "inputTokens": 5204,
+    "outputTokens": 392
+  }
+}
