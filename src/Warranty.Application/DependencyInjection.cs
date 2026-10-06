@@ -21,6 +21,7 @@ public static class DependencyInjection
         // Use cases are registered here as they are implemented (user story phases).
         services.AddScoped<ICaseKnowledgeProvider, CaseKnowledgeProvider>();
         services.AddScoped<SubmitClaim>();
+        services.AddScoped<SupplementClaim>();
         services.AddScoped<ClaimantAccess>();
         services.AddScoped<ClaimQueries>();
         services.AddScoped<IActionExecutor, ActionExecutor>();
