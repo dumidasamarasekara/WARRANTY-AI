@@ -242,6 +242,15 @@ export interface paths {
                     };
                 };
                 401: components["responses"]["Problem"];
+                /** @description The caller's tenant is no longer active */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
             };
         };
         put?: never;
@@ -285,6 +294,7 @@ export interface paths {
                         "application/json": components["schemas"]["ClaimPage"];
                     };
                 };
+                400: components["responses"]["ValidationProblem"];
             };
         };
         put?: never;
@@ -316,6 +326,8 @@ export interface paths {
                 };
                 400: components["responses"]["ValidationProblem"];
                 403: components["responses"]["Problem"];
+                413: components["responses"]["Problem"];
+                415: components["responses"]["Problem"];
             };
         };
         delete?: never;
@@ -629,6 +641,7 @@ export interface paths {
                         "application/json": components["schemas"]["SecurityEventPage"];
                     };
                 };
+                400: components["responses"]["ValidationProblem"];
                 403: components["responses"]["Problem"];
             };
         };
@@ -786,7 +799,8 @@ export interface components {
             productName?: string;
             /** @description Present when Approved or Rejected: the AI's claimant explanation for automatic decisions, or the reviewer's claimantExplanation for reviewer decisions. Never the reviewer's justification. */
             outcomeExplanation?: string;
-            requestedItems?: components["schemas"]["RequestedItem"][];
+            /** @description What the claimant is asked to supply; empty unless Pending Information */
+            requestedItems: components["schemas"]["RequestedItem"][];
         };
         RequestedItem: {
             item: string;
@@ -817,6 +831,7 @@ export interface components {
             pageSize: number;
             total: number;
         };
+        /** @description Optional members are omitted from the JSON (never null) when absent or hidden from the caller's role. */
         ClaimDetail: {
             /** Format: uuid */
             claimId: string;
@@ -832,35 +847,39 @@ export interface components {
                 email?: string;
                 country?: string;
             };
+            /** @description name, category and claimValue only when the product is in the tenant's catalog */
             product: {
-                modelCode?: string;
-                serialNumber?: string;
+                modelCode: string;
+                serialNumber: string;
                 name?: string;
                 category?: string;
-                inCatalog?: boolean;
+                inCatalog: boolean;
                 claimValue?: number;
             };
             purchase: {
                 /** Format: date */
-                date?: string;
-                place?: string;
-                price?: number;
-                currency?: string;
+                date: string;
+                place: string;
+                price: number;
+                /** @description The tenant's currency (ISO 4217) */
+                currency: string;
             };
             problemDescription: string;
             evidence: components["schemas"]["EvidenceItem"][];
             latestEvaluation?: components["schemas"]["Evaluation"];
-            reviewDecisions?: components["schemas"]["ReviewDecision"][];
+            reviewDecisions: components["schemas"]["ReviewDecision"][];
             /** @enum {string} */
             finalOutcome?: "Approved" | "Rejected";
             /** @enum {string} */
             finalDecidedBy?: "System" | "Reviewer";
             /** @description Claimant-facing explanation shown for the final outcome */
             finalExplanation?: string;
+            /** @description Items requested from the claimant by the latest information request (FR-010, FR-029) */
+            requestedItems: components["schemas"]["RequestedItem"][];
             /** @description Automatic requests for more information made so far (limit 2, FR-010) */
-            autoInfoRequestCount?: number;
+            autoInfoRequestCount: number;
             /** @description A reviewer has requested more information; later rounds always return to review (FR-034) */
-            reviewerInfoRequested?: boolean;
+            reviewerInfoRequested: boolean;
         };
         EvidenceItem: {
             /** Format: uuid */
@@ -879,77 +898,115 @@ export interface components {
             round: number;
             /** @enum {string} */
             status: "Running" | "Completed" | "Failed";
-            validation?: components["schemas"]["CheckResult"][];
+            validation: components["schemas"]["CheckResult"][];
             /** @description intake-extraction.schema.json */
-            extraction?: Record<string, never>;
-            evidenceFindings?: {
-                ref?: string;
-                /** @enum {string} */
-                kind?: "InvoiceExtraction" | "PhotoAnalysis";
-                result?: Record<string, never>;
-                consistency?: {
-                    field?: string;
-                    claimValue?: string;
-                    evidenceValue?: string;
-                    match?: boolean;
-                }[];
-            }[];
-            policyReferences?: components["schemas"]["PolicyReference"][];
-            /** @description policy-assessment.schema.json */
-            policyAssessment?: Record<string, never>;
+            extraction?: {
+                [key: string]: unknown;
+            };
+            evidenceFindings: components["schemas"]["EvidenceFinding"][];
+            policyReferences: components["schemas"]["PolicyReference"][];
+            policyAssessment?: components["schemas"]["PolicyAssessment"];
+            /** @description Omitted for role claims-agent (FR-005) */
             risk?: {
-                score?: number;
+                score: number;
                 /** @enum {string} */
-                level?: "Low" | "Medium" | "High";
-                signals?: {
-                    code?: string;
+                level: "Low" | "Medium" | "High";
+                /**
+                 * @description Intake = signals available before evidence analysis (intake short-circuit)
+                 * @enum {string}
+                 */
+                stage: "Intake" | "Full";
+                signals: {
+                    /** @description Risk signal code, e.g. SOURCE_INCONSISTENCY, DUPLICATE_SERIAL_CLAIM */
+                    code: string;
                     /** @enum {string} */
-                    source?: "Deterministic" | "AI";
-                    severity?: string;
-                    detail?: string;
+                    source: "Deterministic" | "AI";
+                    /** @enum {string} */
+                    severity: "Low" | "Medium" | "High";
+                    detail: string;
                 }[];
             };
             recommendation?: components["schemas"]["Recommendation"];
             guardrails?: {
-                disposition?: components["schemas"]["Disposition"];
-                reasons?: string[];
+                disposition: components["schemas"]["Disposition"];
+                reasons: string[];
+                /** @description Omitted for role claims-agent (FR-005) */
                 checks?: components["schemas"]["CheckResult"][];
             };
             failureReason?: string;
+        };
+        EvidenceFinding: {
+            /** @description EV-n reference used in the evaluation */
+            ref?: string;
+            /** Format: uuid */
+            evidenceId: string;
+            /** @enum {string} */
+            kind: "InvoiceExtraction" | "PhotoAnalysis";
+            /** @description invoice-extraction.schema.json or photo-analysis.schema.json */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            consistency: components["schemas"]["ConsistencyCheck"][];
+            /** @description The Evidence agent's confidence (photo analysis only) */
+            confidence?: number;
+        };
+        /** @description Deterministic cross-check of one field between the claim and a piece of evidence (FR-016) */
+        ConsistencyCheck: {
+            field: string;
+            claimValue: string | null;
+            evidenceValue: string | null;
+            match: boolean;
+        };
+        /** @description The Policy agent's reading, the deterministic policy-version selection outcome and the agent's confidence */
+        PolicyAssessment: {
+            /** @enum {string} */
+            versionOutcome: "Ok" | "NoApplicablePolicy" | "AmbiguousPolicyVersion";
+            /** @description policy-assessment.schema.json */
+            assessment: {
+                [key: string]: unknown;
+            } | null;
+            /** @description The Policy agent's confidence in its coverage assessment */
+            confidence?: number;
+            model: string;
+            promptVersion: string;
         };
         PolicyReference: {
             ref: string;
             clauseKey: string;
             clauseTitle?: string;
+            /** @enum {string} */
+            clauseType: "Coverage" | "Period" | "Exclusion" | "ServiceRule" | "Definition";
             documentTitle: string;
             version: number;
             /** Format: date */
             effectiveFrom: string;
             /** Format: date */
-            effectiveTo?: string | null;
+            effectiveTo: string | null;
             excerpt?: string;
-            cited?: boolean;
+            cited: boolean;
         };
+        /** @description An invalid recommendation may lack decision, coverage and confidence. reasoningSummary is omitted for role claims-agent (FR-005); empty texts are omitted. */
         Recommendation: {
             isValid: boolean;
-            validationErrors?: string[];
-            decision: components["schemas"]["AiDecision"];
+            validationErrors: string[];
+            decision?: components["schemas"]["AiDecision"];
             /** @enum {string} */
-            coverage: "COVERED" | "NOT_COVERED" | "UNDETERMINED";
-            confidence: number;
-            reasoningSummary: string;
+            coverage?: "COVERED" | "NOT_COVERED" | "UNDETERMINED";
+            confidence?: number;
+            reasoningSummary?: string;
             claimantExplanation?: string;
-            evidenceRefs?: {
-                ref?: string;
-                observation?: string;
+            evidenceRefs: {
+                ref: string;
+                observation: string;
             }[];
-            policyRefs?: {
-                ref?: string;
-                relevance?: string;
+            policyRefs: {
+                ref: string;
+                /** @enum {string} */
+                relevance: "SUPPORTS_COVERAGE" | "SUPPORTS_REJECTION" | "DEFINES_PERIOD" | "CONTEXT";
             }[];
-            missingInformation?: components["schemas"]["RequestedItem"][];
-            model?: string;
-            promptVersion?: string;
+            missingInformation: components["schemas"]["RequestedItem"][];
+            model: string;
+            promptVersion: string;
         };
         CheckResult: {
             code: string;
@@ -972,7 +1029,7 @@ export interface components {
             /** Format: date-time */
             escalatedAt: string;
             /** @description The caller submitted this claim and may not decide it (separation of duties) */
-            submittedByMe?: boolean;
+            submittedByMe: boolean;
             /** @description Readable labels of the guardrail reason codes (data-model.md), e.g. "returned after reviewer information request" */
             escalationReasons: string[];
         };
@@ -992,7 +1049,7 @@ export interface components {
             decision: "Approve" | "Reject" | "RequestInformation";
             justification?: string;
             claimantExplanation?: string;
-            requestedItems?: components["schemas"]["RequestedItem"][];
+            requestedItems: components["schemas"]["RequestedItem"][];
             /** @description True only when the decision differs from a valid APPROVE/REJECT recommendation (FR-035) */
             overridesAi: boolean;
             reviewerName: string;
@@ -1007,6 +1064,7 @@ export interface components {
             };
             entries: components["schemas"]["TraceEntry"][];
         };
+        /** @description aiCalls, toolCalls and ragQueries are omitted when the step made none. */
         TraceEntry: {
             seq: number;
             /** Format: date-time */
@@ -1016,45 +1074,52 @@ export interface components {
             actor: string;
             summary: string;
             correlationId?: string;
-            details?: Record<string, never>;
+            details?: {
+                [key: string]: unknown;
+            };
             aiCalls?: components["schemas"]["AiCallSummary"][];
             toolCalls?: {
-                tool?: string;
-                allowed?: boolean;
-                latencyMs?: number;
+                agent: string;
+                tool: string;
+                allowed: boolean;
+                latencyMs: number;
+                /** @description The stored redacted result or the denial reason */
                 summary?: string;
             }[];
             ragQueries?: {
-                namespaces?: string[];
-                filters?: Record<string, never>;
-                resultClauseKeys?: string[];
-                latencyMs?: number;
+                agent: string;
+                namespaces: string[];
+                filters: {
+                    [key: string]: unknown;
+                };
+                resultClauseKeys: string[];
+                latencyMs: number;
             }[];
         };
         AiCallSummary: {
-            agent?: string;
-            route?: string;
-            provider?: string;
-            model?: string;
+            agent: string;
+            route: string;
+            provider: string;
+            model: string;
             promptVersion?: string;
-            inputTokens?: number;
-            outputTokens?: number;
-            cacheReadTokens?: number;
-            latencyMs?: number;
-            estimatedCost?: number;
+            inputTokens: number;
+            outputTokens: number;
+            cacheReadTokens: number;
+            latencyMs: number;
+            estimatedCost: number;
             /** @enum {string} */
-            status?: "Ok" | "Invalid" | "Refused" | "Error" | "Timeout";
-            attempt?: number;
+            status: "Ok" | "Invalid" | "Refused" | "Error" | "Timeout";
+            attempt: number;
         };
         PolicyVersionSummary: {
-            policyCode?: string;
-            title?: string;
-            version?: number;
+            policyCode: string;
+            title: string;
+            version: number;
             /** Format: date */
-            effectiveFrom?: string;
+            effectiveFrom: string;
             /** Format: date */
-            effectiveTo?: string | null;
-            regions?: components["schemas"]["Region"][];
+            effectiveTo: string | null;
+            regions: components["schemas"]["Region"][];
         };
         ProblemDetails: {
             type?: string;

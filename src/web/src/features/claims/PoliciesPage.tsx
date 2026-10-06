@@ -70,7 +70,6 @@ export function PoliciesPage({ today = isoToday() }: { today?: string }) {
   const policies = useQuery({
     queryKey: ['policies'],
     queryFn: ({ signal }) => unwrap(api.GET('/api/policies', { signal })),
-    select: (versions) => versions as PolicyVersionSummary[],
   })
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 

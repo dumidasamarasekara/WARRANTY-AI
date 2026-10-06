@@ -98,7 +98,7 @@ public sealed class ClaimQueryEndpointTests(WarrantyAppFixture fixture)
 
             response.StatusCode.ShouldBe(HttpStatusCode.OK, kind);
             response.Content.Headers.ContentType?.MediaType.ShouldBe(file.ContentType, kind);
-            (await response.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(await StoredBytesAsync(file, Ct), kind); // photos are stored sanitized (T110)
+            (await response.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(file.Bytes, kind);
 
             // The endpoint's own caching headers survive the API-wide security headers (T111).
             response.Headers.CacheControl!.NoStore.ShouldBeTrue(kind);

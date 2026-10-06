@@ -44,8 +44,10 @@ const verifiedTrace: DecisionTrace = {
       step: 'PolicyRetrieved',
       actor: 'policy',
       summary: 'Retrieved the policy version in force on the purchase date',
-      ragQueries: [{ namespaces: ['tenant-aurora/policies'], filters: regionFilter, resultClauseKeys: ['AUR-WP-2.1', 'AUR-WP-4.3'], latencyMs: 84 }],
-      toolCalls: [{ tool: 'get_policy_version', allowed: true, latencyMs: 12, summary: 'Aurora Limited Warranty v2' }],
+      ragQueries: [
+        { agent: 'policy', namespaces: ['tenant-aurora/policies'], filters: regionFilter, resultClauseKeys: ['AUR-WP-2.1', 'AUR-WP-4.3'], latencyMs: 84 },
+      ],
+      toolCalls: [{ agent: 'policy', tool: 'get_policy_version', allowed: true, latencyMs: 12, summary: 'Aurora Limited Warranty v2' }],
     },
     {
       seq: 3,
@@ -56,6 +58,8 @@ const verifiedTrace: DecisionTrace = {
       aiCalls: [
         {
           agent: 'decision',
+          route: 'decision',
+          provider: 'anthropic',
           model: 'claude-decision',
           promptVersion: 'decision@4',
           inputTokens: 4210,
@@ -88,6 +92,7 @@ const detail: ClaimDetail = {
   problemDescription: 'The tablet stopped charging.',
   evidence: [],
   reviewDecisions: [],
+  requestedItems: [],
   autoInfoRequestCount: 0,
   reviewerInfoRequested: false,
 }

@@ -4,60 +4,23 @@ import { api, unwrap, type Schemas } from '../../shared/api/client'
 import type { Actor } from '../../shared/ui'
 
 /*
- * `GET /api/claims/{claimId}` returns more than the generated contract types describe (T085): the
- * Policy and Evidence agents' confidence, the policy assessment envelope, `clauseType` and the
- * claim's requested items. Members a role may not see are simply absent (FR-005), and an invalid
- * recommendation may lack its decision, coverage and confidence.
+ * `GET /api/claims/{claimId}` per the contract's `ClaimDetail`. Members a role may not see are simply
+ * absent (FR-005), and an invalid recommendation may lack its decision, coverage and confidence.
  */
 
-export interface ConsistencyRow {
-  field: string
-  claimValue?: string | null
-  evidenceValue?: string | null
-  match: boolean
-}
+export type ConsistencyRow = Schemas['ConsistencyCheck']
 
-export interface EvidenceFinding {
-  ref?: string
-  evidenceId?: string
-  kind: 'InvoiceExtraction' | 'PhotoAnalysis'
-  /** invoice-extraction.schema.json or photo-analysis.schema.json */
-  result?: Record<string, unknown> | null
-  consistency?: ConsistencyRow[]
-  /** The Evidence agent's confidence (photo analysis only). */
-  confidence?: number
-}
+export type EvidenceFinding = Schemas['EvidenceFinding']
 
-export interface PolicyAssessment {
-  versionOutcome?: 'Ok' | 'NoApplicablePolicy' | 'AmbiguousPolicyVersion'
-  /** policy-assessment.schema.json */
-  assessment?: Record<string, unknown> | null
-  /** The Policy agent's confidence in its coverage assessment. */
-  confidence?: number
-  model?: string
-  promptVersion?: string
-}
+export type PolicyAssessment = Schemas['PolicyAssessment']
 
-export type PolicyReference = Schemas['PolicyReference'] & { clauseType?: string }
+export type PolicyReference = Schemas['PolicyReference']
 
-export type Recommendation = Omit<Schemas['Recommendation'], 'decision' | 'coverage' | 'confidence' | 'reasoningSummary'> &
-  Partial<Pick<Schemas['Recommendation'], 'decision' | 'coverage' | 'confidence' | 'reasoningSummary'>>
+export type Recommendation = Schemas['Recommendation']
 
-export type ClaimEvaluation = Omit<
-  Schemas['Evaluation'],
-  'evidenceFindings' | 'policyAssessment' | 'policyReferences' | 'recommendation' | 'extraction'
-> & {
-  extraction?: Record<string, unknown> | null
-  evidenceFindings?: EvidenceFinding[]
-  policyAssessment?: PolicyAssessment
-  policyReferences?: PolicyReference[]
-  recommendation?: Recommendation
-}
+export type ClaimEvaluation = Schemas['Evaluation']
 
-export type ClaimDetail = Omit<Schemas['ClaimDetail'], 'latestEvaluation'> & {
-  latestEvaluation?: ClaimEvaluation
-  requestedItems?: Schemas['RequestedItem'][]
-}
+export type ClaimDetail = Schemas['ClaimDetail']
 
 export type EvidenceItem = Schemas['EvidenceItem']
 
@@ -67,8 +30,7 @@ export const claimQueryKey = (claimId: string) => ['claims', claimId] as const
 export function useClaimDetail(claimId: string) {
   return useQuery({
     queryKey: claimQueryKey(claimId),
-    queryFn: async ({ signal }) =>
-      (await unwrap(api.GET('/api/claims/{claimId}', { params: { path: { claimId } }, signal }))) as unknown as ClaimDetail,
+    queryFn: ({ signal }) => unwrap(api.GET('/api/claims/{claimId}', { params: { path: { claimId } }, signal })),
   })
 }
 

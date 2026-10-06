@@ -85,7 +85,7 @@ const reviewerView: ClaimDetail = {
       },
     ],
     policyAssessment: { versionOutcome: 'Ok', assessment: { coverageAssessment: 'COVERED' }, confidence: 91, model: 'claude-policy', promptVersion: 'policy@3' },
-    risk: { score: 57, level: 'Medium', signals: [{ code: 'HIGH_VALUE_CLAIM', source: 'Deterministic', severity: 'Medium', detail: 'Claim value above typical range' }] },
+    risk: { score: 57, level: 'Medium', stage: 'Full', signals: [{ code: 'HIGH_VALUE_CLAIM', source: 'Deterministic', severity: 'Medium', detail: 'Claim value above typical range' }] },
     recommendation: {
       isValid: true,
       validationErrors: [],
@@ -110,6 +110,7 @@ const reviewerView: ClaimDetail = {
     },
   },
   reviewDecisions: [],
+  requestedItems: [],
   autoInfoRequestCount: 0,
   reviewerInfoRequested: false,
 }
@@ -204,7 +205,7 @@ describe('progress strip', () => {
     const running: ClaimDetail = {
       ...reviewerView,
       status: 'UnderEvaluation',
-      latestEvaluation: { runId: 'r', round: 1, status: 'Running', validation: [{ code: 'REQUIRED_FIELDS', passed: true }] },
+      latestEvaluation: { runId: 'r', round: 1, status: 'Running', validation: [{ code: 'REQUIRED_FIELDS', passed: true }], evidenceFindings: [], policyReferences: [] },
     }
     const steps = progressSteps(running)
     expect(steps.map((step) => step.state)).toEqual(['done', 'done', 'current', 'pending', 'pending', 'pending', 'pending', 'pending'])

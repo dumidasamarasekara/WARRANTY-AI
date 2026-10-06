@@ -3,15 +3,12 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
-using SkiaSharp;
-using Warranty.Application.Abstractions.Storage;
-using Warranty.Infrastructure.Storage;
 
 namespace Warranty.IntegrationTests.Claims;
 
 /// <summary>
-/// Claim submissions made of synthetic data: a fresh serial and freshly generated evidence (a PDF with a
-/// random body, photos of random pixels, so unique hashes), so no claim built here raises a
+/// Claim submissions made of synthetic data: a fresh serial and freshly generated evidence bytes behind
+/// real file signatures (random bodies, so unique hashes), so no claim built here raises a
 /// duplicate-serial or evidence-reuse signal in another test's adjudication.
 /// </summary>
 internal static class SyntheticClaims
@@ -70,33 +67,9 @@ internal static class SyntheticClaims
 
     public static EvidenceFile Pdf() => new("invoice.pdf", [.. "%PDF-1.4\n"u8, .. RandomNumberGenerator.GetBytes(256)], "application/pdf");
 
-    public static EvidenceFile Jpeg() => new("photo-1.jpg", NoiseImage(SKEncodedImageFormat.Jpeg), "image/jpeg");
+    public static EvidenceFile Jpeg() => new("photo-1.jpg", [0xFF, 0xD8, 0xFF, 0xE0, .. RandomNumberGenerator.GetBytes(256)], "image/jpeg");
 
-    public static EvidenceFile Png() => new("photo-2.png", NoiseImage(SKEncodedImageFormat.Png), "image/png");
-
-    /// <summary>The bytes the API stores for <paramref name="file"/>: the output of upload sanitizing (T110).</summary>
-    public static async Task<byte[]> StoredBytesAsync(EvidenceFile file, CancellationToken ct)
-    {
-        var result = await new UploadSanitizer().SanitizeAsync(new MemoryStream(file.Bytes, writable: false), ct);
-        return result is UploadSanitizerResult.Sanitized clean
-            ? clean.Content.ToArray()
-            : throw new InvalidOperationException($"{file.Name} would be rejected: {((UploadSanitizerResult.Rejected)result).Reason}");
-    }
-
-    /// <summary>A small decodable image of random pixels: it passes upload sanitizing (T110) and its sanitized bytes are unique.</summary>
-    private static byte[] NoiseImage(SKEncodedImageFormat format)
-    {
-        const int size = 16;
-        using var bitmap = new SKBitmap(size, size, SKColorType.Rgba8888, SKAlphaType.Opaque);
-        var noise = RandomNumberGenerator.GetBytes(size * size * 3);
-        for (var i = 0; i < size * size; i++)
-        {
-            bitmap.SetPixel(i % size, i / size, new SKColor(noise[i * 3], noise[(i * 3) + 1], noise[(i * 3) + 2]));
-        }
-
-        using var data = bitmap.Encode(format, 95);
-        return data.ToArray();
-    }
+    public static EvidenceFile Png() => new("photo-2.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. RandomNumberGenerator.GetBytes(256)], "image/png");
 }
 
 /// <summary>An evidence file part with its declared content type.</summary>

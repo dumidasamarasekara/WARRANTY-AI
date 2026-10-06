@@ -35,13 +35,11 @@ public sealed class SubmitClaimTests : IDisposable
     private readonly ICatalogRepository _catalog = Substitute.For<ICatalogRepository>();
     private readonly IClaimRepository _claims = Substitute.For<IClaimRepository>();
     private readonly IDocumentStore _documents = Substitute.For<IDocumentStore>();
-    private readonly IUploadSanitizer _sanitizer = Substitute.For<IUploadSanitizer>();
     private readonly IJobQueue _jobs = Substitute.For<IJobQueue>();
     private readonly IDecisionTrailWriter _trail = Substitute.For<IDecisionTrailWriter>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly FakeTimeProvider _time = new(Now);
     private readonly List<string> _events = [];
-    private readonly List<byte[]> _uploaded = [];
     private TenantContextScope _tenant = TenantContextScope.Begin(TenantId, "aurora", "claimant", "corr-1");
     private Claim? _added;
     private ClaimJob? _job;
@@ -59,26 +57,16 @@ public sealed class SubmitClaimTests : IDisposable
         _documents.UploadEvidenceAsync(default!, default!, default!, default).ReturnsForAnyArgs(ci =>
         {
             _events.Add("upload");
-            using var copy = new MemoryStream();
-            ci.ArgAt<Stream>(1).CopyTo(copy);
-            _uploaded.Add(copy.ToArray());
-            return new StoredDocument(ci.ArgAt<string>(0), new string('a', 64), copy.Length);
-        });
-
-        // By default the sanitizer passes the content through, typed by its magic bytes.
-        _sanitizer.SanitizeAsync(default!, default).ReturnsForAnyArgs(ci =>
-        {
-            if (ci.ArgAt<Stream?>(0) is not { } content)
+            var stream = ci.ArgAt<Stream>(1);
+            var length = 0L;
+            var buffer = new byte[4096];
+            int n;
+            while ((n = stream.Read(buffer)) > 0)
             {
-                return Task.FromResult<UploadSanitizerResult>(null!); // a test is configuring a more specific call
+                length += n;
             }
 
-            _events.Add("sanitize");
-            using var copy = new MemoryStream();
-            content.CopyTo(copy);
-            var bytes = copy.ToArray();
-            var type = EvidenceFileSignature.Detect(bytes);
-            return Task.FromResult<UploadSanitizerResult>(new UploadSanitizerResult.Sanitized(type, EvidenceFileSignature.ContentTypeOf(type)!, bytes));
+            return new StoredDocument(ci.ArgAt<string>(0), new string('a', 64), length);
         });
         _unitOfWork.ExecuteInTransactionAsync(default!, default).ReturnsForAnyArgs(async ci =>
         {
@@ -145,7 +133,7 @@ public sealed class SubmitClaimTests : IDisposable
 
         _events.ShouldBe(
         [
-            "sanitize", "sanitize", "upload", "upload", "begin", "save",
+            "upload", "upload", "begin", "save",
             "trail:ClaimSubmitted", "trail:TenantResolved", "trail:EvidenceStored", "commit",
         ]);
         await _trail.Received(1).AppendAsync(claim.Id, TrailStep.ClaimSubmitted, "claimant", Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>());
@@ -277,42 +265,6 @@ public sealed class SubmitClaimTests : IDisposable
     }
 
     [Fact]
-    public async Task Only_the_sanitized_bytes_are_stored_and_hashed()
-    {
-        byte[] clean = [0xFF, 0xD8, 0xFF, 0xDB, 0x01, 0x02, 0x03];
-        _sanitizer.SanitizeAsync(Arg.Is<Stream>(s => s.Length == JpegBytes.Length), Arg.Any<CancellationToken>())
-            .Returns(new UploadSanitizerResult.Sanitized(EvidenceFileType.Jpeg, "image/jpeg", clean));
-
-        (await Submit(Command(ValidData()))).ShouldBeOfType<SubmitClaimResult.Accepted>();
-
-        _uploaded.ShouldContain(bytes => bytes.SequenceEqual(clean));
-        _uploaded.ShouldNotContain(bytes => bytes.SequenceEqual(JpegBytes));
-        _claims.Received(1).AddEvidence(Arg.Is<ClaimEvidence>(e => e.Kind == EvidenceKind.Photo && e.SizeBytes == clean.Length));
-    }
-
-    [Fact]
-    public async Task A_file_the_sanitizer_rejects_is_a_field_error_and_nothing_is_created()
-    {
-        _sanitizer.SanitizeAsync(Arg.Is<Stream>(s => s.Length == PdfBytes.Length), Arg.Any<CancellationToken>())
-            .Returns(new UploadSanitizerResult.Rejected(EvidenceFileType.Pdf, "the PDF contains JavaScript."));
-
-        var invalid = (await Submit(Command(ValidData()))).ShouldBeOfType<SubmitClaimResult.Invalid>();
-
-        invalid.Errors.Keys.ShouldBe(["invoice"]);
-        invalid.Errors["invoice"].ShouldHaveSingleItem().ShouldBe("invoice.pdf can't be used: the PDF contains JavaScript.");
-        await NothingWasCreatedAsync();
-    }
-
-    [Fact]
-    public async Task Files_with_size_or_type_errors_are_not_sent_to_the_sanitizer()
-    {
-        (await Submit(Command(ValidData(), invoices: [File("invoice.pdf", TextBytes)], photos: [File("empty.jpg", [])])))
-            .ShouldBeOfType<SubmitClaimResult.Invalid>();
-
-        await _sanitizer.DidNotReceive().SanitizeAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task A_heic_photo_is_unsupported_media_asking_for_jpeg_or_png()
     {
         var result = await Submit(Command(ValidData(), photos: [File("IMG_0001.jpg", HeicBytes)]));
@@ -385,7 +337,7 @@ public sealed class SubmitClaimTests : IDisposable
     };
 
     private Task<SubmitClaimResult> Submit(SubmitClaimCommand command)
-        => new SubmitClaim(_tenant, _crm, _catalog, _claims, _documents, _sanitizer, _jobs, _trail, _unitOfWork, _time)
+        => new SubmitClaim(_tenant, _crm, _catalog, _claims, _documents, _jobs, _trail, _unitOfWork, _time)
             .ExecuteAsync(command, TestContext.Current.CancellationToken);
 
     private async Task NothingWasCreatedAsync()

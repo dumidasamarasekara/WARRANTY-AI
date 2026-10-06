@@ -29,7 +29,6 @@ public sealed class SupplementClaimTests : IDisposable
 
     private readonly IClaimRepository _claims = Substitute.For<IClaimRepository>();
     private readonly IDocumentStore _documents = Substitute.For<IDocumentStore>();
-    private readonly IUploadSanitizer _sanitizer = Substitute.For<IUploadSanitizer>();
     private readonly IJobQueue _jobs = Substitute.For<IJobQueue>();
     private readonly IDecisionTrailWriter _trail = Substitute.For<IDecisionTrailWriter>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
@@ -43,20 +42,6 @@ public sealed class SupplementClaimTests : IDisposable
 
     public SupplementClaimTests()
     {
-        // By default the sanitizer passes the content through, typed by its magic bytes.
-        _sanitizer.SanitizeAsync(default!, default).ReturnsForAnyArgs(ci =>
-        {
-            if (ci.ArgAt<Stream?>(0) is not { } content)
-            {
-                return Task.FromResult<UploadSanitizerResult>(null!); // a test is configuring a more specific call
-            }
-
-            using var copy = new MemoryStream();
-            content.CopyTo(copy);
-            var bytes = copy.ToArray();
-            var type = EvidenceFileSignature.Detect(bytes);
-            return Task.FromResult<UploadSanitizerResult>(new UploadSanitizerResult.Sanitized(type, EvidenceFileSignature.ContentTypeOf(type)!, bytes));
-        });
         _documents.UploadEvidenceAsync(default!, default!, default!, default).ReturnsForAnyArgs(ci =>
         {
             _events.Add("upload");
@@ -277,37 +262,8 @@ public sealed class SupplementClaimTests : IDisposable
         result.ShouldBeOfType<SupplementClaimResult.Conflict>().Detail.ShouldBe(SupplementClaim.ConcurrentChangeDetail);
     }
 
-    [Fact]
-    public async Task Supplement_files_go_through_the_upload_sanitizer_and_a_rejected_file_stores_nothing()
-    {
-        var claim = PendingClaim();
-        _sanitizer.SanitizeAsync(Arg.Is<Stream>(s => s.Length == PdfBytes.Length), Arg.Any<CancellationToken>())
-            .Returns(new UploadSanitizerResult.Rejected(EvidenceFileType.Pdf, "the PDF is password-protected or encrypted."));
-
-        var result = await Supplement(Command(claim, invoices: [File("invoice.pdf", PdfBytes)], photos: [File("label.jpg", JpegBytes)]));
-
-        var invalid = result.ShouldBeOfType<SupplementClaimResult.Invalid>();
-        invalid.Errors.Keys.ShouldBe(["invoice"]);
-        invalid.Errors["invoice"].ShouldHaveSingleItem().ShouldBe("invoice.pdf can't be used: the PDF is password-protected or encrypted.");
-        await _sanitizer.Received(2).SanitizeAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>());
-        await NothingWasStoredAsync();
-    }
-
-    [Fact]
-    public async Task Only_the_sanitized_bytes_of_a_supplement_are_stored()
-    {
-        var claim = PendingClaim();
-        byte[] clean = [0xFF, 0xD8, 0xFF, 0xDB, 0x01];
-        _sanitizer.SanitizeAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>())
-            .Returns(new UploadSanitizerResult.Sanitized(EvidenceFileType.Jpeg, "image/jpeg", clean));
-
-        (await Supplement(Command(claim, photos: [File("label.jpg", JpegBytes)]))).ShouldBeOfType<SupplementClaimResult.Accepted>();
-
-        _claims.Received(1).AddEvidence(Arg.Is<ClaimEvidence>(e => e.Kind == EvidenceKind.Photo && e.SizeBytes == clean.Length && e.ContentType == "image/jpeg"));
-    }
-
     private Task<SupplementClaimResult> Supplement(SupplementClaimCommand command)
-        => new SupplementClaim(_tenant, _claims, _documents, _sanitizer, _jobs, _trail, _unitOfWork, _time)
+        => new SupplementClaim(_tenant, _claims, _documents, _jobs, _trail, _unitOfWork, _time)
             .ExecuteAsync(command, TestContext.Current.CancellationToken);
 
     private JsonElement Payload() => JsonSerializer.SerializeToElement(_trailPayload.ShouldNotBeNull());

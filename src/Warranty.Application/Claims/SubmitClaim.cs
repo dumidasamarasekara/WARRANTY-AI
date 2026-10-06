@@ -69,7 +69,7 @@ public abstract record SubmitClaimResult
 
 /// <summary>
 /// Submits a claim (FR-007, FR-009, research R10–R12): validates the claim data and the files
-/// (content judged by magic bytes, then cleaned by <see cref="IUploadSanitizer"/>), finds or creates the customer through the CRM, resolves the
+/// (content judged by magic bytes), finds or creates the customer through the CRM, resolves the
 /// product from the tenant's catalog, derives the region, generates a random reference, stores the
 /// evidence for round 1, and saves the claim, its evidence and its adjudication job in one
 /// transaction together with the trail entries <c>ClaimSubmitted</c>, <c>TenantResolved</c> and
@@ -83,7 +83,6 @@ public sealed partial class SubmitClaim(
     ICatalogRepository catalog,
     IClaimRepository claims,
     IDocumentStore documents,
-    IUploadSanitizer sanitizer,
     IJobQueue jobs,
     IDecisionTrailWriter trail,
     IUnitOfWork unitOfWork,
@@ -116,7 +115,6 @@ public sealed partial class SubmitClaim(
 
         var errors = Validate(command.Claim, claimDate);
         AddFileErrors(errors, command, files);
-        var sanitized = await EvidenceUploads.SanitizeAsync(sanitizer, errors, files, ct);
         if (errors.Count > 0)
         {
             return new SubmitClaimResult.Invalid(errors.ToDictionary(e => e.Key, e => e.Value.ToArray(), StringComparer.Ordinal));
@@ -137,8 +135,8 @@ public sealed partial class SubmitClaim(
             claimId, tenant.TenantId, reference, command.Channel, submittedBy, customer.Id, data.Email, data.Phone,
             data.ModelCode, product?.Id, data.SerialNumber, data.PurchaseDate, data.Place, data.Price, region, data.ProblemDescription, now);
 
-        var evidence = new List<ClaimEvidence>(sanitized.Count);
-        foreach (var file in sanitized)
+        var evidence = new List<ClaimEvidence>(files.Count);
+        foreach (var file in files)
         {
             evidence.Add(await EvidenceUploads.StoreAsync(documents, tenant.TenantId, claimId, claim.CurrentRound, file, now, ct));
         }

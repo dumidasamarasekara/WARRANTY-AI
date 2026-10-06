@@ -15,8 +15,7 @@ public enum EvidenceFileType
 
 /// <summary>
 /// Identifies an evidence file by its magic bytes; the file name and the declared content type are
-/// never trusted (FR-009, research R11). Content sanitizing (metadata removal, PDF checks) is done by
-/// <see cref="Abstractions.Storage.IUploadSanitizer"/>.
+/// never trusted (FR-009, research R11). Content sanitizing (metadata removal, PDF checks) is T110.
 /// </summary>
 public static class EvidenceFileSignature
 {

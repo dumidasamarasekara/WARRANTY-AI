@@ -85,7 +85,6 @@ public static class DependencyInjection
             configuration.GetConnectionString(BlobsConnection)
             ?? throw new InvalidOperationException($"Connection string '{BlobsConnection}' is not configured.")));
         services.AddScoped<IDocumentStore, BlobDocumentStore>();
-        services.AddSingleton<IUploadSanitizer, UploadSanitizer>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IJobQueue, PostgresJobQueue>();
