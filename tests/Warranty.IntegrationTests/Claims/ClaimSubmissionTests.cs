@@ -56,13 +56,22 @@ public sealed class ClaimSubmissionTests(WarrantyAppFixture fixture)
             e => e.ContentType.ShouldBe("application/pdf"),
             e => e.Sha256.ShouldBe(Sha256(invoice.Bytes)));
         evidence.Where(e => e.Kind == "Photo").Select(e => e.ContentType).ShouldBe(["image/jpeg", "image/png"], ignoreOrder: true);
-        evidence.Where(e => e.Kind == "Photo").Select(e => e.Sha256).ShouldBe(photos.Select(p => Sha256(p.Bytes)), ignoreOrder: true);
 
-        // The files are in the tenant's own container.
+        // Photos are stored re-encoded without metadata (T110): the hash is the one of the sanitized bytes.
+        var sanitizedHashes = new List<string>();
+        foreach (var photo in photos)
+        {
+            sanitizedHashes.Add(Sha256(await StoredBytesAsync(photo, Ct)));
+        }
+
+        evidence.Where(e => e.Kind == "Photo").Select(e => e.Sha256).ShouldBe(sanitizedHashes, ignoreOrder: true);
+
+        // The files are in the tenant's own container, and each stored file is exactly what was hashed.
         var container = new BlobServiceClient(fixture.BlobConnectionString).GetBlobContainerClient("tenant-aurora");
         foreach (var item in evidence)
         {
-            (await container.GetBlobClient(item.BlobPath).ExistsAsync(Ct)).Value.ShouldBeTrue(item.BlobPath);
+            var blob = await container.GetBlobClient(item.BlobPath).DownloadContentAsync(Ct);
+            Sha256(blob.Value.Content.ToArray()).ShouldBe(item.Sha256, item.BlobPath);
         }
 
         var job = await SingleRowAsync(
@@ -196,6 +205,24 @@ public sealed class ClaimSubmissionTests(WarrantyAppFixture fixture)
         (await ErrorKeysAsync(noFiles)).ShouldBe(["invoice", "photos"], ignoreOrder: true);
         gif.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ErrorKeysAsync(gif)).ShouldBe(["invoice"]);
+        (await ClaimCountAsync(serial)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_pdf_with_javascript_or_an_unreadable_photo_is_rejected_by_upload_sanitizing_and_creates_nothing()
+    {
+        var serial = NewSerial();
+        using var client = fixture.CreateClaimantClient(WarrantyAppFixture.AuroraHost);
+        var scripted = new EvidenceFile(
+            "invoice.pdf",
+            "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >> >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"u8.ToArray(),
+            "application/pdf");
+        var broken = new EvidenceFile("photo-1.jpg", [0xFF, 0xD8, 0xFF, 0xE0, .. RandomNumberGenerator.GetBytes(256)], "image/jpeg");
+
+        using var response = await client.PostAsync("/api/public/claims", Submission(serial, invoices: [scripted], photos: [broken]), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ErrorKeysAsync(response)).ShouldBe(["invoice", "photos"], ignoreOrder: true);
         (await ClaimCountAsync(serial)).ShouldBe(0);
     }
 
