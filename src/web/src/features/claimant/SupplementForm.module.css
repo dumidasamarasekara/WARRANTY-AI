@@ -1,0 +1,68 @@
+/* Supplement form — ui-design.md §6.3 (staff dialog) and §6.6 (claimant status page). */
+.form {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.requested {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.requestedTitle {
+  color: var(--color-text-secondary);
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+}
+
+.requestedList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.requestedList li {
+  display: grid;
+  gap: 2px;
+}
+
+.reason {
+  color: var(--color-text-soft);
+}
+
+.note {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+.problemList {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.correlation {
+  margin-top: var(--space-1);
+  font: var(--text-small);
+}
+
+.correlation code {
+  font: var(--text-mono);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (max-width: 639px) {
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .action {
+    width: 100%;
+  }
+}

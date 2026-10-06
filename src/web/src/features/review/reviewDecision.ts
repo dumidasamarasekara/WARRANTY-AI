@@ -1,5 +1,5 @@
 import type { Schemas } from '../../shared/api/client'
-import { aiDecisionPresentation } from '../../shared/presentation'
+import { aiDecisionPresentation, requestedItemLabels, type RequestedItemCode } from '../../shared/presentation'
 
 export type ClaimDetail = Schemas['ClaimDetail']
 export type ReviewQueueItem = Schemas['ReviewQueueItem']
@@ -84,14 +84,7 @@ export function withinLimits(text: string, limits: { min: number; max: number })
   return length >= limits.min && length <= limits.max
 }
 
-export type RequestedItemCode =
-  | 'INVOICE'
-  | 'LEGIBLE_INVOICE'
-  | 'PHOTO_OF_DAMAGE'
-  | 'PHOTO_OF_SERIAL_LABEL'
-  | 'PURCHASE_DATE'
-  | 'PROBLEM_DETAILS'
-  | 'OTHER'
+export type { RequestedItemCode }
 
 export interface RequestedItemOption {
   item: RequestedItemCode
@@ -100,14 +93,17 @@ export interface RequestedItemOption {
   reason: string
 }
 
-/** The requested-item codes of the decision schema, with the claimant-facing reason sent for each. */
+/**
+ * The requested-item codes of the decision schema, with the claimant-facing reason sent for each.
+ * The labels are the ones the claimant later sees; only `OTHER` reads differently in the picker.
+ */
 export const requestedItemOptions: readonly RequestedItemOption[] = [
-  { item: 'INVOICE', label: 'Invoice or receipt', reason: 'Please upload the invoice or receipt for this purchase.' },
-  { item: 'LEGIBLE_INVOICE', label: 'Clearer copy of the invoice', reason: 'Please upload a clearer copy of the invoice so it can be read.' },
-  { item: 'PHOTO_OF_DAMAGE', label: 'Photos of the damage', reason: 'Please upload photos that clearly show the problem with the product.' },
-  { item: 'PHOTO_OF_SERIAL_LABEL', label: 'Photo of the serial number label', reason: 'Please upload a photo of the label showing the serial number.' },
-  { item: 'PURCHASE_DATE', label: 'Purchase date', reason: 'Please confirm the date you bought the product.' },
-  { item: 'PROBLEM_DETAILS', label: 'More detail about the problem', reason: 'Please describe the problem in more detail.' },
+  { item: 'INVOICE', label: requestedItemLabels.INVOICE, reason: 'Please upload the invoice or receipt for this purchase.' },
+  { item: 'LEGIBLE_INVOICE', label: requestedItemLabels.LEGIBLE_INVOICE, reason: 'Please upload a clearer copy of the invoice so it can be read.' },
+  { item: 'PHOTO_OF_DAMAGE', label: requestedItemLabels.PHOTO_OF_DAMAGE, reason: 'Please upload photos that clearly show the problem with the product.' },
+  { item: 'PHOTO_OF_SERIAL_LABEL', label: requestedItemLabels.PHOTO_OF_SERIAL_LABEL, reason: 'Please upload a photo of the label showing the serial number.' },
+  { item: 'PURCHASE_DATE', label: requestedItemLabels.PURCHASE_DATE, reason: 'Please confirm the date you bought the product.' },
+  { item: 'PROBLEM_DETAILS', label: requestedItemLabels.PROBLEM_DETAILS, reason: 'Please describe the problem in more detail.' },
   { item: 'OTHER', label: 'Something else', reason: '' },
 ]
 

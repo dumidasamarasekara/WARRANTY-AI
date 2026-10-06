@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 import { claimantTokenFor } from '../../shared/api/claimantToken'
 import { ApiProblem, api, unwrap, type Schemas } from '../../shared/api/client'
 import { formatDateTime } from '../../shared/presentation'
 import {
+  Alert,
   Card,
   EmptyState,
   LoadingState,
@@ -19,12 +20,22 @@ import {
 import tones from '../../shared/ui/tone.module.css'
 import { claimProgressSteps, isTransientStatus, nextSteps, statusPollIntervalMs } from './claimProgress'
 import styles from './ClaimStatusPage.module.css'
+import { SupplementForm } from './SupplementForm'
+import { asSupplementForm } from './supplement'
 
 type ClaimantClaimView = Schemas['ClaimantClaimView']
 
+const submitSupplement = (reference: string, body: FormData) =>
+  unwrap(
+    api.POST('/api/public/claims/{reference}/supplements', {
+      params: { path: { reference } },
+      body: asSupplementForm(body),
+    }),
+  )
+
 const accessPath = (reference: string) => `/claims/access?reference=${encodeURIComponent(reference)}`
 
-/** Status, outcome explanation and requested items only — never risk, fraud or reasoning (FR-037). */
+/** Status and outcome explanation only — never risk, fraud or reasoning (FR-037). */
 function OutcomeBanner({ claim }: { claim: ClaimantClaimView }) {
   let tone: Tone
   let title: string
@@ -48,18 +59,8 @@ function OutcomeBanner({ claim }: { claim: ClaimantClaimView }) {
     case 'PendingInformation':
       tone = 'warn'
       title = 'We need a bit more information'
-      body = claim.requestedItems?.length ? (
-        <>
-          <p>Please send us:</p>
-          <ul className={styles.requested}>
-            {claim.requestedItems.map((requested, index) => (
-              <li key={`${index}-${requested.item}`}>
-                <strong>{requested.item}</strong> — {requested.reason}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null
+      // The requested items are listed in the supplement form right below the banner.
+      body = <p>Please send us what's listed below so we can finish checking your claim.</p>
       break
     case 'UnderReview':
       tone = 'pending'
@@ -115,9 +116,12 @@ export interface ClaimStatusPageProps {
 export function ClaimStatusPage({ pollIntervalMs = statusPollIntervalMs }: ClaimStatusPageProps) {
   const reference = (useParams().reference ?? '').toUpperCase()
   const hasToken = claimantTokenFor(reference) !== undefined
+  const queryClient = useQueryClient()
+  const queryKey = ['claimant-claim', reference]
+  const [supplementSent, setSupplementSent] = useState(false)
 
   const claim = useQuery({
-    queryKey: ['claimant-claim', reference],
+    queryKey,
     queryFn: ({ signal }) =>
       unwrap(api.GET('/api/public/claims/{reference}', { params: { path: { reference } }, signal })),
     enabled: hasToken,
@@ -145,6 +149,7 @@ export function ClaimStatusPage({ pollIntervalMs = statusPollIntervalMs }: Claim
   }
 
   const view = claim.data
+  const pendingInformation = view.status === 'PendingInformation'
   return (
     <section className={styles.page}>
       <Stepper label="Claim progress" steps={claimProgressSteps(view.status)} />
@@ -159,9 +164,31 @@ export function ClaimStatusPage({ pollIntervalMs = statusPollIntervalMs }: Claim
         </p>
       </div>
       {/* Polling updates are announced politely (ui-design.md §6.6). */}
-      <div aria-live="polite">
+      <div aria-live="polite" className={styles.live}>
+        {supplementSent && (isTransientStatus(view.status) || view.status === 'UnderReview') && (
+          <Alert tone="ok" title="Thank you — we received your information">
+            We're checking your claim again.
+          </Alert>
+        )}
         <OutcomeBanner claim={view} />
       </div>
+      {pendingInformation && (
+        <Card title="Send the requested information" titleAs="h2" padding="lg">
+          <SupplementForm
+            variant="claimant"
+            requestedItems={view.requestedItems ?? []}
+            submit={(body) => submitSupplement(reference, body)}
+            onSubmitted={(accepted) => {
+              setSupplementSent(true)
+              // Resume polling straight away: the new round starts as Submitted.
+              queryClient.setQueryData<ClaimantClaimView>(queryKey, (current) =>
+                current && { ...current, status: accepted.status, requestedItems: undefined },
+              )
+              void queryClient.invalidateQueries({ queryKey })
+            }}
+          />
+        </Card>
+      )}
       <WhatHappensNext claim={view} />
     </section>
   )
