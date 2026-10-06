@@ -109,6 +109,15 @@ describe('SecurityEventsPage', () => {
       'Access denied',
       'AI scope violation',
     ])
+    // Each kind is a badge in its tone with a decorative dot; the label carries the meaning.
+    const badges = rows.slice(1).map((row) => within(within(row).getAllByRole('cell')[1]!).getByText(/./, { selector: '.badge' }))
+    expect(badges.map((badge) => ['human', 'warn', 'err'].find((tone) => badge.classList.contains(tone)))).toEqual([
+      'human',
+      'warn',
+      'warn',
+      'err',
+    ])
+    for (const badge of badges) expect(badge.querySelector('[aria-hidden="true"]')).not.toBeNull()
     expect(rows[1]).toHaveTextContent('Agent Reviewer')
     expect(rows[2]).toHaveTextContent('claimant channel')
     expect(rows[3]).toHaveTextContent('99999999-9999-9999-9999-999999999999')

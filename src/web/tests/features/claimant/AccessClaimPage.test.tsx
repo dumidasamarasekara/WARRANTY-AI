@@ -101,6 +101,37 @@ describe('AccessClaimPage', () => {
     expect(screen.getByRole('heading', { name: 'Check your claim' })).toBeInTheDocument()
   })
 
+  it('does not reveal whether the reference or the contact was wrong', async () => {
+    // An unknown reference and a contact mismatch both answer 401; the page must not tell them apart.
+    const unauthorized = [
+      () =>
+        HttpResponse.json(
+          { title: 'Unauthorized', status: 401, detail: 'Unknown reference' },
+          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      () =>
+        HttpResponse.json(
+          { title: 'Contact mismatch', status: 401, detail: 'The email does not match' },
+          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      () => new HttpResponse(null, { status: 401 }),
+    ]
+    const messages: string[] = []
+    for (const response of unauthorized) {
+      server.resetHandlers()
+      respondToAccess(response)
+      const { unmount } = renderAccess()
+      await fillAndSubmit('ABCD234567', 'claimant@example.test')
+      messages.push((await screen.findByRole('alert')).textContent ?? '')
+      expect(screen.queryByText(/Unknown reference|Contact mismatch|does not match/)).not.toBeInTheDocument()
+      unmount()
+    }
+
+    expect(new Set(messages).size).toBe(1)
+    expect(messages[0]).toContain("We couldn't find a claim with those details")
+    expect(claimantTokenFor('ABCD234567')).toBeUndefined()
+  })
+
   it('tells the claimant when to try again after too many attempts', async () => {
     respondToAccess(
       () =>
