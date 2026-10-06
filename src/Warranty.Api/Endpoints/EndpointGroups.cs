@@ -2,6 +2,7 @@ using Warranty.Api.Endpoints.Claims;
 using Warranty.Api.Endpoints.Public;
 using Warranty.Api.Endpoints.Reference;
 using Warranty.Api.Endpoints.Trace;
+using Warranty.Api.Tenancy;
 
 namespace Warranty.Api.Endpoints;
 
@@ -9,7 +10,8 @@ namespace Warranty.Api.Endpoints;
 /// The API's endpoint groups per contracts/rest-api.openapi.yaml. Each user story maps its routes
 /// into the matching group. Staff groups require a staff user (default policy <c>AnyStaff</c>) and
 /// routes add their specific policy; public routes are anonymous unless they require the
-/// <c>Claimant</c> policy.
+/// <c>Claimant</c> policy. Staff groups whose routes name a claim run <see cref="CrossTenantGuard"/>,
+/// so a claim or evidence ID outside the user's tenant gets a 404 and a security event.
 /// </summary>
 public static class EndpointGroups
 {
@@ -20,16 +22,16 @@ public static class EndpointGroups
             .MapClaimantRoutes();
 
     public static RouteGroupBuilder MapClaimEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization()
+        => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
             .MapClaimRoutes();
 
     /// <summary><c>/api/review-queue</c> and <c>/api/claims/{claimId}/review-decisions</c>.</summary>
     public static RouteGroupBuilder MapReviewEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api").WithTags("Review").RequireAuthorization();
+        => app.MapGroup("/api").WithTags("Review").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>();
 
     /// <summary><c>/api/claims/{claimId}/trace</c>.</summary>
     public static RouteGroupBuilder MapTraceEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api/claims").WithTags("Trace").RequireAuthorization()
+        => app.MapGroup("/api/claims").WithTags("Trace").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
             .MapTraceRoutes();
 
     /// <summary><c>/api/me</c> and <c>/api/policies</c>.</summary>
