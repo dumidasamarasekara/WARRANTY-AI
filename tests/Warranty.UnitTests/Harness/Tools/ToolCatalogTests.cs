@@ -31,7 +31,11 @@ public sealed class ToolCatalogTests
         new ClaimHistoryLookupTool(Substitute.For<IClaimRepository>()),
         new SearchPolicyKnowledgeTool(Substitute.For<IKnowledgeRetriever>(), Substitute.For<IClaimRepository>(), Substitute.For<ICatalogRepository>()),
         new SearchGlobalKnowledgeTool(Substitute.For<IKnowledgeRetriever>()),
+        ConsequentialTool.CreateRepairRequest(),
+        ConsequentialTool.NotifyCustomer(),
     ];
+
+    private static readonly string[] ConsequentialToolNames = ["create_repair_request", "notify_customer"];
 
     [Theory]
     [InlineData(AgentNames.Intake, new[] { "customer_lookup", "product_lookup" })]
@@ -44,11 +48,17 @@ public sealed class ToolCatalogTests
         => new ToolRegistry(Tools).For(agent).Select(t => t.Descriptor.Name).ShouldBe(tools);
 
     [Fact]
-    public void Every_tool_is_read_only_with_a_strict_schema_without_tenant_fields()
+    public void Every_tool_has_a_strict_schema_without_tenant_fields_and_only_the_action_executor_may_call_consequential_ones()
     {
         foreach (var tool in Tools)
         {
-            tool.Descriptor.SideEffect.ShouldBe(ToolSideEffect.ReadOnly, tool.Descriptor.Name);
+            var consequential = ConsequentialToolNames.Contains(tool.Descriptor.Name);
+            tool.Descriptor.SideEffect.ShouldBe(consequential ? ToolSideEffect.Consequential : ToolSideEffect.ReadOnly, tool.Descriptor.Name);
+            if (consequential)
+            {
+                tool.Descriptor.AllowedCallers.ShouldBe([ToolDescriptor.ActionExecutorCaller], ignoreOrder: false, tool.Descriptor.Name);
+            }
+
             tool.Descriptor.Problems().ShouldBeEmpty(tool.Descriptor.Name);
             AllPropertyNames(tool.Descriptor.InputSchema)
                 .ShouldAllBe(p => !p.Contains("tenant", StringComparison.OrdinalIgnoreCase), tool.Descriptor.Name);
@@ -105,7 +115,10 @@ public sealed class ToolCatalogTests
         await using var scope = provider.CreateAsyncScope();
 
         scope.ServiceProvider.GetRequiredService<ToolRegistry>().All.Select(t => t.Descriptor.Name).ShouldBe(
-            ["customer_lookup", "product_lookup", "warranty_lookup", "invoice_validation", "claim_history_lookup", "search_policy_knowledge", "search_global_knowledge"],
+            [
+                "customer_lookup", "product_lookup", "warranty_lookup", "invoice_validation", "claim_history_lookup", "search_policy_knowledge",
+                "search_global_knowledge", "create_repair_request", "notify_customer",
+            ],
             ignoreOrder: true);
         scope.ServiceProvider.GetRequiredService<ClaimHistoryLookupTool>()
             .ShouldBeSameAs(scope.ServiceProvider.GetServices<ITool>().OfType<ClaimHistoryLookupTool>().Single());
