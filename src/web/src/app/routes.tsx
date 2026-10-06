@@ -4,6 +4,7 @@ import { ClaimStatusPage } from '../features/claimant/ClaimStatusPage'
 import { SubmitClaimPage } from '../features/claimant/SubmitClaimPage'
 import { NewClaimPage } from '../features/claims/NewClaimPage'
 import { PoliciesPage } from '../features/claims/PoliciesPage'
+import { ReviewQueuePage } from '../features/review/ReviewQueuePage'
 import { AuthProvider } from './AuthProvider'
 import { ClaimantLayout } from './ClaimantLayout'
 import { Layout } from './Layout'
@@ -49,7 +50,7 @@ const staffRoutes: RouteObject = {
       handle: crumb('Review queue'),
       element: (
         <RequireRole roles={['claims-reviewer']}>
-          <PlaceholderPage title="Review queue" />
+          <ReviewQueuePage />
         </RequireRole>
       ),
     },

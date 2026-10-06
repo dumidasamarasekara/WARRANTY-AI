@@ -1,0 +1,53 @@
+/* Decision / override dialog — ui-design.md §6.4. */
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.summary {
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-human);
+  border-radius: var(--radius-sm);
+  background: var(--tone-human-bg);
+  color: var(--tone-human-ink);
+}
+
+.items {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  color: var(--color-text-secondary);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-body);
+  cursor: pointer;
+}
+
+.item input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.fieldError {
+  font: var(--text-small);
+  color: var(--color-error);
+}
+
+.problem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
