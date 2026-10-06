@@ -74,6 +74,7 @@ public sealed class AdjudicationRunnerTests
     private int _detectFailures;
     private Action<DecisionInput, AgentExecutionContext>? _onDecision;
     private CaseProduct? _caseProduct = new(ProductId, "AUR-TAB10", "Aurora Tab 10", "tablet", 450m);
+    private bool _policyAmbiguous;
 
     public AdjudicationRunnerTests()
     {
@@ -135,6 +136,30 @@ public sealed class AdjudicationRunnerTests
         var value = evaluation.Checks.Single(c => c.Code == GuardrailCheckCode.ClaimValueWithinLimit);
         (catalog.Passed, value.Passed, value.Actual).ShouldBe((false, false, "unknown"));
         evaluation.Reasons.ShouldContain(EscalationReason.ProductNotInCatalog);
+        evaluation.ApprovedActionJson!.ShouldContain("EscalateToReview");
+        await _actions.DidNotReceive().ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.FinalizeApproved), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_policy_agents_ambiguity_flag_reaches_the_guardrails_and_escalates_an_AI_approval(bool resumedAfterPolicy)
+    {
+        _policyAmbiguous = true;
+        if (resumedAfterPolicy)
+        {
+            // The retried job restores the Policy step from its stored assessment JSON.
+            _detectFailures = 1;
+            await Should.ThrowAsync<TimeoutException>(() => Runner().RunAsync(ClaimId, 1, Ct));
+            _store.Rollback();
+        }
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        var evaluation = _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem();
+        evaluation.Disposition.ShouldBe(Disposition.HumanReview, "the AI recommends APPROVE/COVERED, but the policy agent reports ambiguity");
+        evaluation.Reasons.ShouldBe([EscalationReason.AmbiguousPolicy]);
+        evaluation.Checks.Single(c => c.Code == GuardrailCheckCode.PolicyApplicable).Passed.ShouldBeFalse();
         evaluation.ApprovedActionJson!.ShouldContain("EscalateToReview");
         await _actions.DidNotReceive().ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.FinalizeApproved), Arg.Any<CancellationToken>());
     }
@@ -373,7 +398,10 @@ public sealed class AdjudicationRunnerTests
 
         var assessment = PolicyAssessment.Create(
             ctx.Run.RunId, Aurora, PolicyVersionOutcome.Ok,
-            """{"coverageAssessment":"COVERED","ambiguity":{"isAmbiguous":false,"explanation":""}}""", 90, "model", "policy.v1");
+            _policyAmbiguous
+                ? """{"coverageAssessment":"COVERED","ambiguity":{"isAmbiguous":true,"explanation":"POL-1 and POL-2 conflict."}}"""
+                : """{"coverageAssessment":"COVERED","ambiguity":{"isAmbiguous":false,"explanation":""}}""",
+            90, "model", "policy.v1");
         _store.AddPolicyAssessment(assessment);
         var window = CoverageWindowCalculator.Calculate(_version.Terms, Region.NA, "mainboard", PurchaseDate, ClaimDate);
         return AgentResult<PolicyResult>.Success(new PolicyResult(RetrievalOutcome.Ok, clauses, assessment, _version)
@@ -381,6 +409,8 @@ public sealed class AdjudicationRunnerTests
             CoverageWindow = window,
             Component = "MAINBOARD",
             CoverageAssessment = "COVERED",
+            IsAmbiguous = _policyAmbiguous,
+            AmbiguityExplanation = _policyAmbiguous ? "POL-1 and POL-2 conflict." : string.Empty,
         });
     }
 

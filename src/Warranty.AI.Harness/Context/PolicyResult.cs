@@ -43,7 +43,7 @@ public sealed partial record PolicyResult
 
     /// <summary>
     /// The model's own <c>ambiguity.isAmbiguous</c> flag (wording conflicts, no clause covers the case, …).
-    /// Not part of <see cref="PolicyFacts"/> yet; the runner can pass it on as a reason for review.
+    /// Passed to the guardrails as <see cref="PolicyFacts.AgentReportsAmbiguity"/>, where it escalates as ambiguous policy.
     /// </summary>
     public bool IsAmbiguous { get; init; }
 
@@ -51,5 +51,5 @@ public sealed partial record PolicyResult
     public string? AmbiguityExplanation { get; init; }
 
     /// <summary>The guardrail engine's view of this step (contracts/agents-and-tools.md).</summary>
-    public PolicyFacts ToFacts() => new(VersionOutcome, Version, Clauses, CoverageWindow);
+    public PolicyFacts ToFacts() => new(VersionOutcome, Version, Clauses, CoverageWindow, IsAmbiguous);
 }

@@ -26,6 +26,7 @@ public sealed class EscalationRulesTests
             data.Add("no-applicable-policy", decision, GuardrailCheckCode.PolicyApplicable, EscalationReason.NoApplicablePolicy);
             data.Add("ambiguous-policy-version", decision, GuardrailCheckCode.PolicyApplicable, EscalationReason.AmbiguousPolicy);
             data.Add("coverage-undetermined", decision, GuardrailCheckCode.CoverageWindowAgrees, EscalationReason.AmbiguousPolicy);
+            data.Add("policy-agent-ambiguity", decision, GuardrailCheckCode.PolicyApplicable, EscalationReason.AmbiguousPolicy);
             data.Add("returned-from-review", decision, GuardrailCheckCode.NotReturnedFromReview, EscalationReason.ReturnedAfterReviewerRequest);
             data.Add("unsafe-claimant-text", decision, GuardrailCheckCode.ClaimantTextSafe, EscalationReason.UnsafeClaimantText);
         }
@@ -219,8 +220,12 @@ public sealed class EscalationRulesTests
                 scenario.VersionOutcome = PolicyVersionOutcome.AmbiguousPolicyVersion;
                 break;
             case "coverage-undetermined":
-                // The Policy agent's ambiguity flag reaches the guardrails as an UNDETERMINED coverage reading.
+                // The Decision agent's coverage reading is UNDETERMINED.
                 scenario.Coverage = CoverageDetermination.Undetermined;
+                break;
+            case "policy-agent-ambiguity":
+                // The Policy agent flags ambiguity while the Decision agent still reads COVERED / NOT_COVERED.
+                scenario.PolicyAgentReportsAmbiguity = true;
                 break;
             case "returned-from-review":
                 scenario.ReviewerInfoRequested = true;
