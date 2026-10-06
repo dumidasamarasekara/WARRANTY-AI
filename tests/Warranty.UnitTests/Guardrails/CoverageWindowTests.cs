@@ -185,5 +185,55 @@ public sealed class CoverageWindowTests
         result.CoverageEndDate.ShouldBeNull();
         result.WithinStandardCoverage.ShouldBeNull();
         result.WithinComponentCoverage.ShouldBeNull();
+        (result.AccidentalWindowEndDate, result.WithinAccidentalWindow).ShouldBe((null, null));
+    }
+
+    // ---- Accidental-damage allowance window (T077) ---------------------------------------------------
+
+    /// <summary>BOR-WP v1: 24 months in all regions, battery 12 months, one accidental-damage incident within 12 months.</summary>
+    private static CoverageTerms BorealisV1Terms() => new(
+        new Dictionary<Region, int> { [Region.NA] = 24, [Region.EU] = 24 },
+        new Dictionary<string, int> { ["battery"] = 12 },
+        new AccidentalDamageTerms(true, 12, 1),
+        [ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair]);
+
+    [Theory]
+    [InlineData(2026, 3, 10, true)]
+    [InlineData(2026, 3, 11, false)]
+    [InlineData(2025, 9, 1, true)]
+    public void The_accidental_window_ends_windowMonths_after_purchase_inclusive(int year, int month, int day, bool within)
+    {
+        var result = CoverageWindowCalculator.Calculate(BorealisV1Terms(), Region.NA, "SCREEN", D(2025, 3, 10), D(year, month, day));
+
+        result.AccidentalWindowEndDate.ShouldBe(D(2026, 3, 10));
+        result.WithinAccidentalWindow.ShouldBe(within);
+    }
+
+    [Fact]
+    public void The_accidental_window_is_independent_of_the_standard_and_component_windows()
+    {
+        // 14 months after purchase: inside the 24-month defect window, outside the 12-month accidental allowance.
+        var result = CoverageWindowCalculator.Calculate(BorealisV1Terms(), Region.EU, null, D(2025, 1, 31), D(2026, 3, 31));
+
+        (result.CoverageEndDate, result.WithinComponentCoverage).ShouldBe((D(2027, 1, 31), true));
+        (result.AccidentalWindowEndDate, result.WithinAccidentalWindow).ShouldBe((D(2026, 1, 31), false));
+    }
+
+    [Fact]
+    public void Terms_that_do_not_cover_accidental_damage_have_no_accidental_window()
+    {
+        var result = CoverageWindowCalculator.Calculate(AuroraV1Terms(), Region.NA, "SCREEN", D(2025, 3, 10), D(2025, 4, 1));
+
+        result.Outcome.ShouldBe(CoverageWindowOutcome.Determined);
+        (result.AccidentalWindowEndDate, result.WithinAccidentalWindow).ShouldBe((null, null));
+    }
+
+    [Fact]
+    public void The_accidental_window_end_follows_month_end_clamping()
+    {
+        var result = CoverageWindowCalculator.Calculate(
+            BorealisV1Terms() with { AccidentalDamage = new AccidentalDamageTerms(true, 1, 1) }, Region.NA, null, D(2025, 1, 31), D(2025, 2, 28));
+
+        (result.AccidentalWindowEndDate, result.WithinAccidentalWindow).ShouldBe((D(2025, 2, 28), true));
     }
 }

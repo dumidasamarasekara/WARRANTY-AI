@@ -34,11 +34,15 @@ internal sealed class GuardrailScenario
 
     private static readonly DateOnly ClaimDay = new(2026, 9, 1);
 
-    private GuardrailScenario()
+    private GuardrailScenario(AccidentalDamageTerms? accidentalDamage = null)
     {
+        accidentalDamage ??= AccidentalDamageTerms.NotCovered;
         Version = Policy(
             Guid.Parse("22222222-2222-7222-8222-222222222222"), 2,
-            [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair]);
+            accidentalDamage.Covered
+                ? [ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair]
+                : [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair],
+            accidentalDamage);
         var otherVersion = Policy(Guid.Parse("33333333-3333-7333-8333-333333333333"), 1, [ExclusionCode.AccidentalDamage]);
         Clauses =
         [
@@ -77,6 +81,11 @@ internal sealed class GuardrailScenario
     public bool ReviewerInfoRequested { get; set; }
 
     public int AutoInfoRequestCount { get; set; }
+
+    public DateOnly PurchaseDate { get; set; } = new(2026, 1, 15);
+
+    /// <summary>All-time approved accidental-damage claims for the serial (<c>claim_history_lookup</c>).</summary>
+    public int PriorApprovedAccidental { get; set; }
 
     public List<RequestedItem> IntakeMissingItems { get; } = [];
 
@@ -143,6 +152,22 @@ internal sealed class GuardrailScenario
     /// <summary>A defect claim within the coverage window that the AI approves: every FR-026 condition holds.</summary>
     public static GuardrailScenario ClearApprove() => new();
 
+    /// <summary>
+    /// Tenant B's allowance (one accidental-damage incident within 12 months, accidental damage not excluded):
+    /// a cracked screen bought 10 months before the claim date that the AI approves on the coverage clause.
+    /// </summary>
+    public static GuardrailScenario ApproveAccidentalDamage()
+    {
+        var scenario = new GuardrailScenario(new AccidentalDamageTerms(true, 12, 1))
+        {
+            PurchaseDate = new DateOnly(2025, 11, 1),
+            ClaimantExplanation = "Your plan includes one accidental-damage repair in the first 12 months, so your screen will be repaired.",
+        };
+        scenario.PhotoDamageTypes.Clear();
+        scenario.PhotoDamageTypes.Add("CRACKED_SCREEN");
+        return scenario;
+    }
+
     /// <summary>A claim made after the coverage window ended that the AI rejects on the period clause: every FR-027 condition holds.</summary>
     public static GuardrailScenario ClearReject()
     {
@@ -181,7 +206,8 @@ internal sealed class GuardrailScenario
         var settings = TenantSettings.Create(
             Tenant, "EUR", AutoApprovalLimit, MinConfidence, AutoApproveEnabled, AutoRejectEnabled, AlwaysReviewCategories);
         var caseFacts = new CaseFacts(
-            Tenant, ClaimId, RunId, ProductInCatalog, ProductCategory, ClaimValue, ReviewerInfoRequested, AutoInfoRequestCount);
+            Tenant, ClaimId, RunId, ProductInCatalog, ProductCategory, ClaimValue, ReviewerInfoRequested, AutoInfoRequestCount,
+            PurchaseDate, PriorApprovedAccidental);
         var intake = IntakeResult.Create(
             RunId, Tenant, [new ValidationCheck("INVOICE_PRESENT", true, null), new ValidationCheck("PHOTO_PRESENT", true, null)],
             "{}", IntakeMissingItems);
@@ -212,13 +238,14 @@ internal sealed class GuardrailScenario
                 RunId, Tenant, raw, ["$.policyRefs: required"], "claude-opus-5-5", "decision", "v1", Decision, Confidence);
     }
 
-    private static PolicyVersion Policy(Guid id, int version, IReadOnlyList<ExclusionCode> exclusions) => PolicyVersion.Create(
+    private static PolicyVersion Policy(
+        Guid id, int version, IReadOnlyList<ExclusionCode> exclusions, AccidentalDamageTerms? accidentalDamage = null) => PolicyVersion.Create(
         id, Tenant, Guid.Parse("66666666-6666-7666-8666-666666666666"), version,
         new DateOnly(2024, 1, 1), null, [Region.NA, Region.EU], [],
         new CoverageTerms(
             new Dictionary<Region, int> { [Region.NA] = 12, [Region.EU] = 24 },
             new Dictionary<string, int> { ["battery"] = 6 },
-            AccidentalDamageTerms.NotCovered,
+            accidentalDamage ?? AccidentalDamageTerms.NotCovered,
             exclusions),
         $"tenant-a/warranty-v{version}.md", $"sha256-v{version}");
 

@@ -30,11 +30,24 @@ public sealed record CoverageWindowResult(
     CoverageWindowOutcome Outcome,
     DateOnly? CoverageEndDate,
     bool? WithinStandardCoverage,
-    bool? WithinComponentCoverage);
+    bool? WithinComponentCoverage)
+{
+    /// <summary>
+    /// Last day of the accidental-damage allowance (<c>purchase_date + accidentalDamage.windowMonths</c>,
+    /// <see cref="AccidentalDamageRule"/>); null when the terms do not cover accidental damage or the window
+    /// was not determined.
+    /// </summary>
+    public DateOnly? AccidentalWindowEndDate { get; init; }
+
+    /// <summary>Claim date within the accidental-damage allowance window; null when <see cref="AccidentalWindowEndDate"/> is null.</summary>
+    public bool? WithinAccidentalWindow { get; init; }
+}
 
 /// <summary>
 /// Computes the coverage window from structured <see cref="CoverageTerms"/> only — never from clause
-/// text or AI output (T053).
+/// text or AI output (T053), including the accidental-damage allowance window (T077); whether an
+/// accidental-damage claim is covered also needs the serial's incident count and is decided by
+/// <see cref="AccidentalDamageRule"/>.
 /// </summary>
 public static class CoverageWindowCalculator
 {
@@ -61,11 +74,16 @@ public static class CoverageWindowCalculator
             ? purchaseDate.AddMonths(componentMonths)
             : standardEndDate;
 
+        var accidentalEndDate = AccidentalDamageRule.WindowEndDate(terms.AccidentalDamage, purchaseDate);
         return new CoverageWindowResult(
             CoverageWindowOutcome.Determined,
             coverageEndDate,
             WithinStandardCoverage: claimDate <= standardEndDate,
-            WithinComponentCoverage: claimDate <= coverageEndDate);
+            WithinComponentCoverage: claimDate <= coverageEndDate)
+        {
+            AccidentalWindowEndDate = accidentalEndDate,
+            WithinAccidentalWindow = accidentalEndDate is { } end ? claimDate <= end : null,
+        };
     }
 
     private static readonly CoverageWindowResult Undetermined =
