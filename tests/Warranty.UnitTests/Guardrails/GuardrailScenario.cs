@@ -104,6 +104,9 @@ internal sealed class GuardrailScenario
     // Risk (Low means no signal of any kind, research R23)
     public List<RiskSignal> RiskSignals { get; } = [];
 
+    /// <summary>The computed level when at least one signal is present (any signal makes risk at least Medium).</summary>
+    public RiskLevel SignalledRiskLevel { get; set; } = RiskLevel.Medium;
+
     // AI recommendation; null means AI analysis could not be completed (FR-031)
     public bool AiAvailable { get; set; } = true;
 
@@ -128,6 +131,9 @@ internal sealed class GuardrailScenario
         new(CoverageClause, PolicyRefRelevance.SupportsCoverage),
         new(PeriodClause, PolicyRefRelevance.DefinesPeriod),
     ];
+
+    /// <summary>The recommendation's <c>missingInformation</c> items.</summary>
+    public List<RequestedItem> AiMissingInformation { get; } = [];
 
     public bool ManipulationDetected { get; set; }
 
@@ -192,7 +198,7 @@ internal sealed class GuardrailScenario
         var policy = new PolicyFacts(VersionOutcome, VersionOutcome == PolicyVersionOutcome.Ok ? Version : null, Clauses, window);
         var risk = RiskAssessment.Create(
             RunId, Tenant, RiskAssessmentStage.Full, Math.Min(100, 25 * RiskSignals.Count),
-            RiskSignals.Count == 0 ? RiskLevel.Low : RiskLevel.Medium, RiskSignals);
+            RiskSignals.Count == 0 ? RiskLevel.Low : SignalledRiskLevel, RiskSignals);
 
         return new GuardrailInput(
             settings, caseFacts, intake, evidence, policy, risk, AiAvailable ? BuildRecommendation() : null,
@@ -207,7 +213,7 @@ internal sealed class GuardrailScenario
         return RecommendationValid
             ? Recommendation.CreateValid(
                 RunId, Tenant, raw, Decision, Coverage, Confidence, "Staff-facing reasoning summary.", ClaimantExplanation,
-                EvidenceCitations, PolicyCitations, [], ManipulationDetected, "claude-opus-5-5", "decision", "v1")
+                EvidenceCitations, PolicyCitations, AiMissingInformation, ManipulationDetected, "claude-opus-5-5", "decision", "v1")
             : Recommendation.CreateInvalid(
                 RunId, Tenant, raw, ["$.policyRefs: required"], "claude-opus-5-5", "decision", "v1", Decision, Confidence);
     }
