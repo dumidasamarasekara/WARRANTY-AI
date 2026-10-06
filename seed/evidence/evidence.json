@@ -353,6 +353,107 @@
       "modelCode": "AUR-TAB10",
       "serial": "AT10-24-0022",
       "variant": 11
+    },
+    {
+      "scenario": "S5",
+      "path": "S5/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-084519",
+      "purchaseDateOffsetMonths": -3,
+      "productName": "Aurora Book 15",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0001",
+      "amount": 1400.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S5",
+      "path": "S5/photo-1.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-BOOK15",
+      "variant": 30
+    },
+    {
+      "scenario": "S5",
+      "path": "S5/photo-2.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "back",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0001",
+      "variant": 30
+    },
+    {
+      "scenario": "S13",
+      "path": "S13/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Borealis Store",
+      "sellerAddress": "45 Example Harbour Road\nNorthport, US 00002",
+      "invoiceNumber": "BS-2026-641208",
+      "purchaseDateOffsetMonths": -6,
+      "productName": "Borealis Smart Oven 60",
+      "modelCode": "BOR-OVEN60",
+      "serial": "BO60-24-0001",
+      "amount": 1650.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S13",
+      "path": "S13/photo-1.jpg",
+      "kind": "photo",
+      "device": "oven",
+      "view": "front",
+      "modelCode": "BOR-OVEN60",
+      "variant": 31
+    },
+    {
+      "scenario": "S13",
+      "path": "S13/photo-2.jpg",
+      "kind": "photo",
+      "device": "oven",
+      "view": "back",
+      "modelCode": "BOR-OVEN60",
+      "serial": "BO60-24-0001",
+      "variant": 31
+    },
+    {
+      "scenario": "S20",
+      "path": "S20/invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-086233",
+      "purchaseDateOffsetMonths": -3,
+      "productName": "Aurora Book 15",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0002",
+      "amount": 1400.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "S20",
+      "path": "S20/photo-1.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-BOOK15",
+      "variant": 32
+    },
+    {
+      "scenario": "S20",
+      "path": "S20/photo-2.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "back",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0002",
+      "variant": 32
     }
   ]
 }

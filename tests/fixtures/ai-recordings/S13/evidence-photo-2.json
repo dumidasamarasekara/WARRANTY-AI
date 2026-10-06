@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "oven",
+    "visibleSerial": "BO60-24-0001",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 92,
+    "observations": "Rear panel of a grey Borealis oven with ventilation slots. The serial label reads 'BOREALIS MODEL BOR-OVEN60' and 'S/N: BO60-24-0001'. The housing is undamaged."
+  },
+  "usage": {
+    "inputTokens": 1663,
+    "outputTokens": 140
+  }
+}
