@@ -32,8 +32,10 @@ jobs:
         run: dotnet test --project tests/Warranty.UnitTests --no-build
 
       # Testcontainers uses the runner's Docker engine (PostgreSQL + pgvector, Azurite); AI calls replay recordings.
+      # The Aspire AppHost smoke test (Category=Smoke: every container incl. Ollama and Keycloak on fixed ports,
+      # npm install) is run manually or nightly, not on every pull request (plan.md "Smoke").
       - name: Integration tests
-        run: dotnet test --project tests/Warranty.IntegrationTests --no-build
+        run: dotnet test --project tests/Warranty.IntegrationTests --no-build -- --filter-not-trait "Category=Smoke"
 
   frontend:
     name: Frontend lint, tests and build
