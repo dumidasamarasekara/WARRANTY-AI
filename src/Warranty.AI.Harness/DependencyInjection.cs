@@ -4,6 +4,7 @@ using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Agents.Risk;
 using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Execution;
+using Warranty.AI.Harness.Safety;
 using Warranty.AI.Harness.Schemas;
 using Warranty.AI.Harness.Tools;
 using Warranty.AI.Harness.Tools.Implementations;
@@ -42,7 +43,9 @@ public static class DependencyInjection
         services.AddScoped<ITool, SearchPolicyKnowledgeTool>();
         services.AddScoped<ITool, SearchGlobalKnowledgeTool>();
 
-        // The risk capability (scoped: it reads the tenant's claim history and settings).
+        // The risk capability (scoped: it reads the tenant's claim history and settings) and its
+        // injection detector over the global phrase list (research R14).
+        services.TryAddSingleton(_ => new InjectionDetector(InjectionDetector.GlobalPhrases));
         services.AddScoped<IRiskAssessor, RiskAssessor>();
 
         // Agents are scoped (they persist through the scoped adjudication repository); each resolves as
