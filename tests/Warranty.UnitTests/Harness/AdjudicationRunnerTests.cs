@@ -512,6 +512,16 @@ public sealed class AdjudicationRunnerTests
                     Committed<GuardrailEvaluation>().SingleOrDefault(g => g.RunId == runId)));
         }
 
+        public Task<IReadOnlyDictionary<Guid, LatestRunOutcome>> GetLatestOutcomesAsync(IReadOnlyCollection<Guid> claimIds, CancellationToken ct)
+            => Task.FromResult<IReadOnlyDictionary<Guid, LatestRunOutcome>>(Runs
+                .Where(r => claimIds.Contains(r.ClaimId))
+                .GroupBy(r => r.ClaimId)
+                .Select(g => g.MaxBy(r => r.Round)!)
+                .ToDictionary(
+                    r => r.ClaimId,
+                    r => new LatestRunOutcome(
+                        r.ClaimId, r.Id, Committed<Recommendation>().SingleOrDefault(x => x.RunId == r.Id)?.Decision, r.Disposition)));
+
         public Task SaveChangesAsync(CancellationToken ct)
         {
             Commit();

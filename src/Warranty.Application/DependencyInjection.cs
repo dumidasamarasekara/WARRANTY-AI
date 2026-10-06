@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICaseKnowledgeProvider, CaseKnowledgeProvider>();
         services.AddScoped<SubmitClaim>();
         services.AddScoped<ClaimantAccess>();
+        services.AddScoped<ClaimQueries>();
         services.AddScoped<IActionExecutor, ActionExecutor>();
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
