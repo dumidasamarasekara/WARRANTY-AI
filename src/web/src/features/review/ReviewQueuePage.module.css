@@ -1,0 +1,208 @@
+/* Review queue — ui-design.md §6.4. */
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.subtitle,
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (width < 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.queueList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background var(--duration-hover) var(--easing-standard);
+}
+
+.card:hover {
+  background: var(--color-bg);
+}
+
+.card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.cardSelected,
+.cardSelected:hover {
+  border-color: var(--color-human);
+  background: var(--t-bg);
+}
+
+.reference,
+.headerReference {
+  font: var(--text-mono);
+  color: var(--tone-human-ink);
+}
+
+.product {
+  font-weight: 600;
+}
+
+.cardMeta {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.workspace,
+.workspaceBody {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.claimHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.headerTitle {
+  font: var(--text-entity-title);
+}
+
+.headerValue {
+  font: var(--text-data);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (width < 1200px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.recommendation {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.noDecision,
+.decisionValue {
+  font: var(--text-metric);
+}
+
+.cited {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+.yourDecision {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-human);
+  border-radius: var(--radius-md);
+  background: var(--t-bg);
+  color: var(--t-ink);
+}
+
+.yourDecisionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cardTitle {
+  font: var(--text-card-title);
+}
+
+.struck {
+  color: var(--color-text-muted);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: 2px;
+}
+
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.override {
+  margin-left: auto;
+}
+
+.caseFileLink {
+  justify-self: start;
+  color: var(--color-primary);
+}
