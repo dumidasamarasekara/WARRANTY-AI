@@ -5,6 +5,7 @@ using Warranty.Api.Auth;
 using Warranty.Api.Endpoints;
 using Warranty.Api.Http;
 using Warranty.Api.RateLimiting;
+using Warranty.Api.Security;
 using Warranty.Api.Tenancy;
 using Warranty.Api.Workers;
 using Warranty.Application;
@@ -26,6 +27,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddWarrantyAuth(builder.Configuration, builder.Environment);
 builder.Services.AddTenantResolution();
 builder.Services.AddWarrantyRateLimiting();
+builder.Services.AddWarrantyCors();
 
 builder.Services
     .AddWarrantyInfrastructure(builder.Configuration)
@@ -40,6 +42,12 @@ builder.Services.AddClaimJobWorker(builder.Configuration);
 
 var app = builder.Build();
 
+app.UseSecurityHeaders();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 app.UseCorrelationIdHeader();
 // A malformed or unreadable request body is the client's error (400), also where bad requests throw (Development).
 app.UseExceptionHandler(new ExceptionHandlerOptions
@@ -47,6 +55,9 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
     StatusCodeSelector = ex => ex is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError,
 });
 app.UseStatusCodePages();
+
+// CORS before authentication so preflights are answered without a token.
+app.UseCors(SecurityHeaders.CorsPolicyName);
 
 // Authentication → tenant resolution → authorization (research R9).
 app.UseAuthentication();
