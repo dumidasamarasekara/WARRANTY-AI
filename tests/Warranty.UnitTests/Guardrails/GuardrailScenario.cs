@@ -103,6 +103,9 @@ internal sealed class GuardrailScenario
 
     public PolicyVersion Version { get; }
 
+    /// <summary>The Policy agent's <c>ambiguity.isAmbiguous</c> flag.</summary>
+    public bool PolicyAgentReportsAmbiguity { get; set; }
+
     public IReadOnlyList<RetrievedPolicyRef> Clauses { get; }
 
     /// <summary>Deterministic coverage window (the calculator's result is built from these two values).</summary>
@@ -221,7 +224,7 @@ internal sealed class GuardrailScenario
         var window = VersionOutcome == PolicyVersionOutcome.Ok
             ? new CoverageWindowResult(CoverageWindowOutcome.Determined, CoverageEndDate, WithinCoverageWindow, WithinCoverageWindow)
             : new CoverageWindowResult(CoverageWindowOutcome.NoApplicablePolicy, null, null, null);
-        var policy = new PolicyFacts(VersionOutcome, VersionOutcome == PolicyVersionOutcome.Ok ? Version : null, Clauses, window);
+        var policy = new PolicyFacts(VersionOutcome, VersionOutcome == PolicyVersionOutcome.Ok ? Version : null, Clauses, window, PolicyAgentReportsAmbiguity);
         var risk = RiskAssessment.Create(
             RunId, Tenant, RiskAssessmentStage.Full, Math.Min(100, 25 * RiskSignals.Count),
             RiskSignals.Count == 0 ? RiskLevel.Low : SignalledRiskLevel, RiskSignals);

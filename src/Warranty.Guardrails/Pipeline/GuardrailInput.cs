@@ -56,13 +56,16 @@ public sealed record PhotoFinding(string EvidenceRef, IReadOnlyList<string> Dama
 /// Policy step facts: the version outcome, the applicable version (with its structured terms), the
 /// issued <c>POL-n</c> clauses and the deterministic coverage window for the claim's region and
 /// component, computed by <see cref="CoverageWindowCalculator"/> (its <c>WithinComponentCoverage</c>
-/// is the deciding flag).
+/// is the deciding flag). <see cref="AgentReportsAmbiguity"/> is the Policy agent's own
+/// <c>ambiguity.isAmbiguous</c> flag, passed as a plain bool because this project references no AI
+/// project; <c>POLICY_APPLICABLE</c> escalates on it as ambiguous policy.
 /// </summary>
 public sealed record PolicyFacts(
     PolicyVersionOutcome VersionOutcome,
     PolicyVersion? Version,
     IReadOnlyList<RetrievedPolicyRef> Clauses,
-    CoverageWindowResult CoverageWindow);
+    CoverageWindowResult CoverageWindow,
+    bool AgentReportsAmbiguity);
 
 /// <summary>Who triggered the evaluation; automatic runs are performed by the adjudication worker.</summary>
 public sealed record ActorInfo(string Subject, bool IsAutomation)
