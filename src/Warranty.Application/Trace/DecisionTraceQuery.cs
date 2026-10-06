@@ -7,9 +7,11 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Adjudication;
 using Warranty.Domain.Adjudication;
+using Warranty.Domain.AiOps;
 using Warranty.Domain.Audit;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Review;
 
 namespace Warranty.Application.Trace;
 
@@ -20,8 +22,8 @@ public sealed record DecisionTrace(Guid ClaimId, TraceIntegrity Integrity, IRead
 public sealed record TraceIntegrity(bool HashChainValid);
 
 /// <summary>
-/// <c>TraceEntry</c>: one trail step with its one-line summary, correlation ID and step details. The
-/// AI call, tool call and RAG query lists of the contract are attached by T104.
+/// <c>TraceEntry</c>: one trail step with its one-line summary, correlation ID and step details, and the
+/// AI calls, tool calls and RAG queries (<c>aiops.*</c>) the step made; a list is omitted when the step made none.
 /// </summary>
 public sealed record TraceEntry(
     int Seq,
@@ -30,7 +32,41 @@ public sealed record TraceEntry(
     string Actor,
     string Summary,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CorrelationId,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonObject? Details);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonObject? Details,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AiCallSummary>? AiCalls = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ToolCallSummary>? ToolCalls = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<RagQuerySummary>? RagQueries = null);
+
+/// <summary><c>AiCallSummary</c>: one model invocation of a step (FR-040) — model, prompt version, tokens, latency and cost.</summary>
+public sealed record AiCallSummary(
+    string Agent,
+    string Route,
+    string Provider,
+    string Model,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PromptVersion,
+    int InputTokens,
+    int OutputTokens,
+    int CacheReadTokens,
+    long LatencyMs,
+    decimal EstimatedCost,
+    string Status,
+    int Attempt);
+
+/// <summary>One tool invocation of a step, including a denied attempt; the summary is the stored redacted result or the denial reason.</summary>
+public sealed record ToolCallSummary(
+    string Agent,
+    string Tool,
+    bool Allowed,
+    long LatencyMs,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Summary);
+
+/// <summary>One knowledge retrieval of a step: the namespaces searched, the filters applied and the clause keys returned.</summary>
+public sealed record RagQuerySummary(
+    string Agent,
+    IReadOnlyList<string> Namespaces,
+    JsonObject Filters,
+    IReadOnlyList<string> ResultClauseKeys,
+    long LatencyMs);
 
 /// <summary>
 /// The decision trace read model (FR-038 – FR-041): the claim's trail entries of the current tenant in
@@ -40,12 +76,21 @@ public sealed record TraceEntry(
 /// output; guardrail checks carry their expected and actual values from the stored evaluation. Customer
 /// identifiers never appear: identifying fields are dropped and every text is passed through the
 /// claim's <see cref="CustomerIdentifierScrubber"/>. Unknown steps and payload shapes are shown as stored.
+/// <para>
+/// The run's model calls, tool calls and RAG queries are attached to the step that made them, matched by run
+/// and time: the first entry of the same run written by the calling agent at or after the call started, else
+/// the first entry of the run written at or after it, else the run's last entry; a reviewer decision is never
+/// the target. <c>ReviewerDecided</c> entries carry the stored review decision. The hash chain is re-verified
+/// with <c>HashChainVerifier</c> over exactly the entries returned (<see cref="IDecisionTrailReader"/>).
+/// </para>
 /// </summary>
 public sealed class DecisionTraceQuery(
     ITenantContext tenant,
     IClaimRepository claims,
     ICustomerRepository customers,
     IAdjudicationRepository adjudication,
+    IAiOpsRepository aiOps,
+    IReviewRepository reviews,
     IDecisionTrailReader trail)
 {
     /// <summary>Payload properties that would identify the customer or quote the claimant's own text; never returned.</summary>
@@ -93,15 +138,36 @@ public sealed class DecisionTraceQuery(
             ? new Dictionary<Guid, ClaimEvidence>()
             : (await claims.GetEvidenceAsync(claimId, ct)).ToDictionary(e => e.Id);
 
+        var calls = new Dictionary<int, StepCalls>();
+        foreach (var runId in runs.Keys)
+        {
+            var targets = parsed
+                .Where(p => p.Entry.Step != TrailStep.ReviewerDecided && RunIdOf(p.Payload) == runId)
+                .Select(p => p.Entry)
+                .ToList();
+            if (targets.Count > 0)
+            {
+                AttachCalls(calls, targets, await aiOps.GetForRunAsync(runId, ct), scrubber);
+            }
+        }
+
+        var decisions = parsed.Any(p => p.Entry.Step == TrailStep.ReviewerDecided)
+            ? (await reviews.GetForClaimAsync(claimId, ct))
+                .Where(d => d.ClaimId == claimId && d.TenantId == tenant.TenantId)
+                .ToDictionary(d => d.Id)
+            : new Dictionary<Guid, ReviewDecision>();
+
         var entries = parsed
-            .Select(p => ToEntry(p.Entry, p.Payload, RunIdOf(p.Payload) is { } id ? runs.GetValueOrDefault(id) : null, evidence, scrubber))
+            .Select(p => ToEntry(
+                p.Entry, p.Payload, RunIdOf(p.Payload) is { } id ? runs.GetValueOrDefault(id) : null, evidence, decisions, scrubber,
+                calls.GetValueOrDefault(p.Entry.Seq)))
             .ToList();
         return new DecisionTrace(claimId, new TraceIntegrity(snapshot.HashChainValid), entries);
     }
 
     private static TraceEntry ToEntry(
         DecisionTrailEntry entry, JsonObject? payload, RunRecord? run, IReadOnlyDictionary<Guid, ClaimEvidence> evidence,
-        CustomerIdentifierScrubber scrubber)
+        IReadOnlyDictionary<Guid, ReviewDecision> decisions, CustomerIdentifierScrubber scrubber, StepCalls? calls)
     {
         if (payload is not null && run is not null)
         {
@@ -119,6 +185,11 @@ public sealed class DecisionTraceQuery(
             }
         }
 
+        if (payload is not null && entry.Step == TrailStep.ReviewerDecided)
+        {
+            AttachReviewDecision(payload, decisions);
+        }
+
         if (payload is not null)
         {
             Sanitize(payload, scrubber);
@@ -131,7 +202,101 @@ public sealed class DecisionTraceQuery(
             entry.Actor,
             scrubber.Scrub(entry.Summary),
             string.IsNullOrWhiteSpace(entry.CorrelationId) ? null : entry.CorrelationId,
-            payload);
+            payload,
+            calls is { AiCalls.Count: > 0 } ? calls.AiCalls : null,
+            calls is { ToolCalls.Count: > 0 } ? calls.ToolCalls : null,
+            calls is { RagQueries.Count: > 0 } ? calls.RagQueries : null);
+    }
+
+    /// <summary>The AI calls, tool calls and RAG queries attached to one trail entry, in start order.</summary>
+    private sealed class StepCalls
+    {
+        public List<AiCallSummary> AiCalls { get; } = [];
+
+        public List<ToolCallSummary> ToolCalls { get; } = [];
+
+        public List<RagQuerySummary> RagQueries { get; } = [];
+    }
+
+    /// <summary>Attaches each <c>aiops</c> record of one run to its step among <paramref name="targets"/> (the run's entries in seq order).</summary>
+    private void AttachCalls(Dictionary<int, StepCalls> calls, List<DecisionTrailEntry> targets, AiOpsRecords records, CustomerIdentifierScrubber scrubber)
+    {
+        StepCalls For(string agent, DateTimeOffset startedAt)
+        {
+            var target = targets.FirstOrDefault(e => e.OccurredAt >= startedAt && string.Equals(e.Actor, agent, StringComparison.Ordinal))
+                         ?? targets.FirstOrDefault(e => e.OccurredAt >= startedAt)
+                         ?? targets[^1];
+            if (!calls.TryGetValue(target.Seq, out var step))
+            {
+                calls[target.Seq] = step = new StepCalls();
+            }
+
+            return step;
+        }
+
+        foreach (var call in records.ModelCalls.Where(c => c.TenantId == tenant.TenantId).OrderBy(c => c.StartedAt))
+        {
+            For(call.Agent, call.StartedAt).AiCalls.Add(new AiCallSummary(
+                call.Agent, call.Route, call.Provider, call.Model, call.PromptVersion, call.InputTokens, call.OutputTokens, call.CacheReadTokens,
+                call.LatencyMs, call.EstimatedCost, call.Status.ToString(), call.Attempt));
+        }
+
+        foreach (var call in records.ToolCalls.Where(c => c.TenantId == tenant.TenantId).OrderBy(c => c.StartedAt))
+        {
+            var summary = call.Allowed ? call.ResultSummary : call.DenialReason ?? call.ResultSummary;
+            For(call.Agent, call.StartedAt).ToolCalls.Add(new ToolCallSummary(
+                call.Agent, call.Tool, call.Allowed, call.LatencyMs, string.IsNullOrWhiteSpace(summary) ? null : scrubber.Scrub(summary)));
+        }
+
+        foreach (var query in records.RagQueries.Where(q => q.TenantId == tenant.TenantId).OrderBy(q => q.StartedAt))
+        {
+            var filters = ParsePayload(query.FiltersJson) ?? [];
+            Sanitize(filters, scrubber);
+            For(query.Agent, query.StartedAt).RagQueries.Add(new RagQuerySummary(
+                query.Agent, query.Namespaces, filters, ClauseKeysOf(query.ResultsJson), query.LatencyMs));
+        }
+    }
+
+    /// <summary>The distinct clause keys of a stored <c>[{chunkId, clauseKey, score}]</c> result list, in result order.</summary>
+    private static List<string> ClauseKeysOf(string resultsJson)
+    {
+        try
+        {
+            return JsonNode.Parse(resultsJson) is JsonArray results
+                ? results.OfType<JsonObject>().Select(r => TextOf(r["clauseKey"])).OfType<string>().Distinct(StringComparer.Ordinal).ToList()
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Adds the stored review decision the entry names (<c>decisionId</c>) as <c>review</c>: decision, override flag,
+    /// reviewer, justification, claimant explanation, requested items with their reasons and the decision time.
+    /// </summary>
+    private static void AttachReviewDecision(JsonObject payload, IReadOnlyDictionary<Guid, ReviewDecision> decisions)
+    {
+        if (TextOf(payload["decisionId"]) is not { } text || !Guid.TryParse(text, out var id) || !decisions.TryGetValue(id, out var decision))
+        {
+            return;
+        }
+
+        payload["review"] = new JsonObject
+        {
+            ["decisionId"] = decision.Id,
+            ["runId"] = decision.RunId,
+            ["decision"] = decision.Decision.ToString(),
+            ["overridesAi"] = decision.OverridesAi,
+            ["reviewer"] = decision.ReviewerName,
+            ["justification"] = decision.Justification,
+            ["claimantExplanation"] = decision.ClaimantExplanation,
+            ["requestedItems"] = new JsonArray(decision.RequestedItems
+                .Select(i => (JsonNode)new JsonObject { ["item"] = i.Item, ["reason"] = i.Reason })
+                .ToArray()),
+            ["decidedAt"] = decision.DecidedAt,
+        };
     }
 
     /// <summary>The step's wire name; a value this build does not know is shown by its number rather than failing the trace.</summary>

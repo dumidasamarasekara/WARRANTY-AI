@@ -6,15 +6,20 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Trace;
 using Warranty.Domain.Adjudication;
+using Warranty.Domain.AiOps;
 using Warranty.Domain.Audit;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Crm;
 using Warranty.Domain.Policies;
+using Warranty.Domain.Review;
 
 namespace Warranty.UnitTests.Application;
 
-/// <summary>The decision trace read model (T069, FR-038 – FR-041): ordering, step details, resolved references, privacy.</summary>
+/// <summary>
+/// The decision trace read model (T069, T104, FR-038 – FR-041): ordering, step details, resolved references, attached
+/// AI/tool/RAG records and review decisions, privacy.
+/// </summary>
 public sealed class DecisionTraceQueryTests : IDisposable
 {
     private const string Email = "jordan.sample@example.test";
@@ -30,6 +35,8 @@ public sealed class DecisionTraceQueryTests : IDisposable
     private readonly IClaimRepository _claims = Substitute.For<IClaimRepository>();
     private readonly ICustomerRepository _customers = Substitute.For<ICustomerRepository>();
     private readonly IAdjudicationRepository _adjudication = Substitute.For<IAdjudicationRepository>();
+    private readonly IAiOpsRepository _aiOps = Substitute.For<IAiOpsRepository>();
+    private readonly IReviewRepository _reviews = Substitute.For<IReviewRepository>();
     private readonly IDecisionTrailReader _trail = Substitute.For<IDecisionTrailReader>();
     private readonly TenantContextScope _tenant = TenantContextScope.Begin(TenantId, "aurora", "auditor-sub");
     private readonly Claim _claim;
@@ -53,6 +60,8 @@ public sealed class DecisionTraceQueryTests : IDisposable
             .Returns(Customer.Create(_claim.CustomerId, TenantId, FullName, Email, "US", Phone, Address));
         _trail.ReadAsync(_claim.Id, Arg.Any<CancellationToken>()).Returns(_ => new DecisionTrailSnapshot(_entries, true));
         _adjudication.GetRunRecordAsync(_runId, Arg.Any<CancellationToken>()).Returns(RunRecord());
+        _aiOps.GetForRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new AiOpsRecords([], [], []));
+        _reviews.GetForClaimAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -256,7 +265,178 @@ public sealed class DecisionTraceQueryTests : IDisposable
             .ShouldBe(["seq", "occurredAt", "step", "actor", "summary", "correlationId", "details"], ignoreOrder: true);
     }
 
-    private DecisionTraceQuery Query() => new(_tenant, _claims, _customers, _adjudication, _trail);
+    [Fact]
+    public async Task Model_tool_and_rag_records_are_attached_to_the_step_of_the_calling_agent_by_run_and_time()
+    {
+        Add(TrailStep.ClaimSubmitted, Claim.ClaimantSubmitter, "Claim submitted.", new { round = 1 });
+        Add(TrailStep.IntakeValidated, "intake", "Intake validation passed.", new { runId = _runId, round = 1 });
+        Add(TrailStep.ClaimExtracted, "intake", "Problem structured.", new { runId = _runId, round = 1 });
+        Add(TrailStep.PolicyRetrieved, "policy", "Policy applies.", new { runId = _runId, round = 1, clauses = Array.Empty<object>() });
+        Add(TrailStep.RiskEvaluated, "risk", "Risk Low.", new { runId = _runId, round = 1 });
+        Add(TrailStep.AiRecommended, "decision", "AI recommends APPROVE.", new { runId = _runId, round = 1 });
+        _aiOps.GetForRunAsync(_runId, Arg.Any<CancellationToken>()).Returns(new AiOpsRecords(
+            [ModelCall("intake", At(1.5)), ModelCall("policy", At(3.2)), ModelCall("decision", At(4.1), ModelCallStatus.Invalid, 1), ModelCall("decision", At(4.5), attempt: 2)],
+            [ToolCall("decision", "get_claim_history", At(4.2), allowed: true), ToolCall("decision", "approve_claim", At(4.3), allowed: false)],
+            [RagQuery("policy", At(3.1))]));
+
+        var trace = (await Query().GetAsync(_claim.Id, Ct))!;
+
+        trace.Entries[0].AiCalls.ShouldBeNull();
+        var intake = trace.Entries[1].AiCalls.ShouldHaveSingleItem();
+        intake.Agent.ShouldBe("intake");
+        intake.Provider.ShouldBe("anthropic");
+        intake.Model.ShouldBe("claude-sonnet");
+        intake.PromptVersion.ShouldBe("3");
+        intake.InputTokens.ShouldBe(1200);
+        intake.OutputTokens.ShouldBe(300);
+        intake.CacheReadTokens.ShouldBe(800);
+        intake.LatencyMs.ShouldBe(950);
+        intake.EstimatedCost.ShouldBe(0.0123m);
+        intake.Status.ShouldBe("Ok");
+        trace.Entries[2].AiCalls.ShouldBeNull();
+
+        var policy = trace.Entries[3];
+        policy.AiCalls.ShouldHaveSingleItem().Agent.ShouldBe("policy");
+        var rag = policy.RagQueries.ShouldHaveSingleItem();
+        rag.Namespaces.ShouldBe(["tenant:aurora:policy"]);
+        rag.Filters["region"]!.GetValue<string>().ShouldBe("NA");
+        rag.ResultClauseKeys.ShouldBe(["AUR-WP-2.1", "AUR-WP-3.1"]);
+        rag.LatencyMs.ShouldBe(40);
+
+        trace.Entries[4].AiCalls.ShouldBeNull();
+        var decision = trace.Entries[5];
+        decision.AiCalls!.Select(c => (c.Status, c.Attempt)).ShouldBe([("Invalid", 1), ("Ok", 2)]);
+        decision.ToolCalls!.Select(c => (c.Tool, c.Allowed, c.Summary)).ShouldBe(
+            [("get_claim_history", true, "2 prior claims."), ("approve_claim", false, "consequential_tool")]);
+        decision.RagQueries.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_record_without_an_entry_of_its_agent_goes_to_the_next_entry_of_the_run_and_never_to_a_reviewer_decision()
+    {
+        Add(TrailStep.IntakeValidated, "intake", "Intake validation passed.", new { runId = _runId, round = 1 });
+        Add(TrailStep.EvidenceAnalyzed, "evidence", "2 of 2 evidence files analysed.", new { runId = _runId, round = 1 });
+        Add(TrailStep.GuardrailsEvaluated, "system", "Guardrails evaluated.", new { runId = _runId, round = 1 });
+        Add(TrailStep.ReviewerDecided, "reviewer-sub", "Claim approved by reviewer.", new { runId = _runId, round = 1 });
+        _aiOps.GetForRunAsync(_runId, Arg.Any<CancellationToken>()).Returns(new AiOpsRecords(
+            [ModelCall("risk", At(1.5)), ModelCall("decision", At(30))],
+            [],
+            [RagQuery("policy", At(0.5)), RagQuery("policy", At(1.0)) with { TenantId = Guid.CreateVersion7() }]));
+
+        var trace = (await Query().GetAsync(_claim.Id, Ct))!;
+
+        trace.Entries[0].RagQueries.ShouldHaveSingleItem();
+        trace.Entries[1].AiCalls.ShouldHaveSingleItem().Agent.ShouldBe("risk");
+        trace.Entries[2].AiCalls.ShouldHaveSingleItem().Agent.ShouldBe("decision");
+        trace.Entries[3].AiCalls.ShouldBeNull();
+        trace.Entries[3].RagQueries.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Records_of_a_run_of_another_claim_are_never_attached()
+    {
+        var foreignRun = Guid.CreateVersion7();
+        _adjudication.GetRunRecordAsync(foreignRun, Arg.Any<CancellationToken>())
+            .Returns(new RunRecord(AdjudicationRun.Start(foreignRun, TenantId, Guid.CreateVersion7(), 1, Correlation, Start), null, [], [], null, null, null, null));
+        _aiOps.GetForRunAsync(foreignRun, Arg.Any<CancellationToken>()).Returns(new AiOpsRecords([ModelCall("intake", At(0.5))], [], []));
+        Add(TrailStep.IntakeValidated, "intake", "Intake validation passed.", new { runId = foreignRun, round = 1 });
+
+        var trace = (await Query().GetAsync(_claim.Id, Ct))!;
+
+        trace.Entries.Single().AiCalls.ShouldBeNull();
+        await _aiOps.DidNotReceive().GetForRunAsync(foreignRun, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Tool_summaries_and_rag_filters_never_show_customer_identifiers()
+    {
+        Add(TrailStep.AiRecommended, "decision", "AI recommends APPROVE.", new { runId = _runId, round = 1 });
+        _aiOps.GetForRunAsync(_runId, Arg.Any<CancellationToken>()).Returns(new AiOpsRecords(
+            [],
+            [ToolCall("decision", "get_customer", At(0.5), allowed: true) with { ResultSummary = $"Customer {FullName} reachable at {Email}." }],
+            [RagQuery("decision", At(0.6)) with { FiltersJson = $"{{\"region\":\"NA\",\"note\":\"{Email}\",\"customerName\":\"{FullName}\"}}" }]));
+
+        var trace = (await Query().GetAsync(_claim.Id, Ct))!;
+
+        var json = JsonSerializer.Serialize(trace, JsonSerializerOptions.Web);
+        foreach (var identifier in new[] { Email, FullName, "Jordan" })
+        {
+            json.ShouldNotContain(identifier, Case.Insensitive);
+        }
+
+        trace.Entries.Single().RagQueries.ShouldHaveSingleItem().Filters["region"]!.GetValue<string>().ShouldBe("NA");
+    }
+
+    [Fact]
+    public async Task A_reviewer_decision_entry_carries_the_stored_review_decision()
+    {
+        var decision = ReviewDecision.Create(
+            Guid.CreateVersion7(), TenantId, _claim.Id, _runId, "reviewer-sub", "Riley Reviewer", ReviewDecisionKind.RequestInformation,
+            "The photo does not show the serial number.", null, [new RequestedItem(RequestedItemCodes.PhotoOfSerialLabel, "Serial number not visible.")], null, Start.AddHours(2));
+        _reviews.GetForClaimAsync(_claim.Id, Arg.Any<CancellationToken>()).Returns([decision]);
+        Add(TrailStep.ReviewerDecided, "reviewer-sub", "Reviewer requested information.", new
+        {
+            decisionId = decision.Id, runId = _runId, round = 1, decision = "RequestInformation", requestedItems = new[] { RequestedItemCodes.PhotoOfSerialLabel },
+        });
+
+        var details = (await Query().GetAsync(_claim.Id, Ct))!.Entries.Single().Details!;
+
+        var review = details["review"]!.AsObject();
+        review["decisionId"]!.GetValue<Guid>().ShouldBe(decision.Id);
+        review["decision"]!.GetValue<string>().ShouldBe("RequestInformation");
+        review["overridesAi"]!.GetValue<bool>().ShouldBeFalse();
+        review["justification"]!.GetValue<string>().ShouldBe("The photo does not show the serial number.");
+        review["requestedItems"]![0]!["item"]!.GetValue<string>().ShouldBe(RequestedItemCodes.PhotoOfSerialLabel);
+        review["requestedItems"]![0]!["reason"]!.GetValue<string>().ShouldBe("Serial number not visible.");
+        review["decidedAt"]!.GetValue<DateTimeOffset>().ShouldBe(Start.AddHours(2));
+    }
+
+    [Fact]
+    public async Task Attached_calls_follow_the_contract_property_names()
+    {
+        Add(TrailStep.PolicyRetrieved, "policy", "Policy applies.", new { runId = _runId, round = 1 });
+        _aiOps.GetForRunAsync(_runId, Arg.Any<CancellationToken>()).Returns(new AiOpsRecords(
+            [ModelCall("policy", At(0.5))], [ToolCall("policy", "get_policy", At(0.6), allowed: true)], [RagQuery("policy", At(0.7))]));
+
+        var trace = (await Query().GetAsync(_claim.Id, Ct))!;
+        var entry = JsonNode.Parse(JsonSerializer.Serialize(trace, JsonSerializerOptions.Web))!["entries"]![0]!.AsObject();
+
+        entry["aiCalls"]![0]!.AsObject().Select(p => p.Key).ShouldBe(
+            ["agent", "route", "provider", "model", "promptVersion", "inputTokens", "outputTokens", "cacheReadTokens", "latencyMs", "estimatedCost", "status", "attempt"],
+            ignoreOrder: true);
+        entry["toolCalls"]![0]!.AsObject().Select(p => p.Key).ShouldBe(["agent", "tool", "allowed", "latencyMs", "summary"], ignoreOrder: true);
+        entry["ragQueries"]![0]!.AsObject().Select(p => p.Key).ShouldBe(["agent", "namespaces", "filters", "resultClauseKeys", "latencyMs"], ignoreOrder: true);
+    }
+
+    private DecisionTraceQuery Query() => new(_tenant, _claims, _customers, _adjudication, _aiOps, _reviews, _trail);
+
+    /// <summary>A time <paramref name="seconds"/> after <see cref="Start"/>; entry <c>n</c> occurs at <c>Start + n s</c>.</summary>
+    private static DateTimeOffset At(double seconds) => Start.AddSeconds(seconds);
+
+    private ModelCall ModelCall(string agent, DateTimeOffset startedAt, ModelCallStatus status = ModelCallStatus.Ok, int attempt = 1)
+        => new()
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, ClaimId = _claim.Id, RunId = _runId, Agent = agent, Route = "reasoning",
+            Provider = "anthropic", Model = "claude-sonnet", PromptId = agent, PromptVersion = "3", InputTokens = 1200, OutputTokens = 300,
+            CacheReadTokens = 800, LatencyMs = 950, EstimatedCost = 0.0123m, Status = status, Attempt = attempt, StartedAt = startedAt,
+        };
+
+    private ToolCall ToolCall(string agent, string tool, DateTimeOffset startedAt, bool allowed)
+        => new()
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, RunId = _runId, Agent = agent, Tool = tool, Allowed = allowed,
+            DenialReason = allowed ? null : "consequential_tool", ResultSummary = allowed ? "2 prior claims." : "Tool not available.",
+            LatencyMs = 12, Status = allowed ? "ok" : "denied", StartedAt = startedAt,
+        };
+
+    private RagQuery RagQuery(string agent, DateTimeOffset startedAt)
+        => new()
+        {
+            Id = Guid.CreateVersion7(), TenantId = TenantId, RunId = _runId, Agent = agent, Namespaces = ["tenant:aurora:policy"],
+            FiltersJson = "{\"operation\":\"search_policy\",\"region\":\"NA\"}", QueryText = "battery coverage", TopK = 5,
+            ResultsJson = "[{\"chunkId\":\"c1\",\"clauseKey\":\"AUR-WP-2.1\",\"score\":0.9},{\"chunkId\":\"c2\",\"clauseKey\":\"AUR-WP-3.1\",\"score\":0.8},{\"chunkId\":\"c3\",\"clauseKey\":\"AUR-WP-2.1\",\"score\":0.7}]",
+            LatencyMs = 40, StartedAt = startedAt,
+        };
 
     private void Add(TrailStep step, string actor, string summary, object payload)
         => _entries.Add(Entry(_entries.Count + 1, step, actor, summary, JsonSerializer.Serialize(payload, JsonSerializerOptions.Web)));
