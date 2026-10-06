@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -21,9 +20,6 @@ namespace Warranty.IntegrationTests.Scenarios;
 [Collection(WarrantyAppCollection.Name)]
 public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
 {
-    /// <summary>Claims submitted once per scenario and shared by the tests that read them.</summary>
-    private static readonly ConcurrentDictionary<string, Lazy<Task<Guid>>> SubmittedClaims = new(StringComparer.Ordinal);
-
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -193,9 +189,11 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
         keys.ShouldAllBe(k => k.StartsWith(clausePrefix, StringComparison.Ordinal));
     }
 
-    /// <summary>Submits the scenario's claim once per test run (through its channel) and returns the claim ID.</summary>
-    private Task<Guid> SubmitOnceAsync(GoldenScenario scenario)
-        => SubmittedClaims.GetOrAdd(scenario.ScenarioId, _ => new Lazy<Task<Guid>>(() => SubmitAsClaimantAsync(scenario))).Value;
+    /// <summary>
+    /// Submits the scenario's claim once per test run (through its channel) and returns the claim ID; shared with
+    /// the other scenario classes, since US4 compares S22 with this class's S4-aurora claim.
+    /// </summary>
+    private Task<Guid> SubmitOnceAsync(GoldenScenario scenario) => scenario.SubmitOnceAsync(SubmitAsClaimantAsync);
 
     /// <summary>Submits through the tenant's claimant channel; the public response carries no claim ID, so it is looked up by reference.</summary>
     private async Task<Guid> SubmitAsClaimantAsync(GoldenScenario scenario)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
@@ -15,6 +16,9 @@ namespace Warranty.IntegrationTests.Scenarios;
 public sealed class GoldenScenario
 {
     private static readonly Lazy<IReadOnlyList<JsonObject>> All = new(LoadAll);
+
+    /// <summary>Claims submitted once per scenario and test run, shared by every test class (<see cref="SubmitOnceAsync"/>).</summary>
+    private static readonly ConcurrentDictionary<string, Lazy<Task<Guid>>> Submitted = new(StringComparer.Ordinal);
 
     private readonly JsonObject _entry;
 
@@ -79,6 +83,86 @@ public sealed class GoldenScenario
     /// <summary>Whether the reviewer's decision is expected to override the AI recommendation, if the scenario says.</summary>
     public bool? ExpectedOverridesAi => (bool?)Expected["overridesAi"];
 
+    /// <summary>Scenarios whose claims must be submitted (and settled) before this one, e.g. the claim whose photo is reused.</summary>
+    public IReadOnlyList<string> SubmitAfter => List(_entry, "submitAfter");
+
+    /// <summary>True when the replayed model is deliberately wrong, so <see cref="ExpectedRecommendation"/> is what the fixture recommends.</summary>
+    public bool FaultyRecommendation => (bool?)_entry["faultyRecommendation"] ?? false;
+
+    /// <summary>Fixture files whose structured output deliberately violates the output schema.</summary>
+    public IReadOnlyList<string> InvalidOutputFixtures => List(_entry, "invalidOutputFixtures");
+
+    /// <summary>Tools outside the agent's scope that a fixture deliberately requests.</summary>
+    public IReadOnlyList<string> DeniedToolRequests => List(_entry, "deniedToolRequests");
+
+    /// <summary>The expected disposition (data-model wire name, e.g. <c>HumanReview</c>), if the scenario says.</summary>
+    public string? ExpectedDisposition => (string?)Expected["disposition"];
+
+    /// <summary>
+    /// The decision of the run's valid recommendation (e.g. <c>APPROVE</c>), or null when no valid recommendation
+    /// exists — <c>"recommendation": null</c>. <see cref="HasExpectedRecommendation"/> tells whether the scenario says.
+    /// </summary>
+    public string? ExpectedRecommendation => (string?)Expected["recommendation"];
+
+    /// <summary>True when the scenario states <c>recommendation</c> (a decision or null).</summary>
+    public bool HasExpectedRecommendation => Expected.ContainsKey("recommendation");
+
+    /// <summary>False when an invalid recommendation is expected to be stored, if the scenario says.</summary>
+    public bool? ExpectedRecommendationValid => (bool?)Expected["recommendationValid"];
+
+    /// <summary>The computed risk level (<c>Low</c>, <c>Medium</c>, <c>High</c>), if the scenario says.</summary>
+    public string? ExpectedRiskLevel => (string?)Expected["riskLevel"];
+
+    /// <summary>The computed risk score, if the scenario says.</summary>
+    public int? ExpectedRiskScore => (int?)Expected["riskScore"];
+
+    /// <summary>The risk level the model reported in its decision output (never used by the guardrails), if the scenario says.</summary>
+    public string? ExpectedModelRiskLevel => (string?)Expected["modelRiskLevel"];
+
+    /// <summary>Risk signal codes the claim must have.</summary>
+    public IReadOnlyList<string> ExpectedRiskSignals => ExpectedList("riskSignals");
+
+    /// <summary>Risk signal codes the claim must not have.</summary>
+    public IReadOnlyList<string> AbsentRiskSignals => ExpectedList("absentRiskSignals");
+
+    /// <summary>Guardrail checks that must fail (others may fail too).</summary>
+    public IReadOnlyList<string> FailedGuardrails => ExpectedList("failedGuardrails");
+
+    /// <summary>Guardrail checks that must pass.</summary>
+    public IReadOnlyList<string> PassedGuardrails => ExpectedList("passedGuardrails");
+
+    /// <summary>Agents recorded as <c>AiStepFailed</c>, with the run's <c>failure_reason</c>.</summary>
+    public IReadOnlyList<string> FailedAiSteps => ExpectedList("failedAiSteps");
+
+    /// <summary>Model calls per agent the run makes, including corrective turns and retries.</summary>
+    public IReadOnlyDictionary<string, int> ExpectedModelCalls
+        => Expected["modelCalls"]?.AsObject().ToDictionary(p => p.Key, p => (int)p.Value!, StringComparer.Ordinal)
+           ?? new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>Invoice fields whose consistency check fails (empty: every field matches), or null when the scenario does not say.</summary>
+    public IReadOnlyList<string>? ExpectedInvoiceMismatches
+        => Expected.ContainsKey("invoiceMismatches") ? ExpectedList("invoiceMismatches") : null;
+
+    /// <summary>The status text of the claimant view (e.g. <c>Under Review</c>), if the scenario says.</summary>
+    public string? ExpectedClaimantStatus => (string?)Expected["claimantStatus"];
+
+    /// <summary>True when the claimant view must show no risk vocabulary.</summary>
+    public bool ClaimantViewHidesRisk => (bool?)Expected["claimantViewHidesRisk"] ?? false;
+
+    /// <summary>False when no repair request may exist for the claim, if the scenario says.</summary>
+    public bool? ExpectedRepairRequestCreated => (bool?)Expected["repairRequestCreated"];
+
+    /// <summary>The trail steps the claim's trail ends with (before any executed actions).</summary>
+    public IReadOnlyList<string> ExpectedLastTrailEntries => ExpectedList("lastTrailEntries");
+
+    /// <summary>
+    /// Submits the scenario's claim at most once per test run, across every test class, and returns its claim ID:
+    /// a second claim for the same serial or evidence would raise duplicate-serial or evidence-reuse signals in
+    /// its own adjudication, so scenario classes that share a scenario (e.g. S4-aurora) share its claim.
+    /// </summary>
+    public Task<Guid> SubmitOnceAsync(Func<GoldenScenario, Task<Guid>> submit)
+        => Submitted.GetOrAdd(ScenarioId, _ => new Lazy<Task<Guid>>(() => submit(this))).Value;
+
     public static GoldenScenario Load(string scenarioId)
         => new(All.Value.SingleOrDefault(s => (string?)s["scenarioId"] == scenarioId)?.DeepClone().AsObject()
                ?? throw new ArgumentException($"Scenario '{scenarioId}' is not in seed/golden/scenarios.json.", nameof(scenarioId)));
@@ -137,8 +221,10 @@ public sealed class GoldenScenario
         return form;
     }
 
-    private IReadOnlyList<string> ExpectedList(string name)
-        => Expected[name]?.AsArray().Select(v => (string)v!).ToList() ?? [];
+    private IReadOnlyList<string> ExpectedList(string name) => List(Expected, name);
+
+    private static IReadOnlyList<string> List(JsonObject owner, string name)
+        => owner[name]?.AsArray().Select(v => (string)v!).ToList() ?? [];
 
     private static ByteArrayContent EvidencePart(string relativePath)
     {
