@@ -32,8 +32,6 @@ namespace Warranty.IntegrationTests.Audit;
 [Collection(WarrantyAppCollection.Name)]
 public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
 {
-    private const string PendingEndpoint = "Pending T127";
-
     private const string AccessDenied = "ACCESS_DENIED";
 
     private const string CrossTenantAccessDenied = "CROSS_TENANT_ACCESS_DENIED";
@@ -104,7 +102,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
 
     // ---- GET /api/security-events ---------------------------------------------------------------
 
-    [Fact(Skip = PendingEndpoint)]
+    [Fact]
     public async Task The_aurora_auditor_lists_exactly_the_four_events_newest_first_without_details_or_ips()
     {
         var produced = await ProduceAsync();
@@ -159,7 +157,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Theory(Skip = PendingEndpoint)]
+    [Theory]
     [InlineData(AccessDenied)]
     [InlineData(ClaimantAccessFailed)]
     [InlineData(SelfReviewRefused)]
@@ -177,7 +175,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
         listed.Where(e => produced.Targets.Contains(e.Target)).Select(e => e.Target!).ShouldBe(expected, ignoreOrder: true);
     }
 
-    [Fact(Skip = PendingEndpoint)]
+    [Fact]
     public async Task An_operator_only_kind_filter_lists_nothing()
     {
         await ProduceAsync();
@@ -196,7 +194,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact(Skip = PendingEndpoint)]
+    [Fact]
     public async Task Pages_split_the_newest_first_listing_without_gaps_or_overlap()
     {
         await ProduceAsync();
@@ -227,7 +225,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
         beyond.ShouldBeEmpty();
     }
 
-    [Fact(Skip = PendingEndpoint)]
+    [Fact]
     public async Task The_borealis_auditor_sees_none_of_the_aurora_events()
     {
         var produced = await ProduceAsync();
@@ -243,7 +241,7 @@ public sealed class SecurityEventsTests(WarrantyAppFixture fixture)
         listed.ShouldAllBe(e => !OperatorOnlyKinds.Contains(e.Kind));
     }
 
-    [Theory(Skip = PendingEndpoint)]
+    [Theory]
     [InlineData("agent.aurora")]
     [InlineData("reviewer.aurora")]
     [InlineData("agent-reviewer.aurora")]
