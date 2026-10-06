@@ -1,0 +1,75 @@
+/* Tenant strip, staff context bar (ui-design.md §6.1) and claimant branded header (§6.6). */
+.strip {
+  flex: none;
+  height: 3px;
+}
+
+.contextBar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-5);
+  height: 32px;
+  padding: 0 var(--space-5);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-soft);
+  font: var(--text-small);
+  white-space: nowrap;
+}
+
+.label {
+  color: var(--color-text-secondary);
+}
+
+.value {
+  font-weight: 600;
+}
+
+.isolation {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 1023px) {
+  .isolation {
+    display: none;
+  }
+}
+
+.claimantHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 56px;
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-inverse);
+  font: 600 12px/1 var(--font-display);
+}
+
+.tenantName {
+  font: 600 16px/24px var(--font-display);
+}
+
+.product {
+  color: var(--color-text-secondary);
+  font: var(--text-small);
+}
+
+@media (max-width: 639px) {
+  .claimantHeader {
+    padding: 0 var(--space-4);
+  }
+}
