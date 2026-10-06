@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Agents.Risk;
@@ -82,6 +83,10 @@ public sealed class AdjudicationRunnerTests
     private int _intakeRiskFailures;
     private int _settingsFailures;
     private readonly IAiGateway _gateway = Substitute.For<IAiGateway>();
+    private TimeProvider _time = TimeProvider.System;
+
+    /// <summary>What an agent's model calls do after the fake produced its result (e.g. take time on a fake clock).</summary>
+    private Func<string, CancellationToken, Task>? _modelWork;
 
     public AdjudicationRunnerTests()
     {
@@ -436,6 +441,84 @@ public sealed class AdjudicationRunnerTests
     }
 
     [Fact]
+    public async Task An_AI_step_stopped_by_the_run_deadline_is_a_timed_out_failure_and_the_claim_goes_to_human_review()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 10, 0, 0, TimeSpan.Zero));
+        _time = clock;
+        _modelWork = async (agent, ct) =>
+        {
+            if (agent == AgentNames.Policy)
+            {
+                // The policy model call is still running when the four minutes are up.
+                clock.Advance(AdjudicationRunner.RunDeadline);
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+        };
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        AdjudicationRunner.RunDeadline.ShouldBe(TimeSpan.FromMinutes(4));
+        _log.ShouldBe(["intake", "evidence", "policy", "risk:detect", "risk:full"], "the decision is skipped; risk, guardrails and action still run");
+        var run = _store.Runs.ShouldHaveSingleItem();
+        run.Status.ShouldBe(RunStatus.Completed);
+        run.Disposition.ShouldBe(Disposition.HumanReview);
+        run.FailureReason.ShouldBe($"policy: TimedOut: {AdjudicationRunner.DeadlineExceeded}");
+        _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem().Reasons.ShouldContain(EscalationReason.AiUnavailable);
+        _store.Committed<Recommendation>().ShouldBeEmpty();
+        await _actions.Received(1).ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.EscalateToReview), Arg.Any<CancellationToken>());
+        _trail.Steps.ShouldContain(TrailStep.AiStepFailed);
+        _trail.Steps.ShouldNotContain(TrailStep.CoverageAssessed);
+        _trail.Steps[^1].ShouldBe(TrailStep.GuardrailsEvaluated);
+    }
+
+    [Fact]
+    public async Task An_AI_step_not_started_before_the_run_deadline_fails_without_calling_its_agent()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 10, 0, 0, TimeSpan.Zero));
+        _time = clock;
+        _modelWork = (agent, _) =>
+        {
+            if (agent == AgentNames.Evidence)
+            {
+                // Evidence finishes just as the deadline passes; its result is kept.
+                clock.Advance(AdjudicationRunner.RunDeadline + TimeSpan.FromSeconds(1));
+            }
+
+            return Task.CompletedTask;
+        };
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        _log.ShouldBe(["intake", "evidence", "risk:detect", "risk:full"]);
+        var run = _store.Runs.ShouldHaveSingleItem();
+        run.Disposition.ShouldBe(Disposition.HumanReview);
+        run.FailureReason.ShouldBe($"policy: TimedOut: {AdjudicationRunner.DeadlineExceeded}");
+        _trail.Steps.ShouldContain(TrailStep.EvidenceAnalyzed);
+        _trail.Steps.Count(s => s == TrailStep.AiStepFailed).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_job_is_not_an_AI_failure_and_propagates()
+    {
+        using var job = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        _modelWork = async (agent, ct) =>
+        {
+            if (agent == AgentNames.Policy)
+            {
+                await job.CancelAsync();
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+        };
+
+        await Should.ThrowAsync<OperationCanceledException>(() => Runner().RunAsync(ClaimId, 1, job.Token));
+
+        var run = _store.Runs.ShouldHaveSingleItem();
+        run.Status.ShouldBe(RunStatus.Running);
+        run.CurrentStep.ShouldBe(RunStep.Policy, "the retried job resumes at the policy step");
+        run.FailureReason.ShouldBeNull();
+    }
+
+    [Fact]
     public void The_failure_reason_lists_one_failed_step_per_line_and_reads_back()
     {
         var failures = new[]
@@ -487,11 +570,11 @@ public sealed class AdjudicationRunnerTests
         return new AdjudicationRunner(
             tenant, cases, claims, _store, _policies, tenants, _store, _trail,
             new AdjudicationAgents(
-                new FakeAgent<CaseContext, IntakeResult>(AgentNames.Intake, Intake),
-                new FakeAgent<EvidenceInput, EvidenceResult>(AgentNames.Evidence, Evidence),
-                new FakeAgent<PolicyInput, PolicyResult>(AgentNames.Policy, Policy),
-                new FakeAgent<DecisionInput, RecommendationResult>(AgentNames.Decision, Decision)),
-            new FakeRisk(this), new GuardrailEngine(), _actions, _gateway, tools, _traces, redactor, TimeProvider.System);
+                new FakeAgent<CaseContext, IntakeResult>(AgentNames.Intake, Intake, _modelWork),
+                new FakeAgent<EvidenceInput, EvidenceResult>(AgentNames.Evidence, Evidence, _modelWork),
+                new FakeAgent<PolicyInput, PolicyResult>(AgentNames.Policy, Policy, _modelWork),
+                new FakeAgent<DecisionInput, RecommendationResult>(AgentNames.Decision, Decision, _modelWork)),
+            new FakeRisk(this), new GuardrailEngine(), _actions, _gateway, tools, _traces, redactor, _time);
     }
 
     private AgentResult<IntakeResult> Intake(CaseContext input, AgentExecutionContext ctx)
@@ -586,14 +669,21 @@ public sealed class AdjudicationRunnerTests
         ],
         ClaimHistoryCounts.None, false, 0);
 
-    private sealed class FakeAgent<TIn, TOut>(string name, Func<TIn, AgentExecutionContext, AgentResult<TOut>> run) : IAgent<TIn, TOut>
+    private sealed class FakeAgent<TIn, TOut>(
+        string name, Func<TIn, AgentExecutionContext, AgentResult<TOut>> run, Func<string, CancellationToken, Task>? modelWork = null) : IAgent<TIn, TOut>
     {
         public AgentDescriptor Descriptor { get; } = new(name, "route", new PromptRef(name, 1), null, [], 1, 1_000);
 
-        public Task<AgentResult<TOut>> RunAsync(TIn input, AgentExecutionContext ctx, CancellationToken ct)
+        public async Task<AgentResult<TOut>> RunAsync(TIn input, AgentExecutionContext ctx, CancellationToken ct)
         {
             ctx.Tools.Definitions.ShouldBeEmpty();
-            return Task.FromResult(run(input, ctx));
+            var result = run(input, ctx);
+            if (modelWork is not null)
+            {
+                await modelWork(name, ct);
+            }
+
+            return result;
         }
     }
 

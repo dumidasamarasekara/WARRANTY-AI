@@ -90,6 +90,7 @@ internal sealed class AiGateway(
                 Latency = time.GetElapsedTime(start),
                 EstimatedCost = usage.EstimateCost(raw.Model, raw.InputTokens, raw.OutputTokens, raw.CacheReadTokens, raw.CacheWriteTokens),
             },
+            MaxTokens = maxTokens,
         };
 
         usage.Record(

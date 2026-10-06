@@ -30,7 +30,8 @@ public sealed record AiTurnRequest(
     AiConversation Conversation,               // append-only; see below
     IReadOnlyList<AiToolDefinition> Tools,     // already filtered to the agent's allow-list
     AiOutputSchema? OutputSchema,              // JSON Schema from contracts/schemas
-    TimeSpan Timeout);
+    TimeSpan Timeout,
+    int? MaxTokensOverride = null);            // the harness's truncation retry doubles the limit
 
 public sealed record AiTurnResult(
     AiStopKind Stop,                           // Completed | ToolCalls | Refused | Truncated | Failed
@@ -38,7 +39,8 @@ public sealed record AiTurnResult(
     IReadOnlyList<AiToolCall> ToolCalls,       // when Stop == ToolCalls
     JsonElement? StructuredOutput,             // when Stop == Completed and OutputSchema != null
     AiUsage Usage,
-    AiFailure? Failure);                       // Transient | RateLimited | Timeout | ProviderError | InvalidOutput
+    AiFailure? Failure,                        // Transient | RateLimited | Timeout | ProviderError | InvalidOutput
+    int? MaxTokens = null);                    // output token limit the turn ran with
 
 public sealed record AiUsage(
     string Provider, string Model, int InputTokens, int OutputTokens,

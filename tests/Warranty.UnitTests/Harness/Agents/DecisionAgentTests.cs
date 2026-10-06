@@ -370,6 +370,8 @@ public sealed class DecisionAgentTests : IAsyncDisposable
     [Fact]
     public async Task Output_that_breaks_the_schema_is_stored_as_an_invalid_recommendation()
     {
+        // The answer breaks the schema again in the one corrective turn.
+        _model.Enqueue(ScriptedModelProvider.Completed(Output().Replace("\"APPROVE\"", "\"MAYBE\"", StringComparison.Ordinal)));
         _model.Enqueue(ScriptedModelProvider.Completed(Output().Replace("\"APPROVE\"", "\"MAYBE\"", StringComparison.Ordinal)));
 
         var result = await RunAsync(Input());
@@ -524,6 +526,8 @@ public sealed class DecisionAgentTests : IAsyncDisposable
     [Fact]
     public async Task The_raw_output_of_a_schema_invalid_answer_is_redacted_too()
     {
+        // The answer breaks the schema again in the one corrective turn.
+        _model.Enqueue(ScriptedModelProvider.Completed("""{"decision":"APPROVE","note":"mail someone@privacy-probe.test"}"""));
         _model.Enqueue(ScriptedModelProvider.Completed("""{"decision":"APPROVE","note":"mail someone@privacy-probe.test"}"""));
 
         var result = await RunAsync(Input());
