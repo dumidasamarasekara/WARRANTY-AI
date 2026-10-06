@@ -106,9 +106,78 @@ describe('ReviewDecisionForm', () => {
     })
   })
 
+  it('requires a reason to reject even in agreement with the AI, keeping the pre-filled message', async () => {
+    onDecision(() => decided('Reject'))
+    const { user } = renderForm(reviewClaim({ decision: 'REJECT' }), 'Reject')
+
+    expect(screen.getByRole('dialog', { name: 'Reject claim' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Override AI recommendation' })).not.toBeInTheDocument()
+    expect(messageField()).toHaveValue(aiExplanation)
+    expect(justificationField()).toBeInTheDocument()
+    expect(confirm('Reject claim')).toBeDisabled()
+
+    await user.type(justificationField()!, 'Liquid damage visible on photo 2')
+    expect(confirm('Reject claim')).toBeEnabled()
+    await user.click(confirm('Reject claim'))
+
+    await waitFor(() => expect(received).toHaveLength(1))
+    expect(received[0]!.body).toEqual({
+      decision: 'Reject',
+      claimantExplanation: aiExplanation,
+      justification: 'Liquid damage visible on photo 2',
+    })
+  })
+
+  it('does not pre-fill an approval that overrides an AI rejection and requires the reason', () => {
+    renderForm(reviewClaim({ decision: 'REJECT' }), 'Approve')
+
+    expect(screen.getByRole('dialog', { name: 'Override AI recommendation' })).toBeInTheDocument()
+    expect(screen.getByText(/AI recommends/)).toHaveTextContent('AI recommends Reject. You are choosing Approve.')
+    expect(messageField()).toHaveValue('')
+    expect(justificationField()).toBeInTheDocument()
+    expect(confirm('Approve claim')).toBeDisabled()
+  })
+
+  it('requires a claimant message of at least 20 characters to approve when nothing is pre-filled', async () => {
+    onDecision(() => decided('Approve'))
+    const { user } = renderForm(reviewClaim({ decision: 'HUMAN_REVIEW' }), 'Approve')
+
+    expect(confirm('Approve claim')).toBeDisabled()
+    await user.type(messageField(), 'Approved.')
+    expect(confirm('Approve claim')).toBeDisabled()
+    await user.type(messageField(), ' Your repair is covered.')
+    expect(confirm('Approve claim')).toBeEnabled()
+
+    await user.click(confirm('Approve claim'))
+    await waitFor(() => expect(received).toHaveLength(1))
+    expect(received[0]!.body).toEqual({ decision: 'Approve', claimantExplanation: 'Approved. Your repair is covered.' })
+  })
+
+  it('treats an invalid AI recommendation as no AI decision: no pre-fill and no override wording', () => {
+    renderForm(reviewClaim({ decision: 'APPROVE', isValid: false }), 'Reject')
+
+    expect(screen.getByRole('dialog', { name: 'Reject claim' })).toBeInTheDocument()
+    expect(messageField()).toHaveValue('')
+    expect(screen.queryByText(/AI recommends/)).not.toBeInTheDocument()
+    expect(justificationField()).toBeInTheDocument()
+  })
+
   it('does not pre-fill the message when the AI text failed CLAIMANT_TEXT_SAFE', () => {
     renderForm(reviewClaim({ decision: 'APPROVE', textSafe: false }), 'Approve')
     expect(messageField()).toHaveValue('')
+  })
+
+  it('does not pre-fill the message when the CLAIMANT_TEXT_SAFE check did not run', () => {
+    renderForm(reviewClaim({ decision: 'APPROVE', textSafe: null }), 'Approve')
+    expect(messageField()).toHaveValue('')
+  })
+
+  it('has no claimant message for an information request even against a valid AI decision', () => {
+    renderForm(reviewClaim({ decision: 'APPROVE' }), 'RequestInformation')
+
+    expect(screen.getByRole('dialog', { name: 'Request more information' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Message to the claimant/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(aiExplanation)).not.toBeInTheDocument()
   })
 
   it('shows no override wording and no pre-fill without a valid AI decision', () => {
