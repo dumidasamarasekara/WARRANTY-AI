@@ -1,3 +1,4 @@
+using Warranty.Api.Endpoints.Audit;
 using Warranty.Api.Endpoints.Claims;
 using Warranty.Api.Endpoints.Public;
 using Warranty.Api.Endpoints.Reference;
@@ -45,5 +46,6 @@ public static class EndpointGroups
 
     /// <summary><c>/api/security-events</c>.</summary>
     public static RouteGroupBuilder MapAuditEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api").WithTags("Audit").RequireAuthorization();
+        => app.MapGroup("/api").WithTags("Audit").RequireAuthorization()
+            .MapSecurityEventRoutes();
 }
