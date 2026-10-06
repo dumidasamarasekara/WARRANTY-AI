@@ -49,7 +49,9 @@ namespace Warranty.AI.Harness.Execution;
 /// (the claim cannot be finalized any more), the deterministic risk assessment still runs, and the guardrails
 /// receive the unavailable outputs as null, which escalates the claim to human review
 /// (<c>AI_UNAVAILABLE</c> / <c>INVALID_RECOMMENDATION</c>). Only infrastructure exceptions escape, so the
-/// job retries the round from its checkpoint.
+/// job retries the round from its checkpoint. The AI steps run under the <see cref="RunDeadline"/>
+/// (measured from the start of each execution, so a retried job gets a fresh one): a step the deadline
+/// stops, or one that has not started when it passes, is a <see cref="AgentStatus.TimedOut"/> failure.
 /// </para>
 /// <para>
 /// <b>Intake short-circuit</b> (FR-010, FR-028, research R24). When intake lists missing items, Evidence,
@@ -99,12 +101,15 @@ public sealed partial class AdjudicationRunner(
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(round);
         using var runSpan = traces.StartSpan("harness.run", Tags(claimId, round, null, null));
+        using var deadline = new Deadline(RunDeadline, time, ct);
 
         var state = await LoadCaseAsync(claimId, round, ct);
         if (state is null)
         {
             return;
         }
+
+        state.Deadline = deadline;
 
         if (state.Run.CurrentStep == RunStep.Intake)
         {
@@ -187,9 +192,9 @@ public sealed partial class AdjudicationRunner(
     {
         using var span = StartStep(state, "intake");
         var ctx = state.Context;
-        var agent = agents.Intake;
-        var result = await agent.RunAsync(ctx.Case, AgentContext(ctx, agent.Descriptor.Name), ct);
-        var intake = result.Output ?? throw new InvalidOperationException("The Intake Agent returned no intake result.");
+        var result = await RunAgentAsync(state, agents.Intake, ctx.Case, ct);
+        var intake = result.Output
+                     ?? (result.Succeeded ? throw new InvalidOperationException("The Intake Agent returned no intake result.") : NoIntakeResult(state));
         ctx.Intake = intake;
         state.ShortCircuit = intake.MissingItems.Count > 0;
 
@@ -208,8 +213,7 @@ public sealed partial class AdjudicationRunner(
     {
         using var span = StartStep(state, "evidence");
         var ctx = state.Context;
-        var agent = agents.Evidence;
-        var result = await agent.RunAsync(new EvidenceInput(ctx.Case, RequireIntake(ctx)), AgentContext(ctx, agent.Descriptor.Name), ct);
+        var result = await RunAgentAsync(state, agents.Evidence, new EvidenceInput(ctx.Case, RequireIntake(ctx)), ct);
         ctx.Evidence = result.Output;
 
         var entries = new List<TrailEntry>();
@@ -230,8 +234,7 @@ public sealed partial class AdjudicationRunner(
     {
         using var span = StartStep(state, "policy");
         var ctx = state.Context;
-        var agent = agents.Policy;
-        var result = await agent.RunAsync(new PolicyInput(ctx.Case, RequireIntake(ctx)), AgentContext(ctx, agent.Descriptor.Name), ct);
+        var result = await RunAgentAsync(state, agents.Policy, new PolicyInput(ctx.Case, RequireIntake(ctx)), ct);
 
         // The partial result is kept even when the model step failed: its clauses are the run's issued POL-n.
         ctx.Policy = result.Output;
@@ -282,9 +285,8 @@ public sealed partial class AdjudicationRunner(
         var modelRisk = AiRiskReading.None;
         if (state.CanRunDecision)
         {
-            var agent = agents.Decision;
             var input = DecisionInput.From(ctx, ctx.Policy?.CoverageWindow ?? PolicyResult.NoCoverageWindow, signals);
-            var result = await agent.RunAsync(input, AgentContext(ctx, agent.Descriptor.Name), ct);
+            var result = await RunAgentAsync(state, agents.Decision, input, ct);
             ctx.Recommendation = result.Output;
             modelRisk = result.Output?.Risk ?? AiRiskReading.None;
             if (!result.Succeeded)
@@ -489,6 +491,9 @@ public sealed partial class AdjudicationRunner(
 
         /// <summary>The Risk step's deterministic signals; recomputed when a resumed run starts at Decision.</summary>
         public IReadOnlyList<RiskSignal>? Signals { get; set; }
+
+        /// <summary>This execution's run deadline; the AI steps run under it (<see cref="RunAgentAsync"/>).</summary>
+        public Deadline? Deadline { get; set; }
 
         public bool Failed(string agent) => Failures.Exists(f => f.Agent == agent);
 

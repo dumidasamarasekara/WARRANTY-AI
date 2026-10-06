@@ -77,13 +77,18 @@ public sealed record AiToolCall(string CallId, string ToolName, JsonElement Argu
 
 public sealed record AiToolResult(string CallId, JsonElement Result, bool IsError);
 
+/// <param name="MaxTokens">
+/// The output token limit the gateway sent with the turn (after route defaults, overrides and model caps), so the
+/// harness can retry a <see cref="AiStopKind.Truncated"/> turn with a larger one; null when unknown.
+/// </param>
 public sealed record AiTurnResult(
     AiStopKind Stop,
     AiMessage AssistantMessage,
     IReadOnlyList<AiToolCall> ToolCalls,
     JsonElement? StructuredOutput,
     AiUsage Usage,
-    AiFailure? Failure);
+    AiFailure? Failure,
+    int? MaxTokens = null);
 
 public sealed record AiEmbeddingRequest(AiCallContext Context, IReadOnlyList<string> Inputs, string Route = "embedding");
 

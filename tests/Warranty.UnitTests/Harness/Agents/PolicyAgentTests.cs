@@ -421,6 +421,8 @@ public sealed class PolicyAgentTests : IAsyncDisposable
     [Fact]
     public async Task Output_that_breaks_the_schema_is_InvalidOutput_with_the_clauses_kept()
     {
+        // The answer breaks the schema again in the one corrective turn.
+        _model.Enqueue(ScriptedModelProvider.Completed("""{"coverageAssessment":"MAYBE"}"""));
         _model.Enqueue(ScriptedModelProvider.Completed("""{"coverageAssessment":"MAYBE"}"""));
 
         var result = await RunAsync();

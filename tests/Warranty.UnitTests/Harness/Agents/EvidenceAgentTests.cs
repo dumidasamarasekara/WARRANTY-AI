@@ -505,7 +505,8 @@ public sealed class EvidenceAgentTests : IAsyncDisposable
     [Fact]
     public async Task An_invoice_extraction_that_breaks_the_schema_is_InvalidOutput_and_the_photos_are_still_analysed()
     {
-        Script(invoice: _ => """{"evidenceRef":"EV-1","legible":true}""");
+        // The invoice answer breaks the schema again in the one corrective turn.
+        Script(invoice: _ => """{"evidenceRef":"EV-1","legible":true}""", correctiveTurns: 1);
 
         var result = await RunAsync(Case());
 
@@ -621,9 +622,9 @@ public sealed class EvidenceAgentTests : IAsyncDisposable
     /// in the request (so the answers do not depend on call order). A null answer uses <paramref name="failure"/>.
     /// </summary>
     private void Script(
-        Func<string, string?>? invoice = null, Func<string, string?>? photo = null, AiTurnResult? failure = null, int photos = 2)
+        Func<string, string?>? invoice = null, Func<string, string?>? photo = null, AiTurnResult? failure = null, int photos = 2, int correctiveTurns = 0)
     {
-        for (var i = 0; i < 1 + photos; i++)
+        for (var i = 0; i < 1 + photos + correctiveTurns; i++)
         {
             _model.Enqueue(request =>
             {

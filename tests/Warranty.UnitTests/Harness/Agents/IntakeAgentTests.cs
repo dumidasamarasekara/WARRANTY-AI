@@ -406,6 +406,8 @@ public sealed class IntakeAgentTests : IAsyncDisposable
     [Fact]
     public async Task Output_that_breaks_the_schema_is_InvalidOutput_with_the_validation_kept_and_persisted()
     {
+        // The answer breaks the schema again in the one corrective turn.
+        _model.Enqueue(ScriptedModelProvider.Completed("""{"problemCategory":"POWER_FAILURE","component":"FLUX_CAPACITOR"}"""));
         _model.Enqueue(ScriptedModelProvider.Completed("""{"problemCategory":"POWER_FAILURE","component":"FLUX_CAPACITOR"}"""));
 
         var result = await RunAsync(Case());
@@ -418,6 +420,20 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         intake.Validation.Select(v => v.Check).ShouldBe(CheckOrder);
         result.Diagnostics.ShouldNotBeEmpty();
         _adjudication.Received(1).AddIntakeResult(intake);
+    }
+
+    [Fact]
+    public async Task A_corrective_turn_that_fixes_the_output_succeeds()
+    {
+        _model.Enqueue(ScriptedModelProvider.Completed("""{"problemCategory":"POWER_FAILURE","component":"FLUX_CAPACITOR"}"""));
+        _model.Enqueue(ScriptedModelProvider.Completed(ValidExtraction));
+
+        var result = await RunAsync(Case());
+
+        result.Status.ShouldBe(AgentStatus.Succeeded);
+        IntakeExtraction.From(result.Output!).ShouldNotBeNull();
+        _model.Requests.Count.ShouldBe(2);
+        _model.Requests[1].Messages[^1].Parts.OfType<TextPart>().ShouldHaveSingleItem().Text.ShouldContain("Validation errors:");
     }
 
     [Fact]

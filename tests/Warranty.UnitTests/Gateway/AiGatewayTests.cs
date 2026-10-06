@@ -157,6 +157,18 @@ public sealed class AiGatewayTests : IDisposable
     }
 
     [Fact]
+    public async Task The_result_reports_the_output_token_limit_the_turn_ran_with()
+    {
+        var gateway = Gateway();
+
+        var routeDefault = await gateway.CompleteAsync(Request(), TestContext.Current.CancellationToken);
+        var overridden = await gateway.CompleteAsync(Request() with { MaxTokensOverride = 32_000 }, TestContext.Current.CancellationToken);
+
+        routeDefault.MaxTokens.ShouldBe(16_000);
+        overridden.MaxTokens.ShouldBe(32_000);
+    }
+
+    [Fact]
     public async Task Calls_for_another_tenant_or_with_a_mismatched_prompt_or_route_are_programming_errors()
     {
         var gateway = Gateway();

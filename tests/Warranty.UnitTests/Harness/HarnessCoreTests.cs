@@ -170,19 +170,149 @@ public sealed class HarnessCoreTests
 
     [Theory]
     [InlineData(AiFailureKind.Timeout, AgentStatus.TimedOut)]
-    [InlineData(AiFailureKind.InvalidOutput, AgentStatus.InvalidOutput)]
     [InlineData(AiFailureKind.ProviderError, AgentStatus.Failed)]
+    [InlineData(AiFailureKind.RateLimited, AgentStatus.Failed)]
+    [InlineData(AiFailureKind.Transient, AgentStatus.Failed)]
     public async Task A_failed_turn_ends_the_loop_without_appending_to_the_conversation(AiFailureKind kind, AgentStatus status)
     {
-        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(new AiTurnResult(
-            AiStopKind.Failed, new AiMessage(AiRole.Assistant, []), [], null, AiUsage.None("p", "m"), new AiFailure(kind, "boom")));
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(FailedTurn(kind));
         var conversation = Conversation();
 
         var result = await new AgentTurnLoop().RunAsync(Request(conversation), Execution(), TestContext.Current.CancellationToken);
 
         result.Outcome.ShouldBe(AgentLoopOutcome.Failed);
         result.Status.ShouldBe(status);
+        result.Turns.ShouldBe(1);
         conversation.Messages.Count.ShouldBe(1);
+        await _gateway.Received(1).CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_refusal_ends_the_loop_at_once_as_refused()
+    {
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(new AiTurnResult(
+            AiStopKind.Refused, new AiMessage(AiRole.Assistant, [new TextPart("I can't help with that.")]), [], null, AiUsage.None("p", "m"), null));
+
+        var result = await new AgentTurnLoop().RunAsync(Request(Conversation()), Execution(), TestContext.Current.CancellationToken);
+
+        result.Outcome.ShouldBe(AgentLoopOutcome.Refused);
+        result.Status.ShouldBe(AgentStatus.Refused);
+        await _gateway.Received(1).CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Invalid_output_gets_exactly_one_corrective_turn_that_quotes_the_validation_errors()
+    {
+        var invalid = FailedTurn(AiFailureKind.InvalidOutput, ["/decision: not in the enum", "/confidence: required"]) with
+        {
+            AssistantMessage = new AiMessage(AiRole.Assistant, [new TextPart("""{"decision":"MAYBE"}""")]),
+        };
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(invalid, FinalTurn("""{"applies":true}"""));
+        var conversation = Conversation();
+
+        var result = await new AgentTurnLoop().RunAsync(Request(conversation), Execution(), TestContext.Current.CancellationToken);
+
+        result.Outcome.ShouldBe(AgentLoopOutcome.Completed);
+        result.Status.ShouldBe(AgentStatus.Succeeded);
+        result.Turns.ShouldBe(2);
+        result.Usage.Count.ShouldBe(2);
+        conversation.Messages.Select(m => m.Role).ShouldBe([AiRole.User, AiRole.Assistant, AiRole.User, AiRole.Assistant]);
+        conversation.Messages[1].ShouldBe(invalid.AssistantMessage, "the invalid reply is echoed back unchanged");
+        var correction = conversation.Messages[2].Parts.OfType<TextPart>().ShouldHaveSingleItem().Text;
+        correction.ShouldContain("boom");
+        correction.ShouldContain("- /decision: not in the enum");
+        correction.ShouldContain("- /confidence: required");
+        await _gateway.Received(2).CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_second_invalid_output_ends_the_loop_as_invalid_output()
+    {
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(_ => FailedTurn(AiFailureKind.InvalidOutput, ["/x: bad"]));
+        var conversation = Conversation();
+
+        var result = await new AgentTurnLoop().RunAsync(Request(conversation), Execution(), TestContext.Current.CancellationToken);
+
+        result.Outcome.ShouldBe(AgentLoopOutcome.Failed);
+        result.Status.ShouldBe(AgentStatus.InvalidOutput);
+        result.LastTurn.Failure!.ValidationErrors.ShouldBe(["/x: bad"]);
+        result.Turns.ShouldBe(2);
+        await _gateway.Received(2).CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>());
+
+        // An empty invalid reply is not echoed: only the correction follows the first user turn.
+        conversation.Messages.Select(m => m.Role).ShouldBe([AiRole.User, AiRole.User]);
+    }
+
+    [Fact]
+    public async Task The_corrective_turn_is_allowed_on_the_last_tool_turn()
+    {
+        var single = new AgentDescriptor(Policy.Name, Policy.Route, Policy.Prompt, Policy.OutputSchemaId, Policy.AllowedTools, MaxTurns: 1, Policy.InputTokenBudget);
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(
+            FailedTurn(AiFailureKind.InvalidOutput, ["/x: bad"]), FinalTurn("""{"applies":true}"""));
+
+        var result = await new AgentTurnLoop().RunAsync(
+            new AgentTurnLoopRequest(single, Conversation(), new Dictionary<string, string>(), null, AgentTurnLoopRequest.DefaultTurnTimeout),
+            Execution(),
+            TestContext.Current.CancellationToken);
+
+        result.Status.ShouldBe(AgentStatus.Succeeded);
+    }
+
+    [Fact]
+    public async Task A_truncated_turn_is_asked_again_once_with_twice_the_output_limit()
+    {
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(
+            TruncatedTurn(maxTokens: 8_000),
+            ToolTurn(("c1", "warranty_lookup")),
+            FinalTurn("""{"applies":true}"""));
+        var conversation = Conversation();
+
+        var result = await new AgentTurnLoop().RunAsync(Request(conversation), Execution(), TestContext.Current.CancellationToken);
+
+        result.Status.ShouldBe(AgentStatus.Succeeded);
+        result.Turns.ShouldBe(3);
+        var requests = _gateway.ReceivedCalls().Select(c => (AiTurnRequest)c.GetArguments()[0]!).ToList();
+        requests.Select(r => r.MaxTokensOverride).ShouldBe([null, 16_000, 16_000], "the larger limit is kept for the rest of the loop");
+
+        // The cut-off reply is discarded, not appended.
+        conversation.Messages.Select(m => m.Role).ShouldBe([AiRole.User, AiRole.Assistant, AiRole.User, AiRole.Assistant]);
+        conversation.Messages[1].Parts.ShouldAllBe(p => p is ToolCallPart);
+    }
+
+    [Fact]
+    public async Task Without_a_reported_limit_the_retry_doubles_the_output_tokens_the_truncated_turn_used()
+    {
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(
+            TruncatedTurn(maxTokens: null, outputTokens: 4_000), FinalTurn("""{"applies":true}"""));
+
+        await new AgentTurnLoop().RunAsync(Request(Conversation()), Execution(), TestContext.Current.CancellationToken);
+
+        var requests = _gateway.ReceivedCalls().Select(c => (AiTurnRequest)c.GetArguments()[0]!).ToList();
+        requests[1].MaxTokensOverride.ShouldBe(8_000);
+    }
+
+    [Fact]
+    public async Task A_second_truncation_ends_the_loop_as_a_failure()
+    {
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>()).Returns(TruncatedTurn(8_000), TruncatedTurn(16_000));
+
+        var result = await new AgentTurnLoop().RunAsync(Request(Conversation()), Execution(), TestContext.Current.CancellationToken);
+
+        result.Outcome.ShouldBe(AgentLoopOutcome.Truncated);
+        result.Status.ShouldBe(AgentStatus.Failed);
+        result.Turns.ShouldBe(2);
+        await _gateway.Received(2).CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cancellation_is_not_a_model_outcome_and_propagates()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        _gateway.CompleteAsync(Arg.Any<AiTurnRequest>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AiTurnResult>>(ci => Task.FromCanceled<AiTurnResult>(ci.Arg<CancellationToken>()));
+
+        await Should.ThrowAsync<OperationCanceledException>(() => new AgentTurnLoop().RunAsync(Request(Conversation()), Execution(), cancelled.Token));
     }
 
     [Fact]
@@ -219,6 +349,14 @@ public sealed class HarnessCoreTests
 
     private static AiTurnResult FinalTurn(string json)
         => new(AiStopKind.Completed, new AiMessage(AiRole.Assistant, [new TextPart(json)]), [], JsonDocument.Parse(json).RootElement, AiUsage.None("p", "m"), null);
+
+    private static AiTurnResult FailedTurn(AiFailureKind kind, IReadOnlyList<string>? errors = null)
+        => new(AiStopKind.Failed, new AiMessage(AiRole.Assistant, []), [], null, AiUsage.None("p", "m"), new AiFailure(kind, "boom", errors));
+
+    private static AiTurnResult TruncatedTurn(int? maxTokens, int outputTokens = 0)
+        => new(
+            AiStopKind.Truncated, new AiMessage(AiRole.Assistant, [new TextPart("""{"applies":""")]), [], null,
+            AiUsage.None("p", "m") with { OutputTokens = outputTokens }, null, maxTokens);
 
     private static CaseContext Case() => new(
         ClaimId, 1, "ABCDEFGHJK", ClaimChannel.ClaimantPortal, new DateOnly(2026, 9, 1), new DateOnly(2026, 3, 1), "Store", 450m, "EUR",
