@@ -43,6 +43,12 @@ public static class DependencyInjection
         services.AddScoped<ITool, SearchPolicyKnowledgeTool>();
         services.AddScoped<ITool, SearchGlobalKnowledgeTool>();
 
+        // Consequential tools: descriptor-only, never offered to a model and never executed through a
+        // tool call, so an agent requesting one is a TOOL_SCOPE_VIOLATION (the ActionExecutor calls the
+        // integration ports itself, only for a guardrail-approved action).
+        services.AddSingleton<ITool>(_ => ConsequentialTool.CreateRepairRequest());
+        services.AddSingleton<ITool>(_ => ConsequentialTool.NotifyCustomer());
+
         // The risk capability (scoped: it reads the tenant's claim history and settings) and its
         // injection detector over the global phrase list (research R14).
         services.TryAddSingleton(_ => new InjectionDetector(InjectionDetector.GlobalPhrases));

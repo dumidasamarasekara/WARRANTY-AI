@@ -61,6 +61,7 @@ public sealed class SupplementClaim(
     ITenantContext tenant,
     IClaimRepository claims,
     IDocumentStore documents,
+    IUploadSanitizer sanitizer,
     IJobQueue jobs,
     IDecisionTrailWriter trail,
     IUnitOfWork unitOfWork,
@@ -103,6 +104,7 @@ public sealed class SupplementClaim(
 
         var note = string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim();
         var errors = Validate(command, note, files);
+        var sanitized = await EvidenceUploads.SanitizeAsync(sanitizer, errors, files, ct);
         if (errors.Count > 0)
         {
             return new SupplementClaimResult.Invalid(errors.ToDictionary(e => e.Key, e => e.Value.ToArray(), StringComparer.Ordinal));
@@ -114,8 +116,8 @@ public sealed class SupplementClaim(
 
         // Stored before the transaction (the path is known in advance), as in SubmitClaim: a failed commit
         // can leave unreferenced blobs but never a round without its files.
-        var evidence = new List<ClaimEvidence>(files.Count);
-        foreach (var file in files)
+        var evidence = new List<ClaimEvidence>(sanitized.Count);
+        foreach (var file in sanitized)
         {
             evidence.Add(await EvidenceUploads.StoreAsync(documents, tenant.TenantId, claim.Id, round, file, now, ct));
         }
