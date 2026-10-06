@@ -41,7 +41,11 @@ builder.Services.AddClaimJobWorker(builder.Configuration);
 var app = builder.Build();
 
 app.UseCorrelationIdHeader();
-app.UseExceptionHandler();
+// A malformed or unreadable request body is the client's error (400), also where bad requests throw (Development).
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    StatusCodeSelector = ex => ex is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError,
+});
 app.UseStatusCodePages();
 
 // Authentication → tenant resolution → authorization (research R9).

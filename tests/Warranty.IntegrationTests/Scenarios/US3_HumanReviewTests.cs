@@ -27,8 +27,6 @@ namespace Warranty.IntegrationTests.Scenarios;
 [Collection(WarrantyAppCollection.Name)]
 public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
 {
-    private const string PendingDecisionEndpoint = "Pending T088";
-
     /// <summary>Guardrail reasons hidden from claims agents behind one label (data-model.md, FR-005).</summary>
     private static readonly string[] RiskRelatedReasons = ["RISK_MEDIUM", "RISK_HIGH", "EVIDENCE_CONFLICT", "AI_DETERMINISTIC_DISAGREEMENT", "UNSAFE_CLAIMANT_TEXT"];
 
@@ -162,7 +160,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
 
     // ---- S11: the reviewer overrides the AI on the S5 claim --------------------------------------
 
-    [Fact(Skip = PendingDecisionEndpoint)]
+    [Fact]
     public async Task S11_a_reviewer_rejects_the_S5_claim_against_the_AI_with_a_justification_and_a_claimant_explanation()
     {
         var scenario = GoldenScenario.Load("S11");
@@ -283,7 +281,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact(Skip = PendingDecisionEndpoint)]
+    [Fact]
     public async Task S13_a_reviewer_request_for_information_moves_the_claim_to_PendingInformation()
     {
         var escalation = await EscalatedAsync(GoldenScenario.Load("S13"));
@@ -338,7 +336,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         item.TryGetProperty("aiDecision", out _).ShouldBeFalse("there is no valid AI decision to show");
     }
 
-    [Fact(Skip = PendingDecisionEndpoint)]
+    [Fact]
     public async Task Without_a_valid_recommendation_an_approval_needs_no_justification_but_a_rejection_does()
     {
         var scenario = GoldenScenario.Load("US3-no-recommendation");
@@ -388,7 +386,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact(Skip = PendingDecisionEndpoint)]
+    [Fact]
     public async Task S20_the_submitter_may_not_decide_the_claim_but_another_reviewer_may()
     {
         var scenario = GoldenScenario.Load("S20");

@@ -51,7 +51,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     [InlineData("evidence-content")]
     [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
-    [InlineData("review-decision", Skip = "Pending T088")]
+    [InlineData("review-decision")]
     [InlineData("supplement", Skip = "Pending T101")]
     public async Task Borealis_ids_and_unknown_ids_get_the_same_404_problem_without_borealis_data(string endpointName)
     {
@@ -89,7 +89,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     [InlineData("evidence-content")]
     [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
-    [InlineData("review-decision", Skip = "Pending T088")]
+    [InlineData("review-decision")]
     [InlineData("supplement", Skip = "Pending T101")]
     public async Task Each_denied_lookup_writes_one_identical_access_denied_event_and_borealis_ids_also_an_operator_event(string endpointName)
     {
@@ -284,7 +284,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
                 extracted = new { invoiceDate = "UNKNOWN", modelCode = "UNKNOWN", serial = "UNKNOWN", amount = 0, seller = "UNKNOWN" },
             }));
 
-    private static Task<HttpResponseMessage> SendAsync(HttpClient client, StaffEndpoint endpoint, ClaimIds ids)
+    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, StaffEndpoint endpoint, ClaimIds ids)
     {
         using var request = new HttpRequestMessage(endpoint.Method, endpoint.Path(ids)) { Content = endpoint.Body() };
         if (endpoint.NeedsIfMatch)
@@ -292,7 +292,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
             request.Headers.IfMatch.Add(new EntityTagHeaderValue("\"1\""));
         }
 
-        return client.SendAsync(request, Ct);
+        return await client.SendAsync(request, Ct);
     }
 
     /// <summary>The problem without its per-request members.</summary>
