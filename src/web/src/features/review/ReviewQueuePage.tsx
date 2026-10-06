@@ -255,7 +255,7 @@ function AiRecommendationCard({ claim }: { claim: ClaimDetail }) {
       {ai && recommendation ? (
         <div className={styles.recommendation}>
           <Badge tone={aiDecisionPresentation(ai).tone}>{aiDecisionLabel(ai)}</Badge>
-          <ConfidenceMeter value={recommendation.confidence} size="md" />
+          {recommendation.confidence !== undefined && <ConfidenceMeter value={recommendation.confidence} size="md" />}
           {cited && (
             <p className={styles.cited}>
               {cited.documentTitle} · <code>{cited.clauseKey}</code> · v{cited.version}

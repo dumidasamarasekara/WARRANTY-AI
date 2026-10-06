@@ -1,9 +1,7 @@
 import type { Schemas } from '../../shared/api/client'
 import type { Labelled } from '../../shared/ui/tone'
 
-export type PolicyVersionSummary = Required<Omit<Schemas['PolicyVersionSummary'], 'effectiveTo'>> & {
-  effectiveTo: string | null
-}
+export type PolicyVersionSummary = Schemas['PolicyVersionSummary']
 
 export type PolicyVersionStatus = 'Active' | 'Superseded' | 'Scheduled'
 

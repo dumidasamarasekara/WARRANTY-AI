@@ -28,17 +28,39 @@ export function reviewClaim({ decision = 'APPROVE', isValid = true, textSafe = t
       runId: '22222222-2222-4222-8222-222222222222',
       round: 1,
       status: 'Completed',
+      validation: [],
+      evidenceFindings: [],
       policyReferences: [
-        { ref: 'POL-1', clauseKey: 'AUR-WP-2.1', documentTitle: 'Aurora Limited Warranty', version: 2, effectiveFrom: '2026-01-01', cited: true },
+        {
+          ref: 'POL-1',
+          clauseKey: 'AUR-WP-2.1',
+          clauseType: 'Coverage',
+          documentTitle: 'Aurora Limited Warranty',
+          version: 2,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          cited: true,
+        },
       ],
-      risk: { score: 30, level: 'Medium', signals: [{ code: 'HIGH_VALUE', source: 'Deterministic', severity: 'Medium', detail: 'Above the auto-approval limit' }] },
+      risk: {
+        score: 30,
+        level: 'Medium',
+        stage: 'Full',
+        signals: [{ code: 'HIGH_VALUE', source: 'Deterministic', severity: 'Medium', detail: 'Above the auto-approval limit' }],
+      },
       recommendation: {
         isValid,
+        validationErrors: [],
         decision,
         coverage: 'COVERED',
         confidence: 91,
         reasoningSummary: 'Defect within the warranty period.',
         claimantExplanation,
+        evidenceRefs: [],
+        policyRefs: [],
+        missingInformation: [],
+        model: 'claude-decision',
+        promptVersion: 'decision@1',
       },
       guardrails: {
         disposition: 'HumanReview',
@@ -47,6 +69,9 @@ export function reviewClaim({ decision = 'APPROVE', isValid = true, textSafe = t
       },
     },
     reviewDecisions: [],
+    requestedItems: [],
+    autoInfoRequestCount: 0,
+    reviewerInfoRequested: false,
   }
 }
 

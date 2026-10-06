@@ -133,6 +133,11 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Me' }
         '401': { $ref: '#/components/responses/Problem' }
+        '403':
+          description: The caller's tenant is no longer active
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
 
   /api/claims:
     get:
@@ -155,6 +160,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ClaimPage' }
+        '400': { $ref: '#/components/responses/ValidationProblem' }
     post:
       tags: [Claims]
       summary: Claims agent submits a claim on a customer's behalf (FR-007)
@@ -172,6 +178,8 @@ paths:
               schema: { $ref: '#/components/schemas/SubmissionAccepted' }
         '400': { $ref: '#/components/responses/ValidationProblem' }
         '403': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
 
   /api/claims/{claimId}:
     get:
@@ -332,6 +340,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SecurityEventPage' }
+        '400': { $ref: '#/components/responses/ValidationProblem' }
         '403': { $ref: '#/components/responses/Problem' }
 
   /api/policies:
@@ -545,7 +554,7 @@ components:
 
     ClaimantClaimView:
       type: object
-      required: [reference, status, submittedAt]
+      required: [reference, status, submittedAt, requestedItems]
       description: No risk signals, fraud indicators or internal reasoning (FR-037).
       properties:
         reference: { type: string }
@@ -560,6 +569,7 @@ components:
             reviewer's justification.
         requestedItems:
           type: array
+          description: What the claimant is asked to supply; empty unless Pending Information
           items: { $ref: '#/components/schemas/RequestedItem' }
 
     RequestedItem:
@@ -609,7 +619,22 @@ components:
 
     ClaimDetail:
       type: object
-      required: [claimId, reference, status, channel, claimDate, customer, product, purchase, problemDescription, evidence]
+      required:
+        - claimId
+        - reference
+        - status
+        - channel
+        - claimDate
+        - customer
+        - product
+        - purchase
+        - problemDescription
+        - evidence
+        - reviewDecisions
+        - requestedItems
+        - autoInfoRequestCount
+        - reviewerInfoRequested
+      description: Optional members are omitted from the JSON (never null) when absent or hidden from the caller's role.
       properties:
         claimId: { type: string, format: uuid }
         reference: { type: string }
@@ -625,6 +650,8 @@ components:
             country: { type: string }
         product:
           type: object
+          required: [modelCode, serialNumber, inCatalog]
+          description: name, category and claimValue only when the product is in the tenant's catalog
           properties:
             modelCode: { type: string }
             serialNumber: { type: string }
@@ -634,11 +661,12 @@ components:
             claimValue: { type: number }
         purchase:
           type: object
+          required: [date, place, price, currency]
           properties:
             date: { type: string, format: date }
             place: { type: string }
             price: { type: number }
-            currency: { type: string }
+            currency: { type: string, description: The tenant's currency (ISO 4217) }
         problemDescription: { type: string }
         evidence:
           type: array
@@ -650,6 +678,10 @@ components:
         finalOutcome: { type: string, enum: [Approved, Rejected] }
         finalDecidedBy: { type: string, enum: [System, Reviewer] }
         finalExplanation: { type: string, description: Claimant-facing explanation shown for the final outcome }
+        requestedItems:
+          type: array
+          description: Items requested from the claimant by the latest information request (FR-010, FR-029)
+          items: { $ref: '#/components/schemas/RequestedItem' }
         autoInfoRequestCount:
           type: integer
           minimum: 0
@@ -672,7 +704,7 @@ components:
 
     Evaluation:
       type: object
-      required: [runId, round, status]
+      required: [runId, round, status, validation, evidenceFindings, policyReferences]
       properties:
         runId: { type: string, format: uuid }
         round: { type: integer }
@@ -680,45 +712,39 @@ components:
         validation:
           type: array
           items: { $ref: '#/components/schemas/CheckResult' }
-        extraction: { type: object, description: 'intake-extraction.schema.json' }
+        extraction: { type: object, additionalProperties: true, description: 'intake-extraction.schema.json' }
         evidenceFindings:
           type: array
-          items:
-            type: object
-            properties:
-              ref: { type: string }
-              kind: { type: string, enum: [InvoiceExtraction, PhotoAnalysis] }
-              result: { type: object }
-              consistency:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    field: { type: string }
-                    claimValue: { type: string }
-                    evidenceValue: { type: string }
-                    match: { type: boolean }
+          items: { $ref: '#/components/schemas/EvidenceFinding' }
         policyReferences:
           type: array
           items: { $ref: '#/components/schemas/PolicyReference' }
-        policyAssessment: { type: object, description: 'policy-assessment.schema.json' }
+        policyAssessment: { $ref: '#/components/schemas/PolicyAssessment' }
         risk:
           type: object
+          description: Omitted for role claims-agent (FR-005)
+          required: [score, level, stage, signals]
           properties:
             score: { type: integer }
             level: { type: string, enum: [Low, Medium, High] }
+            stage:
+              type: string
+              enum: [Intake, Full]
+              description: Intake = signals available before evidence analysis (intake short-circuit)
             signals:
               type: array
               items:
                 type: object
+                required: [code, source, severity, detail]
                 properties:
-                  code: { type: string }
+                  code: { type: string, description: 'Risk signal code, e.g. SOURCE_INCONSISTENCY, DUPLICATE_SERIAL_CLAIM' }
                   source: { type: string, enum: [Deterministic, AI] }
-                  severity: { type: string }
+                  severity: { type: string, enum: [Low, Medium, High] }
                   detail: { type: string }
         recommendation: { $ref: '#/components/schemas/Recommendation' }
         guardrails:
           type: object
+          required: [disposition, reasons]
           properties:
             disposition: { $ref: '#/components/schemas/Disposition' }
             reasons:
@@ -726,16 +752,66 @@ components:
               items: { type: string }
             checks:
               type: array
+              description: Omitted for role claims-agent (FR-005)
               items: { $ref: '#/components/schemas/CheckResult' }
         failureReason: { type: string }
 
+    EvidenceFinding:
+      type: object
+      required: [evidenceId, kind, result, consistency]
+      properties:
+        ref: { type: string, description: 'EV-n reference used in the evaluation' }
+        evidenceId: { type: string, format: uuid }
+        kind: { type: string, enum: [InvoiceExtraction, PhotoAnalysis] }
+        result:
+          type: [object, 'null']
+          additionalProperties: true
+          description: 'invoice-extraction.schema.json or photo-analysis.schema.json'
+        consistency:
+          type: array
+          items: { $ref: '#/components/schemas/ConsistencyCheck' }
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: The Evidence agent's confidence (photo analysis only)
+
+    ConsistencyCheck:
+      type: object
+      required: [field, claimValue, evidenceValue, match]
+      description: Deterministic cross-check of one field between the claim and a piece of evidence (FR-016)
+      properties:
+        field: { type: string }
+        claimValue: { type: [string, 'null'] }
+        evidenceValue: { type: [string, 'null'] }
+        match: { type: boolean }
+
+    PolicyAssessment:
+      type: object
+      required: [versionOutcome, assessment, model, promptVersion]
+      description: The Policy agent's reading, the deterministic policy-version selection outcome and the agent's confidence
+      properties:
+        versionOutcome: { type: string, enum: [Ok, NoApplicablePolicy, AmbiguousPolicyVersion] }
+        assessment:
+          type: [object, 'null']
+          additionalProperties: true
+          description: 'policy-assessment.schema.json'
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: The Policy agent's confidence in its coverage assessment
+        model: { type: string }
+        promptVersion: { type: string }
+
     PolicyReference:
       type: object
-      required: [ref, clauseKey, documentTitle, version, effectiveFrom]
+      required: [ref, clauseKey, clauseType, documentTitle, version, effectiveFrom, effectiveTo, cited]
       properties:
         ref: { type: string }
         clauseKey: { type: string }
         clauseTitle: { type: string }
+        clauseType: { type: string, enum: [Coverage, Period, Exclusion, ServiceRule, Definition] }
         documentTitle: { type: string }
         version: { type: integer }
         effectiveFrom: { type: string, format: date }
@@ -745,7 +821,10 @@ components:
 
     Recommendation:
       type: object
-      required: [isValid, decision, coverage, confidence, reasoningSummary]
+      required: [isValid, validationErrors, evidenceRefs, policyRefs, missingInformation, model, promptVersion]
+      description: >
+        An invalid recommendation may lack decision, coverage and confidence. reasoningSummary is
+        omitted for role claims-agent (FR-005); empty texts are omitted.
       properties:
         isValid: { type: boolean }
         validationErrors:
@@ -760,6 +839,7 @@ components:
           type: array
           items:
             type: object
+            required: [ref, observation]
             properties:
               ref: { type: string }
               observation: { type: string }
@@ -767,9 +847,10 @@ components:
           type: array
           items:
             type: object
+            required: [ref, relevance]
             properties:
               ref: { type: string }
-              relevance: { type: string }
+              relevance: { type: string, enum: [SUPPORTS_COVERAGE, SUPPORTS_REJECTION, DEFINES_PERIOD, CONTEXT] }
         missingInformation:
           type: array
           items: { $ref: '#/components/schemas/RequestedItem' }
@@ -789,7 +870,7 @@ components:
 
     ReviewQueueItem:
       type: object
-      required: [claimId, reference, productName, escalatedAt, escalationReasons]
+      required: [claimId, reference, productName, escalatedAt, submittedByMe, escalationReasons]
       properties:
         claimId: { type: string, format: uuid }
         reference: { type: string }
@@ -832,7 +913,7 @@ components:
 
     ReviewDecision:
       type: object
-      required: [id, decision, overridesAi, reviewerName, decidedAt]
+      required: [id, decision, requestedItems, overridesAi, reviewerName, decidedAt]
       properties:
         id: { type: string, format: uuid }
         decision: { type: string, enum: [Approve, Reject, RequestInformation] }
@@ -863,6 +944,7 @@ components:
     TraceEntry:
       type: object
       required: [seq, occurredAt, step, actor, summary]
+      description: aiCalls, toolCalls and ragQueries are omitted when the step made none.
       properties:
         seq: { type: integer }
         occurredAt: { type: string, format: date-time }
@@ -870,7 +952,7 @@ components:
         actor: { type: string }
         summary: { type: string }
         correlationId: { type: string }
-        details: { type: object }
+        details: { type: object, additionalProperties: true }
         aiCalls:
           type: array
           items: { $ref: '#/components/schemas/AiCallSummary' }
@@ -878,20 +960,24 @@ components:
           type: array
           items:
             type: object
+            required: [agent, tool, allowed, latencyMs]
             properties:
+              agent: { type: string }
               tool: { type: string }
               allowed: { type: boolean }
               latencyMs: { type: integer }
-              summary: { type: string }
+              summary: { type: string, description: The stored redacted result or the denial reason }
         ragQueries:
           type: array
           items:
             type: object
+            required: [agent, namespaces, filters, resultClauseKeys, latencyMs]
             properties:
+              agent: { type: string }
               namespaces:
                 type: array
                 items: { type: string }
-              filters: { type: object }
+              filters: { type: object, additionalProperties: true }
               resultClauseKeys:
                 type: array
                 items: { type: string }
@@ -899,6 +985,7 @@ components:
 
     AiCallSummary:
       type: object
+      required: [agent, route, provider, model, inputTokens, outputTokens, cacheReadTokens, latencyMs, estimatedCost, status, attempt]
       properties:
         agent: { type: string }
         route: { type: string }
@@ -915,6 +1002,7 @@ components:
 
     PolicyVersionSummary:
       type: object
+      required: [policyCode, title, version, effectiveFrom, effectiveTo, regions]
       properties:
         policyCode: { type: string }
         title: { type: string }
