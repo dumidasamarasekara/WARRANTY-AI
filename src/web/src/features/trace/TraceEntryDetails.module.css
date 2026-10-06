@@ -1,0 +1,96 @@
+/* Technical details of one trace entry — ui-design.md §6.3 "Decision trace". */
+.well {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font: var(--text-mono);
+  color: var(--color-text-soft);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.heading {
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.field dt {
+  color: var(--color-text-muted);
+}
+
+.field dt::after {
+  content: ':';
+}
+
+.field dd {
+  margin: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.failed {
+  color: var(--tone-err-ink) !important;
+  font-weight: 500;
+}
+
+.retried {
+  color: var(--tone-warn-ink);
+  font-weight: 500;
+}
+
+.summary {
+  color: var(--color-text-soft);
+}
+
+.correlation code {
+  color: var(--color-text);
+}
+
+.json {
+  margin: 0;
+  overflow-x: auto;
+  font: var(--text-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

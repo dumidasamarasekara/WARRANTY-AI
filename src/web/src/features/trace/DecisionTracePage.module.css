@@ -1,0 +1,129 @@
+/* Decision trace tab — ui-design.md §6.3 "Decision trace". */
+.page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.title {
+  font: var(--text-section-title);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+}
+
+.mono {
+  font: var(--text-mono);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.toggleLabel {
+  margin-right: var(--space-1);
+  font: var(--text-label);
+  color: var(--color-text-secondary);
+}
+
+.toggleButton {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font: var(--text-label);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.toggleButton:hover {
+  background: var(--color-surface-muted);
+}
+
+.toggleButton:focus-visible,
+.expand:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.toggleCurrent,
+.toggleCurrent:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* "seq. step" with the actor badge · summary · time */
+.entry {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 110px;
+  gap: var(--space-2) var(--space-4);
+  align-items: start;
+}
+
+@media (width < 768px) {
+  .entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.stepTitle {
+  font: var(--text-card-title);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.summary {
+  font: var(--text-data);
+  color: var(--color-text);
+}
+
+.time {
+  justify-self: end;
+  font: var(--text-mono);
+  color: var(--color-text-secondary);
+}
+
+.expand {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--text-small);
+  font-weight: 500;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.expand:hover {
+  text-decoration: underline;
+}
