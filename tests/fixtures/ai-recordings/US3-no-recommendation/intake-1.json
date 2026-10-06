@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "DISPLAY_DEFECT",
+    "component": "SCREEN",
+    "symptoms": [
+      "built-in display stays black",
+      "laptop keeps running with the keyboard backlight on",
+      "an external monitor shows the desktop"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The laptop's built-in display stopped showing an image during normal use while the laptop keeps running and an external monitor works. The claimant reports no drop, impact or liquid contact."
+  },
+  "usage": {
+    "inputTokens": 1204,
+    "outputTokens": 146
+  }
+}

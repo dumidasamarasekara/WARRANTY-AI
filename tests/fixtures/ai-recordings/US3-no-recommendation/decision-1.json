@@ -1,0 +1,7 @@
+{
+  "stop": "Failed",
+  "failure": {
+    "kind": "ProviderError",
+    "message": "Recorded provider error: the decision model was unavailable (HTTP 529 overloaded)."
+  }
+}
