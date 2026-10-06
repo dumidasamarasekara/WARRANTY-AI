@@ -52,7 +52,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
     [InlineData("review-decision")]
-    [InlineData("supplement", Skip = "Pending T101")]
+    [InlineData("supplement")]
     public async Task Borealis_ids_and_unknown_ids_get_the_same_404_problem_without_borealis_data(string endpointName)
     {
         var endpoint = StaffEndpoint.Named(endpointName);
@@ -90,7 +90,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
     [InlineData("review-decision")]
-    [InlineData("supplement", Skip = "Pending T101")]
+    [InlineData("supplement")]
     public async Task Each_denied_lookup_writes_one_identical_access_denied_event_and_borealis_ids_also_an_operator_event(string endpointName)
     {
         var endpoint = StaffEndpoint.Named(endpointName);

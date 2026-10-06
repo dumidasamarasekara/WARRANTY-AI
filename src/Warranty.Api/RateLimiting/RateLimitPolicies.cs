@@ -19,7 +19,7 @@ public sealed class RateLimitingOptions
 {
     public const string SectionName = "RateLimiting";
 
-    /// <summary><c>POST /api/public/claims</c>: per client IP.</summary>
+    /// <summary><c>POST /api/public/claims</c> and <c>POST /api/public/claims/{reference}/supplements</c>: one budget per client IP.</summary>
     public FixedWindowLimit ClaimSubmission { get; set; } = new() { PermitLimit = 10, Window = TimeSpan.FromHours(1) };
 
     /// <summary><c>POST /api/public/claims/access</c>: per client IP and claim reference.</summary>

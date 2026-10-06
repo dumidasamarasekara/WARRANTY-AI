@@ -41,6 +41,25 @@ public static class ClaimEndpoints
             .RequireAuthorization(AuthPolicies.AnyStaff)
             .Produces<ClaimDetail>()
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // POST /api/claims/{claimId}/supplements: a claims agent supplements a PendingInformation claim (FR-010).
+        group.MapPost("/{claimId:guid}/supplements", (Guid claimId, HttpRequest request, SupplementClaim supplementClaim, CancellationToken ct)
+                => ClaimSubmissionRequest.SupplementAsync(
+                    request,
+                    supplementClaim,
+                    ClaimChannel.AgentPortal,
+                    claimId,
+                    reference: null,
+                    accepted => Results.Accepted(
+                        $"/api/claims/{accepted.ClaimId}",
+                        new SubmissionAccepted(accepted.ClaimId, accepted.Reference, accepted.Status, accepted.Round)),
+                    ct))
+            .WithName("SupplementClaimAsAgent")
+            .WithSummary("Claims agent supplements a Pending Information claim")
+            .RequireAuthorization(AuthPolicies.ClaimsAgent)
+            .WithSubmissionLimits()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         return group;
     }
 
