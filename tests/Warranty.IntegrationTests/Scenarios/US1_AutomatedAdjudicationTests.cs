@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -15,7 +14,7 @@ namespace Warranty.IntegrationTests.Scenarios;
 /// claims agent is adjudicated by the harness with recorded AI responses (seed/golden/scenarios.json,
 /// tests/fixtures/ai-recordings/) and finalized automatically only through the guardrails. Every claim
 /// has its own serial and evidence files, so no test trips another's duplicate-serial or evidence-reuse
-/// signal; the S1 claim is submitted once and shared by the S1 and trace tests.
+/// signal; the S1 and S2 claims are submitted once and shared by the S1, S2 and trace tests here and in US6.
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
 public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
@@ -30,9 +29,6 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         "AutoRejected", "InformationRequested", "EscalatedToReview", "ReviewerDecided", "SupplementReceived", "ActionExecuted", "AiStepFailed",
         "Correction",
     ];
-
-    /// <summary>Claims submitted once per scenario and shared by the tests that read them.</summary>
-    private static readonly ConcurrentDictionary<string, Lazy<Task<Guid>>> SubmittedClaims = new(StringComparer.Ordinal);
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -278,9 +274,11 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         (await CountAsync(ClaimsForSerial, scenario.Serial)).ShouldBe(before);
     }
 
-    /// <summary>Submits the scenario's claim once per test run (through its channel) and returns the claim ID.</summary>
-    private Task<Guid> SubmitOnceAsync(GoldenScenario scenario)
-        => SubmittedClaims.GetOrAdd(scenario.ScenarioId, _ => new Lazy<Task<Guid>>(() => SubmitAsClaimantAsync(scenario))).Value;
+    /// <summary>
+    /// Submits the scenario's claim once per test run (through its channel) and returns the claim ID; the
+    /// claim is shared with the other scenario classes (<see cref="ScenarioClaims"/>), e.g. the US6 trace tests.
+    /// </summary>
+    private Task<Guid> SubmitOnceAsync(GoldenScenario scenario) => ScenarioClaims.SubmitOnceAsync(scenario, SubmitAsClaimantAsync);
 
     /// <summary>Submits through the tenant's claimant channel; the public response carries no claim ID, so it is looked up by reference.</summary>
     private async Task<Guid> SubmitAsClaimantAsync(GoldenScenario scenario)
