@@ -1,5 +1,6 @@
 using Warranty.Api.Endpoints.Claims;
 using Warranty.Api.Endpoints.Public;
+using Warranty.Api.Endpoints.Reference;
 using Warranty.Api.Endpoints.Trace;
 
 namespace Warranty.Api.Endpoints;
@@ -33,7 +34,8 @@ public static class EndpointGroups
 
     /// <summary><c>/api/me</c> and <c>/api/policies</c>.</summary>
     public static RouteGroupBuilder MapReferenceEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api").WithTags("Reference").RequireAuthorization();
+        => app.MapGroup("/api").WithTags("Reference").RequireAuthorization()
+            .MapMeRoutes();
 
     /// <summary><c>/api/security-events</c>.</summary>
     public static RouteGroupBuilder MapAuditEndpoints(this IEndpointRouteBuilder app)

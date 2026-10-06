@@ -206,11 +206,6 @@
   min-width: 0;
 }
 
-.tenantStrip {
-  flex: none;
-  height: 3px;
-}
-
 .header {
   display: flex;
   align-items: center;

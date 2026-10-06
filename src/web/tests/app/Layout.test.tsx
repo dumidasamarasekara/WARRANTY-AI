@@ -102,6 +102,7 @@ describe('staff Layout', () => {
     expect(screen.getByTitle('Your organisation (from your sign-in)')).toHaveTextContent('Aurora Electronics')
     expect(within(breadcrumbs).getByText('Claims')).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Tenant context' })).toHaveTextContent('Tenant Aurora Electronics')
   })
 
   it('lands reviewers on the review queue and others on the claims list', async () => {
@@ -126,8 +127,10 @@ describe('staff Layout', () => {
   it('signs out from the user menu', async () => {
     roles = ['claims-agent']
     renderShell('/staff/claims')
-    await userEvent.click(screen.getByRole('button', { name: /Riley Reviewer/ }))
-    expect(screen.getByText('Claims agent')).toBeInTheDocument()
+    const userButton = screen.getByRole('button', { name: /Riley Reviewer/ })
+    await userEvent.click(userButton)
+    const menu = document.getElementById(userButton.getAttribute('aria-controls') ?? '') as HTMLElement
+    expect(within(menu).getByText('Claims agent')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(signoutRedirect).toHaveBeenCalledOnce()
   })

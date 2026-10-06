@@ -4,6 +4,7 @@ import { Breadcrumbs, EmptyState, cx, type BreadcrumbItem } from '../shared/ui'
 import { hasAnyRole, staffRoleLabels, type StaffRole } from './roles'
 import { crumbLabel } from './routeHandle'
 import { useMe, useReviewQueueCount } from './staffQueries'
+import { TenantBanner, TenantStrip } from './TenantBanner'
 import { tenantMarkerColor } from './tenantTheme'
 import { useStaffSession, type StaffSession } from './useStaffSession'
 import styles from './Layout.module.css'
@@ -99,7 +100,7 @@ export function Layout() {
       </aside>
 
       <div className={styles.column}>
-        <div className={styles.tenantStrip} style={{ background: tenantMarkerColor(tenantName) }} aria-hidden="true" />
+        <TenantStrip tenantName={tenantName} />
         <header className={styles.header}>
           <StaffBreadcrumbs tenantName={tenantName} />
           <div className={styles.headerActions}>
@@ -111,6 +112,7 @@ export function Layout() {
             <UserMenu session={session} />
           </div>
         </header>
+        <TenantBanner area="staff" />
         <main className={styles.main}>
           <Outlet />
         </main>
