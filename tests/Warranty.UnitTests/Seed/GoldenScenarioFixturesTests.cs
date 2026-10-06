@@ -120,8 +120,13 @@ public sealed partial class GoldenScenarioFixturesTests
             return; // a scenario that shares an earlier scenario's serial replays that scenario's fixtures
         }
 
+        var scenario = Scenario(scenarioId);
+        var invalidOutputs = StringList(scenario, "invalidOutputFixtures");
+        var deniedTools = StringList(scenario, "deniedToolRequests");
         var fixtures = Fixtures(folder);
         fixtures.ShouldNotBeEmpty();
+        invalidOutputs.ShouldAllBe(file => File.Exists(Path.Combine(folder, file)), $"{scenarioId}: a listed invalid-output fixture is missing");
+        var requestedTools = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in fixtures.GroupBy(f => f.Agent))
         {
             group.Select(f => f.Index).Order().ShouldBe(Enumerable.Range(1, group.Count()), $"{scenarioId}: {group.Key} fixtures must be numbered 1..n");
@@ -138,13 +143,30 @@ public sealed partial class GoldenScenarioFixturesTests
             {
                 case AiStopKind.Completed when turn.StructuredOutput is { } output:
                     var errors = Validator.Validate(SchemaByAgent[fixture.Agent], output).Errors;
-                    errors.ShouldBeEmpty($"{fixture.Name} does not match {SchemaByAgent[fixture.Agent]}: {string.Join("; ", errors)}");
+                    if (invalidOutputs.Contains(Path.GetFileName(fixture.Path)))
+                    {
+                        errors.ShouldNotBeEmpty($"{fixture.Name} is listed in invalidOutputFixtures but matches {SchemaByAgent[fixture.Agent]}");
+                    }
+                    else
+                    {
+                        errors.ShouldBeEmpty($"{fixture.Name} does not match {SchemaByAgent[fixture.Agent]}: {string.Join("; ", errors)}");
+                    }
+
                     break;
 
                 case AiStopKind.ToolCalls:
                     turn.ToolCalls.ShouldNotBeEmpty($"{fixture.Name}: a ToolCalls turn needs tool calls");
-                    turn.ToolCalls.ShouldAllBe(call => ToolsByAgent[fixture.Agent].Contains(call.ToolName), $"{fixture.Name}: tool not allowed for {fixture.Agent}");
+                    turn.ToolCalls.ShouldAllBe(
+                        call => ToolsByAgent[fixture.Agent].Contains(call.ToolName) || deniedTools.Contains(call.ToolName),
+                        $"{fixture.Name}: tool not allowed for {fixture.Agent} and not listed in deniedToolRequests");
                     turn.ToolCalls.Select(c => c.CallId).ShouldBeUnique();
+                    requestedTools.UnionWith(turn.ToolCalls.Select(c => c.ToolName));
+                    break;
+
+                case AiStopKind.Refused or AiStopKind.Truncated:
+                    // A refusal or truncation carries only the model's text: no tool calls and no structured output.
+                    turn.StructuredOutput.ShouldBeNull($"{fixture.Name}: a {turn.Stop} turn has no structured output");
+                    turn.ToolCalls.ShouldBeEmpty($"{fixture.Name}: a {turn.Stop} turn has no tool calls");
                     break;
 
                 default:
@@ -152,6 +174,8 @@ public sealed partial class GoldenScenarioFixturesTests
                     break;
             }
         }
+
+        deniedTools.ShouldAllBe(tool => requestedTools.Contains(tool), $"{scenarioId}: every tool in deniedToolRequests is requested by a fixture");
     }
 
     [Theory]
@@ -164,7 +188,8 @@ public sealed partial class GoldenScenarioFixturesTests
             return;
         }
 
-        var scenario = LoadScenarios().Single(s => s.GetProperty("scenarioId").GetString() == scenarioId);
+        var scenario = Scenario(scenarioId);
+        var invalidOutputs = StringList(scenario, "invalidOutputFixtures");
         var tenant = scenario.GetProperty("tenant").GetString()!;
         var references = scenario.GetProperty("references").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!, StringComparer.Ordinal);
         var clauseKeys = TenantClauseKeys(tenant);
@@ -178,6 +203,7 @@ public sealed partial class GoldenScenarioFixturesTests
         fixtures.Count(f => f.Agent == "evidence-photo").ShouldBeLessThanOrEqualTo(photoCount, $"{scenarioId}: one photo call per photo");
 
         var outputs = fixtures
+            .Where(f => !invalidOutputs.Contains(Path.GetFileName(f.Path)))
             .Select(f => (f.Agent, f.Name, Turn: Replay(f.Path)))
             .ToList();
         foreach (var (_, name, turn) in outputs)
@@ -284,6 +310,15 @@ public sealed partial class GoldenScenarioFixturesTests
                 return (path, $"{Path.GetFileName(folder)}/{name}", match.Groups["agent"].Value, int.Parse(match.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture));
             })
             .ToList();
+
+    private static JsonElement Scenario(string scenarioId)
+        => LoadScenarios().Single(s => s.GetProperty("scenarioId").GetString() == scenarioId);
+
+    /// <summary>A scenario's optional string-array property (e.g. <c>invalidOutputFixtures</c>); empty when absent.</summary>
+    private static HashSet<string> StringList(JsonElement scenario, string property)
+        => scenario.TryGetProperty(property, out var values)
+            ? values.EnumerateArray().Select(v => v.GetString()!).ToHashSet(StringComparer.Ordinal)
+            : [];
 
     private static List<JsonElement> LoadScenarios()
     {

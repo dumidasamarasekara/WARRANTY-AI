@@ -1,0 +1,8 @@
+{
+  "stop": "Refused",
+  "text": "I can't help with this request.",
+  "usage": {
+    "inputTokens": 7838,
+    "outputTokens": 12
+  }
+}

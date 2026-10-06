@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-1",
+    "legible": true,
+    "sellerName": "AURORA STORE, Inc.",
+    "invoiceNumber": "AS-2026-107490",
+    "invoiceDate": "{{claim.purchaseDate}}",
+    "productDescription": "Aurora Tab 10",
+    "modelCodeOnInvoice": "AUR-TAB10",
+    "serialOnInvoice": "AT10-24-0019",
+    "totalAmount": 449.50,
+    "currency": "USD",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2350,
+    "outputTokens": 171
+  }
+}

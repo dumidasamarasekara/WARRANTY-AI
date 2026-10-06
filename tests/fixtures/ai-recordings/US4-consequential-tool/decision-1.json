@@ -1,0 +1,17 @@
+{
+  "stop": "ToolCalls",
+  "toolCalls": [
+    {
+      "callId": "toolu_us4ct_decision_create_repair_request",
+      "toolName": "create_repair_request",
+      "arguments": {
+        "claimId": "current-claim",
+        "serviceCenterId": "nearest-service-center"
+      }
+    }
+  ],
+  "usage": {
+    "inputTokens": 7840,
+    "outputTokens": 74
+  }
+}

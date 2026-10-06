@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": true,
+    "damageTypes": ["COSMETIC_WEAR"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 87,
+    "observations": "Front of a dark tablet lying on a table. The screen is black and unlit. Fine surface scratches run across the screen glass; the glass is not cracked and there are no dents or liquid marks."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 140
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "HUMAN_REVIEW",
+    "coverage": "COVERED",
+    "confidence": 90,
+    "risk": {
+      "level": "MEDIUM",
+      "signals": [
+        {
+          "code": "SERIAL_MISMATCH_PHOTO",
+          "description": "The serial label in the back photo reads AT10-24-0007, but the claim and the invoice name AT10-24-0006.",
+          "evidenceRefs": ["EV-1", "EV-3"]
+        }
+      ]
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0006, 450.00 USD, dated on the stated purchase date."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: black, unlit screen; no cracks, dents or liquid marks."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: the serial label reads AT10-24-0007, not the claimed AT10-24-0006."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-8",
+        "relevance": "SUPPORTS_COVERAGE"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "DEFINES_PERIOD"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The invoice (EV-1) matches the claimed seller, model, serial AT10-24-0006, price and purchase date, and a power failure during normal use would be a manufacturing defect covered by POL-8 within the 12-month North America period of POL-1. However, the serial label in the back photo (EV-3) reads AT10-24-0007, so it is not certain that the photographed unit is the claimed product. Recommend human review to confirm the unit before a decision.",
+    "claimantExplanation": "Thank you for your claim for your Aurora Tab 10. A member of our claims team will look at your claim before we decide on it. We will contact you if we need anything else from you.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7840,
+    "outputTokens": 545
+  }
+}

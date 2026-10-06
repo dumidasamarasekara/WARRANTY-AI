@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "AT10-24-0008",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 92,
+    "observations": "Back of a silver Aurora tablet with the camera module in the corner. The serial label reads 'AURORA MODEL AUR-TAB10' and 'S/N: AT10-24-0008'. The housing is undamaged."
+  },
+  "usage": {
+    "inputTokens": 1655,
+    "outputTokens": 139
+  }
+}
