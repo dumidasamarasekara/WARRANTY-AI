@@ -84,7 +84,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
     [Theory]
     [InlineData("S10")]
     [InlineData("US4-refusal")]
-    [InlineData("US4-truncated", Skip = "Pending T095")]
+    [InlineData("US4-truncated")]
     public async Task An_AI_step_that_does_not_complete_is_recorded_and_the_claim_goes_to_review(string scenarioId)
     {
         var scenario = GoldenScenario.Load(scenarioId);
@@ -99,7 +99,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
         scenario.ExpectedClaimantStatus.ShouldBe("Under Review");
     }
 
-    [Fact(Skip = "Pending T095")]
+    [Fact]
     public async Task Invalid_decision_output_gets_exactly_one_corrective_turn_before_the_claim_goes_to_review()
     {
         var scenario = GoldenScenario.Load("US4-invalid-output");
