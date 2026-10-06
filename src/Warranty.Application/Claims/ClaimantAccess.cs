@@ -92,7 +92,7 @@ public sealed class ClaimantAccess(
             product?.Name,
             claim.Status.IsFinal() ? claim.FinalExplanation : null,
             claim.Status == ClaimStatus.PendingInformation
-                ? claim.RequestedItems.Select(i => new ClaimantRequestedItem(i.Item, i.Reason)).ToList()
+                ? RequestedItemCatalog.ForClaimant(claim.RequestedItems).Select(i => new ClaimantRequestedItem(i.Item, i.Reason)).ToList()
                 : []);
     }
 

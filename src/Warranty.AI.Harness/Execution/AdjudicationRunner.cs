@@ -52,8 +52,15 @@ namespace Warranty.AI.Harness.Execution;
 /// job retries the round from its checkpoint.
 /// </para>
 /// <para>
-/// <b>Intake short-circuit.</b> When intake lists missing items, the AI analysis steps do not run: the
-/// intake-stage risk assessment and the guardrails decide between a request for information and review.
+/// <b>Intake short-circuit</b> (FR-010, FR-028, research R24). When intake lists missing items, Evidence,
+/// Policy and Decision do not run (no model call is made for them): the Risk step is
+/// <see cref="IRiskAssessor.AssessAtIntakeAsync"/> (stage <c>Intake</c>), and the guardrails evaluate the run
+/// on their short-circuit path with <c>REQUIRED_INFO_COMPLETE</c> failed. The result is
+/// <c>RequestInformation</c> with intake's items, unless an escalation condition that does not need the
+/// missing information holds — claim value above the auto-approval limit, an always-review category, any
+/// intake-stage risk signal, a claim returned after a reviewer's request, or two automatic requests already
+/// made — which routes the claim to <c>HumanReview</c> instead. The action executor stores the items with
+/// claimant-facing text (<c>RequestedItemCatalog</c>).
 /// </para>
 /// </remarks>
 public sealed partial class AdjudicationRunner(
