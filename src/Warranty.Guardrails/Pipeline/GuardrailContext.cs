@@ -43,6 +43,10 @@ internal sealed class GuardrailContext
         RequiredInfoComplete = input.Intake.Validation.All(check => check.Passed) && RequestedItems.Count == 0;
         InformationNeeded = !RequiredInfoComplete || Decision == AiDecision.RequestMoreInformation;
         WithinCoverage = ComputeWithinCoverage(input);
+        AccidentalDamage = AccidentalDamageRule.Evaluate(
+            input.Policy?.Version?.Terms.AccidentalDamage, input.Case.PurchaseDate, input.ClaimDate, input.Case.PriorApprovedAccidental);
+        AccidentalDamageEvidence = input.Evidence?.Photos.FirstOrDefault(
+            photo => photo.DamageTypes is not null && AccidentalDamageRule.IsEvidenced(photo.DamageTypes));
     }
 
     public GuardrailInput Input { get; }
@@ -78,6 +82,15 @@ internal sealed class GuardrailContext
     /// window was not determined or contradicts the claim date and coverage end date (fail closed).
     /// </summary>
     public bool? WithinCoverage { get; }
+
+    /// <summary>
+    /// The applicable version's accidental-damage allowance for this claim (<see cref="AccidentalDamageRule"/>):
+    /// its window and the serial's prior approved accidental-damage claims; <c>NoApplicablePolicy</c> without a version.
+    /// </summary>
+    public AccidentalDamageResult AccidentalDamage { get; }
+
+    /// <summary>The first photo whose damage types show accidental damage (research R26 mapping); null when none does.</summary>
+    public PhotoFinding? AccidentalDamageEvidence { get; }
 
     /// <summary>A <c>POL-n</c> issued for this run and present among the run's retrieved clauses.</summary>
     public bool TryGetIssuedClause(string reference, out RetrievedPolicyRef clause)

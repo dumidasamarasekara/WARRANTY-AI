@@ -369,7 +369,9 @@ public sealed partial class AdjudicationRunner(
             ctx.Case.Product?.Category,
             ctx.Case.Product?.ClaimValue,
             ctx.Case.ReviewerInfoRequested,
-            ctx.Case.AutoInfoRequestCount);
+            ctx.Case.AutoInfoRequestCount,
+            ctx.Case.PurchaseDate,
+            ctx.Case.History.PriorApprovedAccidental);
 
         return new GuardrailInput(
             settings,

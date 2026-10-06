@@ -1,6 +1,7 @@
 using NSubstitute;
 using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Tools.Implementations;
+using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Adjudication;
@@ -29,6 +30,8 @@ public sealed class WarrantyLookupToolTests
     public WarrantyLookupToolTests()
     {
         _claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(NewClaim());
+        _claims.GetHistoryCountsAsync(ClaimId, Arg.Any<string>(), Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(ClaimHistoryCounts.None);
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>()).Returns(NewProduct());
         _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(Aurora, Serial, ProductId));
         _policies.GetPolicyAsync(PolicyId, Arg.Any<CancellationToken>()).Returns(WarrantyPolicy.Create(PolicyId, Aurora, "AUR-WP", "Aurora Limited Warranty"));
@@ -80,7 +83,7 @@ public sealed class WarrantyLookupToolTests
     {
         var result = await Tool.LookupAsync(ClaimId, "BATTERY", TestContext.Current.CancellationToken);
 
-        result.Coverage.ShouldBe(new WarrantyCoverageInfo(new DateOnly(2026, 7, 15), true, false, new DateOnly(2027, 1, 15), true));
+        result.Coverage.ShouldBe(new WarrantyCoverageInfo(new DateOnly(2026, 7, 15), true, false, new DateOnly(2027, 1, 15), true, 0, true));
         result.Policy!.PolicyVersionId.ShouldNotBe(Guid.Empty);
     }
 
@@ -114,6 +117,43 @@ public sealed class WarrantyLookupToolTests
         var result = await Tool.LookupAsync(ClaimId, "SCREEN", TestContext.Current.CancellationToken);
 
         (result.Coverage!.AccidentalWindowEndDate, result.Coverage.WithinAccidentalWindow).ShouldBe((null, null));
+        (result.Coverage.PriorApprovedAccidental, result.Coverage.AccidentalDamageCovered).ShouldBe((null, false));
+        await _claims.DidNotReceiveWithAnyArgs().GetHistoryCountsAsync(default, default!, default, default!, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Accidental_damage_within_the_allowance_is_covered_and_the_serials_prior_incidents_are_counted()
+    {
+        var result = await Tool.InvokeAsync(Args("""{"component":"SCREEN"}"""), Context(AgentNames.Policy), TestContext.Current.CancellationToken);
+
+        var coverage = result.Content.GetProperty("coverage");
+        coverage.GetProperty("priorApprovedAccidental").GetInt32().ShouldBe(0);
+        coverage.GetProperty("accidentalDamageCovered").GetBoolean().ShouldBeTrue();
+        await _claims.Received(1).GetHistoryCountsAsync(ClaimId, Arg.Any<string>(), new DateOnly(2026, 9, 30), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Accidental_damage_beyond_the_incident_limit_is_not_covered()
+    {
+        _claims.GetHistoryCountsAsync(ClaimId, Arg.Any<string>(), Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new ClaimHistoryCounts(0, 1, 0));
+
+        var result = await Tool.LookupAsync(ClaimId, "SCREEN", TestContext.Current.CancellationToken);
+
+        (result.Coverage!.WithinAccidentalWindow, result.Coverage.PriorApprovedAccidental, result.Coverage.AccidentalDamageCovered)
+            .ShouldBe((true, 1, false));
+    }
+
+    [Fact]
+    public async Task Accidental_damage_after_the_allowance_window_is_not_covered()
+    {
+        _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns(
+            [Version(2, new DateOnly(2026, 1, 1), null, Terms with { AccidentalDamage = new AccidentalDamageTerms(true, 6, 1) })]);
+
+        var result = await Tool.LookupAsync(ClaimId, "SCREEN", TestContext.Current.CancellationToken);
+
+        (result.Coverage!.AccidentalWindowEndDate, result.Coverage.WithinAccidentalWindow, result.Coverage.AccidentalDamageCovered)
+            .ShouldBe((new DateOnly(2026, 7, 15), false, false));
     }
 
     [Fact]

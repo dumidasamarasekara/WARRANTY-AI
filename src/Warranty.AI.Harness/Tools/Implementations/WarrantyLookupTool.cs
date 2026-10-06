@@ -15,7 +15,9 @@ namespace Warranty.AI.Harness.Tools.Implementations;
 /// purchase date, for the claim's region and product category — clarification Q1), its structured terms
 /// for the claim's region, and the coverage window computed deterministically by
 /// <see cref="CoverageWindowCalculator"/> for the claimed component. The model only names the component;
-/// region, dates and product come from the claim. No version → <c>NoApplicablePolicy</c>; more than one
+/// region, dates and product come from the claim. When the version covers accidental damage, the
+/// serial's prior approved accidental-damage claims are counted and <see cref="AccidentalDamageRule"/>
+/// says whether the allowance covers this claim. No version → <c>NoApplicablePolicy</c>; more than one
 /// → <c>AmbiguousPolicyVersion</c>; in both cases nothing is computed (FR-014).
 /// </summary>
 public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogRepository catalog, IPolicyRepository policies) : ITool
@@ -42,7 +44,8 @@ public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogReposito
         ToolNames.WarrantyLookup,
         "Returns the warranty policy version that applies to this claim (by purchase date, region and product category), "
         + "its structured coverage terms for the claim's region, and the deterministically computed coverage end date and "
-        + "coverage flags for the given component. Use these computed values; do not recompute them.",
+        + "coverage flags for the given component, and whether accidental damage on this claim falls within the policy's "
+        + "accidental-damage allowance. Use these computed values; do not recompute them.",
         ToolSupport.Schema(Schema),
         ToolSideEffect.ReadOnly,
         ToolSupport.Callers(AgentNames.Policy));
@@ -90,7 +93,10 @@ public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogReposito
         }
 
         var accidental = terms.AccidentalDamage;
-        var accidentalEnd = accidental.Covered ? claim.PurchaseDate.AddMonths(accidental.WindowMonths) : (DateOnly?)null;
+        var priorAccidental = accidental.Covered
+            ? (await claims.GetHistoryCountsAsync(claimId, claim.SerialNumber, claim.ClaimDate, [], ct)).PriorApprovedAccidental
+            : 0;
+        var allowance = AccidentalDamageRule.Evaluate(accidental, claim.PurchaseDate, claim.ClaimDate, priorAccidental);
         return result with
         {
             Outcome = PolicyVersionOutcome.Ok,
@@ -107,8 +113,10 @@ public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogReposito
                 window.CoverageEndDate!.Value,
                 window.WithinStandardCoverage!.Value,
                 window.WithinComponentCoverage!.Value,
-                accidentalEnd,
-                accidentalEnd is { } end ? claim.ClaimDate <= end : null),
+                window.AccidentalWindowEndDate,
+                window.WithinAccidentalWindow,
+                accidental.Covered ? allowance.PriorApprovedIncidents : null,
+                allowance.IsCovered),
         };
     }
 
@@ -165,9 +173,19 @@ public sealed record AccidentalDamageInfo(bool Covered, int WindowMonths, int Ma
 /// <param name="WithinComponentCoverage">Claim date within the window that applies to the component — the deciding flag.</param>
 /// <param name="AccidentalWindowEndDate">Last day of the accidental-damage allowance; null when accidental damage is not covered.</param>
 /// <param name="WithinAccidentalWindow">Claim date within that allowance; null when not covered.</param>
+/// <param name="PriorApprovedAccidental">
+/// All-time approved accidental-damage claims for the serial (same tenant, as <c>claim_history_lookup</c>);
+/// null when accidental damage is not covered.
+/// </param>
+/// <param name="AccidentalDamageCovered">
+/// Whether accidental damage on this claim would be covered (<see cref="AccidentalDamageRule"/>): the version
+/// covers it, the claim date is within the allowance and fewer than <c>maxIncidents</c> were approved before.
+/// </param>
 public sealed record WarrantyCoverageInfo(
     DateOnly CoverageEndDate,
     bool WithinStandardCoverage,
     bool WithinComponentCoverage,
     DateOnly? AccidentalWindowEndDate,
-    bool? WithinAccidentalWindow);
+    bool? WithinAccidentalWindow,
+    int? PriorApprovedAccidental,
+    bool AccidentalDamageCovered);
