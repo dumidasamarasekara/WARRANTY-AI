@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "POWER_FAILURE",
+    "component": "MAINBOARD",
+    "symptoms": [
+      "does not power on",
+      "no charging indicator when connected to the charger",
+      "screen stays black"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The tablet suddenly stopped powering on; the screen stays black and it shows no sign of charging. The claimant reports no drop, impact or liquid contact."
+  },
+  "usage": {
+    "inputTokens": 1180,
+    "outputTokens": 136
+  }
+}

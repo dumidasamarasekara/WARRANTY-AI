@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-1",
+    "legible": true,
+    "sellerName": "Borealis Store",
+    "invoiceNumber": "BS-2026-702288",
+    "invoiceDate": "{{claim.purchaseDate}}",
+    "productDescription": "Borealis Slate 11",
+    "modelCodeOnInvoice": "BOR-SLATE11",
+    "serialOnInvoice": "BS11-24-0003",
+    "totalAmount": 480.00,
+    "currency": "USD",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2350,
+    "outputTokens": 170
+  }
+}

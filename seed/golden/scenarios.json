@@ -3,7 +3,8 @@
     "Golden scenarios (quickstart section 4). The replay provider picks a scenario by the claim's serial (and tenant) and answers the n-th model call of an agent from tests/fixtures/ai-recordings/{scenarioId}/{agent}-{n}.json.",
     "claim: the ClaimSubmissionData sent to POST /api/public/claims or POST /api/claims, without purchase.date; the purchase date is the claim date plus purchaseDateOffsetMonths (or purchaseDate when a scenario needs an absolute date).",
     "evidence: files under seed/evidence/ (rendered from seed/evidence/evidence.json by tools/Warranty.EvidenceGenerator), uploaded as the invoice part and the photos parts in this order.",
-    "references: the run's harness-issued references the fixtures assume. EV-1 is the invoice and EV-2.. the photos in upload order. POL-n are issued for the retrieved clauses of the applicable policy version with Period and Exclusion clauses first in clause-key order, then the other retrieved clauses by score (the top one is the Coverage clause for these scenarios).",
+    "references: the run's harness-issued references the fixtures assume. EV-1 is the invoice and EV-2.. the photos in upload order. POL-n are issued for the retrieved clauses of the applicable policy version with Period and Exclusion clauses first in clause-key order, then Coverage clauses in clause-key order, then the other retrieved clauses by score (PolicyAgent.IssueOrder); only the references the fixtures use are listed.",
+    "notInCatalog: true when the scenario's serial is deliberately missing from the tenant catalog. submitAfter: scenarios whose claims must be submitted (to their own tenants) before this one, e.g. the earlier claim whose photo is reused. absentRiskSignals: signal codes the claim must not have.",
     "Fixture placeholders: {{claim.purchaseDate}} and {{claim.claimDate}} are replaced with the claim's dates (yyyy-MM-dd) when a fixture is replayed, so the invoice date always matches the stated purchase date.",
     "expected: labelled from the tenant's seeded policy text before any model run (research R19), never copied from model output. citedClauseKeys are the clauses the recommendation cites as SUPPORTS_COVERAGE, SUPPORTS_REJECTION or DEFINES_PERIOD."
   ],
@@ -179,6 +180,417 @@
         "recommendation": "APPROVE",
         "coverage": "COVERED",
         "riskLevel": "Low",
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
+    },
+    {
+      "scenarioId": "S3",
+      "story": "US2",
+      "title": "Same as S2 but bought 18 months ago in the European Union: within Aurora's 24-month EU warranty period",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0003",
+      "purchaseDateOffsetMonths": -18,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer EU-1",
+          "email": "eu1.customer@aurora.example.com",
+          "phone": "+49 30 5550 0003",
+          "addressLine": "3 Beispielstrasse",
+          "city": "Berlin",
+          "postalCode": "10115",
+          "country": "DE"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0003"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "EUR",
+          "country": "DE"
+        },
+        "problemDescription": "My Aurora Tab 10 does not turn on anymore. The screen stays black, pressing the power button does nothing and there is no charging light when it is plugged in. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "S3/invoice.pdf",
+        "photos": ["S3/photo-1.jpg", "S3/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "region": "EU",
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.2"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
+    },
+    {
+      "scenarioId": "S4-aurora",
+      "story": "US2",
+      "title": "Accidental screen crack of an Aurora AUR-TAB10 bought 10 months ago in North America: excluded by Aurora's accidental-damage clause",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0004",
+      "purchaseDateOffsetMonths": -10,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-4",
+          "email": "na4.customer@aurora.example.com",
+          "phone": "+1 555 010 0004",
+          "addressLine": "400 Example Lane",
+          "city": "Riverton",
+          "postalCode": "00004",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0004"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "I dropped my Aurora Tab 10 on a tiled floor and the screen cracked. The glass is shattered from the impact point across the display and the touch screen no longer responds properly."
+      },
+      "evidence": {
+        "invoice": "S4-aurora/invoice.pdf",
+        "photos": ["S4-aurora/photo-1.jpg", "S4-aurora/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Rejected",
+        "decidedBy": "System",
+        "disposition": "AutoReject",
+        "recommendation": "REJECT",
+        "coverage": "NOT_COVERED",
+        "riskLevel": "Low",
+        "citedClauseKeys": ["AUR-WP-3.1"],
+        "passedGuardrails": ["COVERAGE_WINDOW_AGREES", "GROUNDED_IN_CLAUSE"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoRejected"]
+      }
+    },
+    {
+      "scenarioId": "S4-borealis",
+      "story": "US2",
+      "title": "The same accidental screen crack on a Borealis BOR-SLATE11 bought 10 months ago: Borealis Care covers one accidental-damage incident within 12 months",
+      "tenant": "borealis",
+      "channel": "claimant",
+      "serial": "BS11-24-0001",
+      "purchaseDateOffsetMonths": -10,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-5",
+          "email": "na5.customer@borealis.example.com",
+          "phone": "+1 555 020 0001",
+          "addressLine": "500 Example Court",
+          "city": "Northport",
+          "postalCode": "00002",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "BOR-SLATE11",
+          "serialNumber": "BS11-24-0001"
+        },
+        "purchase": {
+          "place": "Borealis Store",
+          "price": 480.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "I dropped my Borealis Slate 11 on a tiled floor and the screen cracked. The glass is shattered from the impact point across the display and the touch screen no longer responds properly."
+      },
+      "evidence": {
+        "invoice": "S4-borealis/invoice.pdf",
+        "photos": ["S4-borealis/photo-1.jpg", "S4-borealis/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "BOR-WP-2.1",
+        "POL-2": "BOR-WP-2.2",
+        "POL-3": "BOR-WP-3.1",
+        "POL-4": "BOR-WP-3.2",
+        "POL-5": "BOR-WP-1.1",
+        "POL-6": "BOR-WP-1.2"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "citedClauseKeys": ["BOR-WP-1.2"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
+    },
+    {
+      "scenarioId": "S9",
+      "story": "US2",
+      "title": "Aurora AUR-TAB10 battery that no longer holds a charge, bought on 2026-03-01 in North America: policy version 1 (battery 6 months) applies, not the newer version 2",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0010",
+      "purchaseDate": "2026-03-01",
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-9",
+          "email": "na9.customer@aurora.example.com",
+          "phone": "+1 555 010 0009",
+          "addressLine": "900 Example Boulevard",
+          "city": "Fairview",
+          "postalCode": "00009",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0010"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "The battery of my Aurora Tab 10 no longer holds a charge. When fully charged it drains to zero in less than an hour, even when the tablet is idle. The tablet was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "S9/invoice.pdf",
+        "photos": ["S9/photo-1.jpg", "S9/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Rejected",
+        "decidedBy": "System",
+        "disposition": "AutoReject",
+        "recommendation": "REJECT",
+        "coverage": "NOT_COVERED",
+        "riskLevel": "Low",
+        "policyVersion": 1,
+        "citedClauseKeys": ["AUR-WP-2.3"],
+        "passedGuardrails": ["COVERAGE_WINDOW_AGREES", "GROUNDED_IN_CLAUSE"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoRejected"]
+      }
+    },
+    {
+      "scenarioId": "US2-not-in-catalog",
+      "story": "US2",
+      "title": "S1-like Aurora claim whose serial is not in Aurora's catalog: never looked up in another tenant, escalated without a claim value",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-99-0001",
+      "notInCatalog": true,
+      "purchaseDateOffsetMonths": -4,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-10",
+          "email": "na10.customer@aurora.example.com",
+          "phone": "+1 555 010 0010",
+          "addressLine": "1000 Example Parkway",
+          "city": "Hillcrest",
+          "postalCode": "00010",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-99-0001"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 stopped turning on. The screen stays black, the power button does nothing and there is no charging light when I connect the charger. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US2/not-in-catalog-invoice.pdf",
+        "photos": ["US2/not-in-catalog-photo-1.jpg", "US2/not-in-catalog-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Medium",
+        "riskSignals": ["PRODUCT_NOT_IN_CATALOG"],
+        "claimValue": null,
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+        "failedGuardrails": ["PRODUCT_IN_CATALOG", "CLAIM_VALUE_WITHIN_LIMIT", "RISK_LOW"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+      }
+    },
+    {
+      "scenarioId": "US2-reuse-across-tenants-borealis",
+      "story": "US2",
+      "title": "Borealis BOR-SLATE11 that will not power on, bought 5 months ago: the earlier claim whose front photo US2-reuse-across-tenants submits again to Aurora",
+      "tenant": "borealis",
+      "channel": "claimant",
+      "serial": "BS11-24-0003",
+      "purchaseDateOffsetMonths": -5,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-6",
+          "email": "na6.customer@borealis.example.com",
+          "phone": "+1 555 020 0003",
+          "addressLine": "600 Example Drive",
+          "city": "Northport",
+          "postalCode": "00002",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "BOR-SLATE11",
+          "serialNumber": "BS11-24-0003"
+        },
+        "purchase": {
+          "place": "Borealis Store",
+          "price": 480.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Borealis Slate 11 stopped turning on. The screen stays black, it does not react to the power button and nothing happens when I connect the charger. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US2/reuse-across-tenants-borealis-invoice.pdf",
+        "photos": ["US2/reuse-across-tenants-shared-photo.jpg", "US2/reuse-across-tenants-borealis-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "BOR-WP-2.1",
+        "POL-2": "BOR-WP-2.2",
+        "POL-3": "BOR-WP-3.1",
+        "POL-4": "BOR-WP-3.2",
+        "POL-5": "BOR-WP-1.1",
+        "POL-6": "BOR-WP-1.2"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "citedClauseKeys": ["BOR-WP-1.1", "BOR-WP-2.1"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
+    },
+    {
+      "scenarioId": "US2-reuse-across-tenants",
+      "story": "US2",
+      "title": "S1-like Aurora claim whose front photo was already submitted with a Borealis claim: evidence reuse is checked within the tenant only, so no EVIDENCE_REUSED signal",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0022",
+      "purchaseDateOffsetMonths": -4,
+      "submitAfter": ["US2-reuse-across-tenants-borealis"],
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-11",
+          "email": "na11.customer@aurora.example.com",
+          "phone": "+1 555 010 0011",
+          "addressLine": "1100 Example Terrace",
+          "city": "Oakdale",
+          "postalCode": "00011",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0022"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 suddenly stopped turning on. The screen stays black, it does not react to the power button and there is no charging light when I plug it in. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US2/reuse-across-tenants-aurora-invoice.pdf",
+        "photos": ["US2/reuse-across-tenants-shared-photo.jpg", "US2/reuse-across-tenants-aurora-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "absentRiskSignals": ["EVIDENCE_REUSED"],
         "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
         "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
       }

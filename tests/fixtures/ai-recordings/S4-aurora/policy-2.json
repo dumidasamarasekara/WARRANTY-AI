@@ -1,0 +1,43 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-4",
+        "applies": true,
+        "effect": "EXCLUDES",
+        "note": "The screen cracked when the tablet was dropped; drops and cracked or shattered screens are accidental damage, which this clause excludes."
+      },
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "Purchased in North America: 12-month warranty period. warranty_lookup reports the claim date within standard coverage, so the rejection rests on the exclusion, not on the period."
+      },
+      {
+        "ref": "POL-8",
+        "applies": false,
+        "effect": "GRANTS_COVERAGE",
+        "note": "Covers manufacturing defects only; damage caused by an accident is not a defect in materials or workmanship."
+      },
+      {
+        "ref": "POL-5",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact reported or visible."
+      }
+    ],
+    "coverageAssessment": "NOT_COVERED",
+    "confidence": 94,
+    "relevantExclusions": ["ACCIDENTAL_DAMAGE"],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Not covered: the screen cracked when the tablet was dropped, which is accidental damage excluded by POL-4. The claim is within the 12-month North America warranty period (POL-1, warranty_lookup), but the period does not matter because the damage is not a manufacturing defect under POL-8."
+  },
+  "usage": {
+    "inputTokens": 5371,
+    "outputTokens": 405
+  }
+}

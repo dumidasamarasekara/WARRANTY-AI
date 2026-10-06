@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "BS11-24-0003",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 92,
+    "observations": "Back of a silver Borealis tablet. The serial label reads 'BOREALIS MODEL BOR-SLATE11' and 'S/N: BS11-24-0003'. The housing is undamaged."
+  },
+  "usage": {
+    "inputTokens": 1655,
+    "outputTokens": 134
+  }
+}

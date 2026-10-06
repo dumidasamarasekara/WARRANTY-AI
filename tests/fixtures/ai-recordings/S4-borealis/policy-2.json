@@ -1,0 +1,49 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-6",
+        "applies": true,
+        "effect": "GRANTS_COVERAGE",
+        "note": "Borealis Care covers one accidental-damage incident, such as a drop that cracks the screen, within the first 12 months from purchase. The product was bought about 10 months ago and no earlier accidental-damage incident is known."
+      },
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "24-month warranty period in all regions. warranty_lookup reports the claim date within standard coverage."
+      },
+      {
+        "ref": "POL-5",
+        "applies": false,
+        "effect": "GRANTS_COVERAGE",
+        "note": "A screen cracked in a drop is not a manufacturing defect; coverage comes from the accidental-damage clause instead."
+      },
+      {
+        "ref": "POL-3",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact reported or visible."
+      },
+      {
+        "ref": "POL-4",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No repair or opening by an unauthorized party is reported."
+      }
+    ],
+    "coverageAssessment": "COVERED",
+    "confidence": 91,
+    "relevantExclusions": [],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Covered: the cracked screen is accidental damage, which Borealis Care covers once within the first 12 months from purchase under POL-6; the claim is made about 10 months after purchase. The Borealis policy lists no accidental-damage exclusion; the liquid and unauthorized-repair exclusions (POL-3, POL-4) do not apply."
+  },
+  "usage": {
+    "inputTokens": 5196,
+    "outputTokens": 428
+  }
+}

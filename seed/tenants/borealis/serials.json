@@ -1,7 +1,7 @@
 [
   { "serialNumber": "BS11-24-0001", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-03", "reservedFor": "S4 (Borealis)" },
   { "serialNumber": "BS11-24-0002", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-03", "reservedFor": "S12 (Borealis claim requested by an Aurora reviewer)" },
-  { "serialNumber": "BS11-24-0003", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-10" },
+  { "serialNumber": "BS11-24-0003", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-10", "reservedFor": "US2-reuse-across-tenants-borealis (Borealis claim whose photo is reused at Aurora)" },
   { "serialNumber": "BS11-24-0004", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-10" },
   { "serialNumber": "BS11-24-0005", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-17" },
   { "serialNumber": "BS11-24-0006", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-06-17" },

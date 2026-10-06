@@ -1,0 +1,44 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "REJECT",
+    "coverage": "NOT_COVERED",
+    "confidence": 94,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0010, 450.00 USD, dated 2026-03-01 as stated in the claim."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: screen off; no cracks, dents, swelling or liquid marks."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: serial label shows AT10-24-0010, matching the claim."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-3",
+        "relevance": "SUPPORTS_REJECTION"
+      },
+      {
+        "ref": "POL-8",
+        "relevance": "CONTEXT"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The evidence is consistent: the invoice (EV-1) matches the claimed seller, model, serial, price and the purchase date 2026-03-01, and the photos (EV-2, EV-3) show the claimed unit without physical damage. The failure is the battery. For this purchase date policy version 1 applies, whose battery clause POL-3 covers the battery for 6 months from purchase; warranty_lookup confirms the claim date is outside the battery period. A battery fault would otherwise be a covered defect (POL-8). Recommend rejection.",
+    "claimantExplanation": "Thank you for your claim for your Aurora Tab 10. Under the Aurora Limited Warranty that applied when you bought your tablet, the battery is covered for 6 months from the purchase date. Your tablet was purchased on 1 March 2026, so the battery coverage has ended and this battery replacement is not covered. An Aurora service center can still offer a paid battery replacement.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7803,
+    "outputTokens": 507
+  }
+}

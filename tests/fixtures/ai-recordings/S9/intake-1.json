@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "BATTERY_FAILURE",
+    "component": "BATTERY",
+    "symptoms": [
+      "battery no longer holds a charge",
+      "drains from full to empty in less than an hour while idle"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The tablet's battery no longer holds a charge and drains from full to empty in under an hour, even when idle. The claimant reports no drop, impact or liquid contact."
+  },
+  "usage": {
+    "inputTokens": 1171,
+    "outputTokens": 124
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-1",
+    "legible": true,
+    "sellerName": "Aurora Store",
+    "invoiceNumber": "AS-EU-2025-022614",
+    "invoiceDate": "{{claim.purchaseDate}}",
+    "productDescription": "Aurora Tab 10",
+    "modelCodeOnInvoice": "AUR-TAB10",
+    "serialOnInvoice": "AT10-24-0003",
+    "totalAmount": 450.00,
+    "currency": "EUR",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2352,
+    "outputTokens": 169
+  }
+}

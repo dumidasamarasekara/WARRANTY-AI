@@ -1,0 +1,16 @@
+{
+  "stop": "ToolCalls",
+  "toolCalls": [
+    {
+      "callId": "toolu_us2r_policy_warranty_lookup",
+      "toolName": "warranty_lookup",
+      "arguments": {
+        "component": "MAINBOARD"
+      }
+    }
+  ],
+  "usage": {
+    "inputTokens": 4121,
+    "outputTokens": 58
+  }
+}
