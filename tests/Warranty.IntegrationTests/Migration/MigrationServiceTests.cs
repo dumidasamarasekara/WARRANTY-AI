@@ -42,7 +42,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 6,
-            ["catalog.product_serials"] = 107,
+            ["catalog.product_serials"] = 109,
             ["crm.customers"] = 9,
             ["integration.service_centers"] = 5,
             ["claims.claims"] = 2,

@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 88,
+    "observations": "Back of a silver Aurora tablet with the camera module in the corner and the AURORA logo. No serial label is visible. The housing is undamaged."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 131
+  }
+}

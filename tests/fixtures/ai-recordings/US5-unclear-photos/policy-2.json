@@ -1,0 +1,43 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "applicableClauses": [
+      {
+        "ref": "POL-8",
+        "applies": true,
+        "effect": "GRANTS_COVERAGE",
+        "note": "A display that fails during normal use is a manufacturing defect covered by this clause, provided no excluded event caused it."
+      },
+      {
+        "ref": "POL-1",
+        "applies": true,
+        "effect": "DEFINES_PERIOD",
+        "note": "Purchased in North America: 12-month warranty period. warranty_lookup reports the claim date within standard coverage."
+      },
+      {
+        "ref": "POL-4",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No drop or impact is reported."
+      },
+      {
+        "ref": "POL-5",
+        "applies": false,
+        "effect": "EXCLUDES",
+        "note": "No liquid contact is reported."
+      }
+    ],
+    "coverageAssessment": "COVERED",
+    "confidence": 88,
+    "relevantExclusions": [],
+    "ambiguity": {
+      "isAmbiguous": false,
+      "explanation": ""
+    },
+    "summary": "Covered as reported: flickering lines on the display during normal use are a manufacturing defect under POL-8, and the claim is within the 12-month North America warranty period of POL-1 as computed by warranty_lookup. No exclusion (POL-4, POL-5) is reported."
+  },
+  "usage": {
+    "inputTokens": 5342,
+    "outputTokens": 398
+  }
+}

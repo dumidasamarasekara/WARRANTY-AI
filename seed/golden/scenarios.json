@@ -10,6 +10,7 @@
     "Fixtures that do not complete: { stop: Failed, failure: { kind, message } } is a provider failure (kind ProviderError, Transient, RateLimited or Timeout); stop: Refused and stop: Truncated carry only the model's text (a truncated turn its cut-off output) and usage. A failed first model step skips the later model steps, so e.g. S10 has only intake-1.json.",
     "expected (US4 additions): failedGuardrails / passedGuardrails: checks that must fail / pass (other checks may fail too, e.g. every check that needs a valid recommendation when there is none). riskSignals: signal codes the claim must have; riskScore: the computed score; modelRiskLevel: the risk level the model reported (never used by the guardrails). recommendation: null when no valid recommendation exists; recommendationValid: false when an invalid one is stored. failedAiSteps: agents recorded as AiStepFailed (with the run's failure_reason); modelCalls: model calls per agent the run makes (the fixtures it consumes, including the corrective turn and the truncation retry). invoiceMismatches: invoice fields whose consistency check fails (empty: every field matches). claimantStatus: the status text of the claimant view; claimantViewHidesRisk: the claimant view shows no risk vocabulary. securityEvents: security event kinds the run writes; repairRequestCreated: false when no repair request may exist.",
     "Fixture placeholders: {{claim.purchaseDate}} and {{claim.claimDate}} are replaced with the claim's dates (yyyy-MM-dd) when a fixture is replayed, so the invoice date always matches the stated purchase date.",
+    "Rounds (US5): round and supplement on a claimOf scenario: the claim round the scenario describes and the files the submitter supplies to start it (same shape as evidence; evidence then lists all of the claim's files up to that round). rounds: later rounds of the scenario's own claim, each {round, supplement, references, expected}. The replay fixtures of every round live in the folder of the scenario that submits the claim and are numbered on across rounds (e.g. intake-2 is round 2's intake call). references are per round: EV-n are issued invoices first, then photos, each in round and upload order. reviewer and reviewerDecision on a scenario with rounds: the reviewer's decision on the round-1 outcome (e.g. a RequestInformation that starts round 2). aiFailure: the failure the scenario's round-1 model calls return (its intake call fails, so no AI step completes). expected.requestedItems: the item codes the claim asks the submitter for; autoInfoRequestCount: the claim's count after the round; modelCalls: the only agents whose model is called in the round; aiStepFailed: the agents recorded as failed; riskSignals: the risk signal codes the run records (empty: none); runRounds: the rounds the claim's adjudication runs cover; escalationReasonText: the label of the escalation reason shown to staff.",
     "expected: labelled from the tenant's seeded policy text before any model run (research R19), never copied from model output. citedClauseKeys are the clauses the recommendation cites as SUPPORTS_COVERAGE, SUPPORTS_REJECTION or DEFINES_PERIOD."
   ],
   "scenarios": [
@@ -2013,6 +2014,440 @@
         "overridesAi": true,
         "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
       }
+    },
+    {
+      "scenarioId": "S6-round1",
+      "story": "US5",
+      "title": "Aurora AUR-TAB10 that will not power on, bought 4 months ago in North America, submitted without an invoice: the intake asks for it and no evidence, policy or decision model call is made",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0005",
+      "purchaseDateOffsetMonths": -4,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-15",
+          "email": "na15.customer@aurora.example.com",
+          "phone": "+1 555 010 0015",
+          "addressLine": "1500 Example Lane",
+          "city": "Springfield",
+          "postalCode": "00015",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0005"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 no longer turns on. The screen stays black, nothing happens when I hold the power button and there is no charging light when the charger is connected. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "photos": ["S6/photo-1.jpg", "S6/photo-2.jpg"]
+      },
+      "references": {},
+      "expected": {
+        "status": "PendingInformation",
+        "disposition": "RequestInformation",
+        "requestedItems": ["INVOICE"],
+        "autoInfoRequestCount": 1,
+        "modelCalls": ["intake"],
+        "failedGuardrails": ["REQUIRED_INFO_COMPLETE"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "InformationRequested"]
+      }
+    },
+    {
+      "scenarioId": "S6-round2",
+      "story": "US5",
+      "title": "The claimant supplies the invoice requested in S6-round1: round 2 re-evaluates the S6 claim in full and approves it like S1",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0005",
+      "purchaseDateOffsetMonths": -4,
+      "claimOf": "S6-round1",
+      "round": 2,
+      "supplement": {
+        "invoice": "S6/invoice.pdf",
+        "photos": []
+      },
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-15",
+          "email": "na15.customer@aurora.example.com",
+          "phone": "+1 555 010 0015",
+          "addressLine": "1500 Example Lane",
+          "city": "Springfield",
+          "postalCode": "00015",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0005"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 no longer turns on. The screen stays black, nothing happens when I hold the power button and there is no charging light when the charger is connected. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "S6/invoice.pdf",
+        "photos": ["S6/photo-1.jpg", "S6/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "Approved",
+        "decidedBy": "System",
+        "disposition": "AutoApprove",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "autoInfoRequestCount": 1,
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+        "runRounds": [1, 2],
+        "lastTrailEntries": ["GuardrailsEvaluated", "AutoApproved"]
+      }
+    },
+    {
+      "scenarioId": "US5-unclear-photos",
+      "story": "US5",
+      "title": "Aurora AUR-TAB10 with flickering lines on the display, bought 2 months ago; legible invoice, but both photos are too small and blurred to show the screen: the AI asks for a clear photo of the problem and no risk signal is raised",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0034",
+      "purchaseDateOffsetMonths": -2,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-18",
+          "email": "na18.customer@aurora.example.com",
+          "phone": "+1 555 010 0018",
+          "addressLine": "1800 Example Terrace",
+          "city": "Lakeside",
+          "postalCode": "00018",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0034"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "Since last week the display of my Aurora Tab 10 shows flickering horizontal lines across the whole screen, even on the home screen. Touch input still works. The tablet was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US5/unclear-photos-invoice.pdf",
+        "photos": ["US5/unclear-photos-photo-1.jpg", "US5/unclear-photos-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "PendingInformation",
+        "disposition": "RequestInformation",
+        "recommendation": "REQUEST_MORE_INFORMATION",
+        "coverage": "UNDETERMINED",
+        "riskLevel": "Low",
+        "riskSignals": [],
+        "requestedItems": ["PHOTO_OF_DAMAGE"],
+        "failedGuardrails": ["REQUIRED_INFO_COMPLETE"],
+        "autoInfoRequestCount": 1,
+        "citedClauseKeys": ["AUR-WP-2.1"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "InformationRequested"]
+      }
+    },
+    {
+      "scenarioId": "US5-missing-and-high-value",
+      "story": "US5",
+      "title": "Aurora AUR-BOOK15 (claim value 1,400, above Aurora's auto-approval limit of 500) submitted without an invoice: the missing invoice cannot be requested automatically because the value already requires review (FR-010/FR-028 precedence)",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AB15-24-0008",
+      "purchaseDateOffsetMonths": -3,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-19",
+          "email": "na19.customer@aurora.example.com",
+          "phone": "+1 555 010 0019",
+          "addressLine": "1900 Example Plaza",
+          "city": "Brookfield",
+          "postalCode": "00019",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-BOOK15",
+          "serialNumber": "AB15-24-0008"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 1400.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "The built-in display of my Aurora Book 15 went black while I was working. The laptop keeps running and an external monitor shows the desktop, but the laptop screen stays dark. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "photos": ["US5/missing-and-high-value-photo-1.jpg", "US5/missing-and-high-value-photo-2.jpg"]
+      },
+      "references": {},
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "claimValue": 1400,
+        "escalationReasons": ["VALUE_ABOVE_LIMIT"],
+        "failedGuardrails": ["REQUIRED_INFO_COMPLETE", "CLAIM_VALUE_WITHIN_LIMIT"],
+        "autoInfoRequestCount": 0,
+        "modelCalls": ["intake"],
+        "reviewQueues": ["reviewer.aurora"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+      }
+    },
+    {
+      "scenarioId": "S17",
+      "story": "US5",
+      "title": "Aurora AUR-TAB10 that will not power on, bought 4 months ago, with an illegible (blurred) invoice; the claimant supplies another illegible invoice twice: rounds 1 and 2 request a legible invoice, round 3 goes to review because information is still incomplete after 2 requests",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0012",
+      "purchaseDateOffsetMonths": -4,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-16",
+          "email": "na16.customer@aurora.example.com",
+          "phone": "+1 555 010 0016",
+          "addressLine": "1600 Example Row",
+          "city": "Riverton",
+          "postalCode": "00016",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0012"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 stopped turning on. The screen is black, the power button does nothing and the charging light does not come on when I plug it in. It has not been dropped or exposed to water."
+      },
+      "evidence": {
+        "invoice": "S17/invoice-1.pdf",
+        "photos": ["S17/photo-1.jpg", "S17/photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice-1",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "status": "PendingInformation",
+        "disposition": "RequestInformation",
+        "recommendation": "REQUEST_MORE_INFORMATION",
+        "coverage": "UNDETERMINED",
+        "riskLevel": "Low",
+        "requestedItems": ["LEGIBLE_INVOICE"],
+        "failedGuardrails": ["REQUIRED_INFO_COMPLETE"],
+        "autoInfoRequestCount": 1,
+        "citedClauseKeys": ["AUR-WP-2.1"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "InformationRequested"]
+      },
+      "rounds": [
+        {
+          "round": 2,
+          "supplement": {
+            "invoice": "S17/invoice-2.pdf",
+            "photos": []
+          },
+          "references": {
+            "EV-1": "invoice-1",
+            "EV-2": "invoice-2",
+            "EV-3": "photo-1",
+            "EV-4": "photo-2",
+            "POL-1": "AUR-WP-2.1",
+            "POL-2": "AUR-WP-2.2",
+            "POL-3": "AUR-WP-2.3",
+            "POL-4": "AUR-WP-3.1",
+            "POL-5": "AUR-WP-3.2",
+            "POL-6": "AUR-WP-3.3",
+            "POL-7": "AUR-WP-3.4",
+            "POL-8": "AUR-WP-1.1"
+          },
+          "expected": {
+            "status": "PendingInformation",
+            "disposition": "RequestInformation",
+            "recommendation": "REQUEST_MORE_INFORMATION",
+            "requestedItems": ["LEGIBLE_INVOICE"],
+            "failedGuardrails": ["REQUIRED_INFO_COMPLETE"],
+            "autoInfoRequestCount": 2,
+            "citedClauseKeys": ["AUR-WP-2.1"],
+            "lastTrailEntries": ["GuardrailsEvaluated", "InformationRequested"]
+          }
+        },
+        {
+          "round": 3,
+          "supplement": {
+            "invoice": "S17/invoice-3.pdf",
+            "photos": []
+          },
+          "references": {
+            "EV-1": "invoice-1",
+            "EV-2": "invoice-2",
+            "EV-3": "invoice-3",
+            "EV-4": "photo-1",
+            "EV-5": "photo-2",
+            "POL-1": "AUR-WP-2.1",
+            "POL-2": "AUR-WP-2.2",
+            "POL-3": "AUR-WP-2.3",
+            "POL-4": "AUR-WP-3.1",
+            "POL-5": "AUR-WP-3.2",
+            "POL-6": "AUR-WP-3.3",
+            "POL-7": "AUR-WP-3.4",
+            "POL-8": "AUR-WP-1.1"
+          },
+          "expected": {
+            "status": "UnderReview",
+            "disposition": "HumanReview",
+            "recommendation": "REQUEST_MORE_INFORMATION",
+            "autoInfoRequestCount": 2,
+            "escalationReasons": ["INFO_INCOMPLETE_AFTER_2_REQUESTS"],
+            "escalationReasonText": "information still incomplete after 2 requests",
+            "failedGuardrails": ["REQUIRED_INFO_COMPLETE", "AUTO_INFO_REQUESTS_WITHIN_LIMIT"],
+            "citedClauseKeys": ["AUR-WP-2.1"],
+            "reviewQueues": ["reviewer.aurora"],
+            "runRounds": [1, 2, 3],
+            "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "S16",
+      "story": "US3",
+      "title": "Aurora AUR-TAB10 that will not power on, bought 4 months ago: round 1 fails like S10 (its first model call, intake, returns a provider error, so no AI step completes), reviewer.aurora asks for a photo of the serial label, and round 2 with the AI available recommends APPROVE with every other check passed, yet the claim returns to review (FR-034)",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0033",
+      "purchaseDateOffsetMonths": -4,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-17",
+          "email": "na17.customer@aurora.example.com",
+          "phone": "+1 555 010 0017",
+          "addressLine": "1700 Example Boulevard",
+          "city": "Maplewood",
+          "postalCode": "00017",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0033"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "My Aurora Tab 10 does not start anymore. The screen stays black, holding the power button does nothing and no charging light appears with the charger connected. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "S16/invoice.pdf",
+        "photos": ["S16/photo-1.jpg", "S16/photo-2.jpg"]
+      },
+      "references": {},
+      "aiFailure": "ProviderError",
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "escalationReasons": ["AI_UNAVAILABLE", "NO_APPLICABLE_POLICY"],
+        "aiStepFailed": ["intake"],
+        "reviewQueues": ["reviewer.aurora"],
+        "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+      },
+      "reviewer": "reviewer.aurora",
+      "reviewerDecision": {
+        "decision": "RequestInformation",
+        "justification": "The AI analysis could not be completed and neither photo shows the serial label, so the serial number cannot be confirmed against the product.",
+        "requestedItems": [
+          { "item": "PHOTO_OF_SERIAL_LABEL", "reason": "Please add a clear photo of the label on the back of the tablet that shows its serial number." }
+        ]
+      },
+      "rounds": [
+        {
+          "round": 2,
+          "supplement": {
+            "photos": ["S16/photo-3.jpg"]
+          },
+          "references": {
+            "EV-1": "invoice",
+            "EV-2": "photo-1",
+            "EV-3": "photo-2",
+            "EV-4": "photo-3",
+            "POL-1": "AUR-WP-2.1",
+            "POL-2": "AUR-WP-2.2",
+            "POL-3": "AUR-WP-2.3",
+            "POL-4": "AUR-WP-3.1",
+            "POL-5": "AUR-WP-3.2",
+            "POL-6": "AUR-WP-3.3",
+            "POL-7": "AUR-WP-3.4",
+            "POL-8": "AUR-WP-1.1"
+          },
+          "expected": {
+            "status": "UnderReview",
+            "disposition": "HumanReview",
+            "recommendation": "APPROVE",
+            "coverage": "COVERED",
+            "riskLevel": "Low",
+            "escalationReasons": ["RETURNED_AFTER_REVIEWER_REQUEST"],
+            "escalationReasonText": "returned after reviewer information request",
+            "failedGuardrails": ["NOT_RETURNED_FROM_REVIEW"],
+            "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+            "reviewQueues": ["reviewer.aurora"],
+            "runRounds": [1, 2],
+            "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+          }
+        }
+      ]
     }
   ]
 }

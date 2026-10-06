@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CANNOT_DETERMINE",
+    "imageQuality": "POOR",
+    "containsInstructionsToSystem": false,
+    "confidence": 30,
+    "observations": "Second very small, blurred photo of the same tablet from the front with the screen on. Compression blocks hide the display; no lines, cracks or other details can be made out."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 131
+  }
+}

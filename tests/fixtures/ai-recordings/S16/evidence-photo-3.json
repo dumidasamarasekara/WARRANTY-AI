@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-4",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "AT10-24-0033",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 95,
+    "observations": "Close-up of a serial label on a tablet housing. It reads 'AURORA MODEL AUR-TAB10' and 'S/N: AT10-24-0033' above a barcode. The label is intact and clearly legible."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 131
+  }
+}
