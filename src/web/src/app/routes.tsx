@@ -3,6 +3,7 @@ import { AccessClaimPage } from '../features/claimant/AccessClaimPage'
 import { ClaimStatusPage } from '../features/claimant/ClaimStatusPage'
 import { SubmitClaimPage } from '../features/claimant/SubmitClaimPage'
 import { NewClaimPage } from '../features/claims/NewClaimPage'
+import { PoliciesPage } from '../features/claims/PoliciesPage'
 import { AuthProvider } from './AuthProvider'
 import { ClaimantLayout } from './ClaimantLayout'
 import { Layout } from './Layout'
@@ -52,7 +53,7 @@ const staffRoutes: RouteObject = {
         </RequireRole>
       ),
     },
-    { path: 'policies', handle: crumb('Policies'), element: <PlaceholderPage title="Warranty policies" /> },
+    { path: 'policies', handle: crumb('Policies'), element: <PoliciesPage /> },
     {
       path: 'security-events',
       handle: crumb('Security events'),

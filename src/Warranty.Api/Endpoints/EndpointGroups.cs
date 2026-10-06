@@ -35,7 +35,8 @@ public static class EndpointGroups
     /// <summary><c>/api/me</c> and <c>/api/policies</c>.</summary>
     public static RouteGroupBuilder MapReferenceEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api").WithTags("Reference").RequireAuthorization()
-            .MapMeRoutes();
+            .MapMeRoutes()
+            .MapPolicyRoutes();
 
     /// <summary><c>/api/security-events</c>.</summary>
     public static RouteGroupBuilder MapAuditEndpoints(this IEndpointRouteBuilder app)
