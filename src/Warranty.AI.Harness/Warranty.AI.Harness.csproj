@@ -19,6 +19,8 @@
   <ItemGroup>
     <!-- Byte-for-byte copies of specs/001-ai-claim-adjudication/contracts/schemas (a unit test guards against drift). -->
     <EmbeddedResource Include="Schemas\*.schema.json" LogicalName="Warranty.AI.Harness.Schemas.%(Filename)%(Extension)" />
+    <!-- The global injection phrase list (research R14), embedded from the knowledge seed so it has one source. -->
+    <EmbeddedResource Include="..\..\seed\global\injection-phrases.md" LogicalName="Warranty.AI.Harness.Safety.injection-phrases.md" Link="Safety\injection-phrases.md" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,8 @@
 using System.Globalization;
 using Warranty.AI.Harness.Context;
+using Warranty.AI.Harness.Safety;
 using Warranty.AI.Harness.Tools.Implementations;
+using Warranty.Application.Abstractions.AI;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Adjudication;
@@ -20,8 +22,9 @@ public interface IRiskAssessor
 {
     /// <summary>
     /// Signals available without evidence analysis (<c>PRODUCT_NOT_IN_CATALOG</c>,
-    /// <c>DUPLICATE_SERIAL_CLAIM</c>, <c>EVIDENCE_REUSED</c> from upload hashes); stored with
-    /// <see cref="RiskAssessmentStage.Intake"/>.
+    /// <c>DUPLICATE_SERIAL_CLAIM</c>, <c>EVIDENCE_REUSED</c> from upload hashes, <c>MANIPULATION_ATTEMPT</c>
+    /// from the injection detector on the description and from the intake's <c>containsInstructionsToSystem</c>);
+    /// stored with <see cref="RiskAssessmentStage.Intake"/>.
     /// </summary>
     Task<RiskAssessment> AssessAtIntakeAsync(CaseContext @case, IntakeResult intake, CancellationToken ct);
 
@@ -34,7 +37,7 @@ public interface IRiskAssessor
 
     /// <summary>
     /// All deterministic signals (as <see cref="DetectDeterministicSignalsAsync"/>) plus the AI-reported
-    /// ones (evidence and decision outputs); stored with <see cref="RiskAssessmentStage.Full"/> and set
+    /// ones (evidence and decision outputs, plus the intake's <c>containsInstructionsToSystem</c>); stored with <see cref="RiskAssessmentStage.Full"/> and set
     /// on <see cref="AdjudicationContext.Risk"/>.
     /// </summary>
     Task<RiskAssessment> AssessFullAsync(AdjudicationContext run, AiRiskReading ai, CancellationToken ct);
@@ -108,6 +111,7 @@ public sealed record EvidenceRiskFacts(IReadOnlyList<EvidenceCheck> InvoiceCheck
 /// <summary>Deterministic risk assessment (research R23).</summary>
 public sealed class RiskAssessor(
     ClaimHistoryLookupTool history,
+    InjectionDetector injection,
     ITenantRepository tenants,
     IAdjudicationRepository adjudication,
     TimeProvider time) : IRiskAssessor
@@ -282,14 +286,87 @@ public sealed class RiskAssessor(
         return signals;
     }
 
+    /// <summary>
+    /// The claimant-supplied text the injection detector screens (research R14): the problem description,
+    /// the text extracted from each invoice and the observations read from each photo. Evidence parts are
+    /// labelled with the file's issued <c>EV-n</c>, or with its evidence ID when none was issued.
+    /// </summary>
+    public static IReadOnlyList<UntrustedTextPart> ClaimantTexts(CaseContext @case, EvidenceResult? evidence, ReferenceRegistry? references)
+    {
+        ArgumentNullException.ThrowIfNull(@case);
+
+        var parts = new List<UntrustedTextPart> { UntrustedContent.ClaimantDescription(@case.ProblemDescription ?? string.Empty) };
+        if (evidence is null)
+        {
+            return parts;
+        }
+
+        var refs = (references?.Entries ?? [])
+            .Where(e => e.Kind == ReferenceKind.Evidence)
+            .ToDictionary(e => e.TargetId, e => e.Id);
+        foreach (var finding in evidence.Findings)
+        {
+            var reference = refs.GetValueOrDefault(finding.EvidenceId) ?? finding.EvidenceId.ToString("D", CultureInfo.InvariantCulture);
+            if (InvoiceExtractionOutput.From(finding) is { } invoice)
+            {
+                // One part per field, so a phrase is never assembled from the end of one field and the start of the next.
+                string[] fields = [invoice.SellerName, invoice.InvoiceNumber, invoice.ProductDescription, invoice.ModelCodeOnInvoice, invoice.SerialOnInvoice, .. invoice.Anomalies];
+                parts.AddRange(fields.Select(text => UntrustedContent.InvoiceText(reference, text ?? string.Empty)));
+            }
+            else if (PhotoAnalysisOutput.From(finding) is { } photo)
+            {
+                parts.Add(UntrustedContent.ImageText(reference, photo.Observations));
+            }
+        }
+
+        return parts;
+    }
+
+    /// <summary>
+    /// A deterministic <c>MANIPULATION_ATTEMPT</c> when the injection detector found a listed phrase, naming
+    /// where it was found (with the <c>EV-n</c> of the evidence files); the phrases themselves are not
+    /// repeated, since the list is confidential.
+    /// </summary>
+    public static IReadOnlyList<RiskSignal> ManipulationSignals(IReadOnlyList<InjectionMatch> matches)
+    {
+        ArgumentNullException.ThrowIfNull(matches);
+        if (matches.Count == 0)
+        {
+            return [];
+        }
+
+        var sources = matches.Select(m => m.Source).Distinct(StringComparer.Ordinal).ToList();
+        var refs = sources
+            .Select(s => s[(s.IndexOf(' ', StringComparison.Ordinal) + 1)..])
+            .Where(s => s.StartsWith("EV-", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var signal = Deterministic(
+            RiskSignalCode.ManipulationAttempt,
+            $"Claimant-supplied text contains instructions addressed to the adjudication system ({string.Join(", ", sources)}).");
+        return [signal with { EvidenceRefs = refs }];
+    }
+
+    /// <summary>An AI-sourced <c>MANIPULATION_ATTEMPT</c> when the Intake step reported <c>containsInstructionsToSystem</c>.</summary>
+    public static IReadOnlyList<RiskSignal> IntakeAiSignals(IntakeResult? intake)
+        => intake is not null && IntakeExtraction.From(intake) is { ContainsInstructionsToSystem: true }
+            ? [new RiskSignal(
+                RiskSignalCode.ManipulationAttempt, RiskSignalSource.Ai, SeverityOf(RiskSignalCode.ManipulationAttempt, RiskSignalSource.Ai),
+                "The problem description contains text addressed to the adjudication system.", [])]
+            : [];
+
     public async Task<RiskAssessment> AssessAtIntakeAsync(CaseContext @case, IntakeResult intake, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(@case);
         ArgumentNullException.ThrowIfNull(intake);
 
-        var signals = IntakeSignals(@case, await history.LookupAsync(@case.ClaimId, ct));
+        IReadOnlyList<RiskSignal> signals =
+        [
+            .. IntakeSignals(@case, await history.LookupAsync(@case.ClaimId, ct)),
+            .. ManipulationSignals(injection.Detect(ClaimantTexts(@case, null, null))),
+        ];
         var settings = await tenants.GetCurrentSettingsAsync(ct);
-        var score = Compute(signals, AiRiskReading.None, settings.RiskHighThreshold);
+        var score = Compute(signals, new AiRiskReading(null, IntakeAiSignals(intake)), settings.RiskHighThreshold);
         var assessment = RiskAssessment.Create(intake.RunId, intake.TenantId, RiskAssessmentStage.Intake, score.Score, score.Level, score.Signals);
         adjudication.AddRiskAssessment(assessment);
         return assessment;
@@ -305,6 +382,7 @@ public sealed class RiskAssessor(
         [
             .. IntakeSignals(run.Case, counts),
             .. EvidenceSignals(run.Case, EvidenceRiskFacts.From(run.Evidence, run.References), today),
+            .. ManipulationSignals(injection.Detect(ClaimantTexts(run.Case, run.Evidence, run.References))),
         ];
     }
 
@@ -315,7 +393,7 @@ public sealed class RiskAssessor(
 
         var signals = await DetectDeterministicSignalsAsync(run, ct);
         var settings = await tenants.GetCurrentSettingsAsync(ct);
-        var score = Compute(signals, ai, settings.RiskHighThreshold);
+        var score = Compute(signals, ai with { Signals = [.. ai.Signals, .. IntakeAiSignals(run.Intake)] }, settings.RiskHighThreshold);
         var assessment = RiskAssessment.Create(run.RunId, run.Tenant.TenantId, RiskAssessmentStage.Full, score.Score, score.Level, score.Signals);
         adjudication.AddRiskAssessment(assessment);
         run.Risk = assessment;
