@@ -26,7 +26,7 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddWarrantyAuth(builder.Configuration, builder.Environment);
 builder.Services.AddTenantResolution();
-builder.Services.AddWarrantyRateLimiting();
+builder.Services.AddWarrantyRateLimiting(builder.Configuration);
 builder.Services.AddWarrantyCors();
 
 builder.Services
@@ -63,7 +63,7 @@ app.UseCors(SecurityHeaders.CorsPolicyName);
 app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
-app.UseRateLimiter();
+app.UseWarrantyRateLimiting();
 
 if (app.Environment.IsDevelopment())
 {

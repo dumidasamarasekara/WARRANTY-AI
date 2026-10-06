@@ -1,4 +1,5 @@
 using Warranty.Api.Endpoints.Claims;
+using Warranty.Api.RateLimiting;
 using Warranty.Application.Claims;
 using Warranty.Domain.Claims;
 
@@ -22,7 +23,8 @@ public static class PublicClaimEndpoints
             .WithName("SubmitClaimAsClaimant")
             .WithSummary("Submit a claim through the tenant's claimant channel")
             .AllowAnonymous()
-            .WithSubmissionLimits();
+            .WithSubmissionLimits()
+            .RequireClaimSubmissionLimit();
         return group;
     }
 }

@@ -39,6 +39,8 @@ public sealed class WarrantyAppFixture : IAsyncLifetime
         .WithCommand("--skipApiVersionCheck")
         .Build();
 
+    private Dictionary<string, string?> _settings = [];
+
     private WarrantyApiFactory? _factory;
 
     public WarrantyApiFactory Factory => _factory ?? throw new InvalidOperationException("The fixture is not initialized.");
@@ -57,7 +59,7 @@ public sealed class WarrantyAppFixture : IAsyncLifetime
             throw new InvalidOperationException($"The migration service failed with exit code {exitCode}.");
         }
 
-        _factory = new WarrantyApiFactory(new Dictionary<string, string?>(MigrationRunner.HashEmbeddingRoute)
+        _settings = new Dictionary<string, string?>(MigrationRunner.HashEmbeddingRoute)
         {
             ["ConnectionStrings:warranty"] = OwnerConnectionString("warranty"),
             ["ConnectionStrings:knowledge"] = OwnerConnectionString("knowledge"),
@@ -66,7 +68,30 @@ public sealed class WarrantyAppFixture : IAsyncLifetime
             ["AiGateway:Mode"] = "replay",
             ["ClaimantTokens:SigningKey"] = ClaimantSigningKey,
             ["ClaimJobWorker:PollInterval"] = "00:00:00.250",
+        };
+        _factory = new WarrantyApiFactory(new Dictionary<string, string?>(_settings)
+        {
+            // Every test class submits from the same test-server client, so the shared host relaxes the
+            // public endpoints' limits; Security/ClaimantAccessTests exercises the real ones on its own host.
+            ["RateLimiting:ClaimSubmission:PermitLimit"] = "100000",
+            ["RateLimiting:ClaimantAccess:PermitLimit"] = "100000",
         });
+    }
+
+    /// <summary>
+    /// A separate API host on the same databases and blobs, with the production defaults for anything
+    /// <paramref name="overrides"/> does not set (e.g. the real rate limits) and its own in-memory state.
+    /// The caller disposes it.
+    /// </summary>
+    public WarrantyApiFactory CreateFactory(IReadOnlyDictionary<string, string?> overrides)
+    {
+        var settings = new Dictionary<string, string?>(_settings);
+        foreach (var (key, value) in overrides)
+        {
+            settings[key] = value;
+        }
+
+        return new WarrantyApiFactory(settings);
     }
 
     public async ValueTask DisposeAsync()
