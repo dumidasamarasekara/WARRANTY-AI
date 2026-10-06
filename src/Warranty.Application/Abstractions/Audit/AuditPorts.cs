@@ -32,4 +32,18 @@ public interface ISecurityEventWriter
 
     /// <summary>Records an operator-only event (e.g. <see cref="SecurityEventKind.UnknownChannel"/>); no tenant is attached.</summary>
     Task RecordOperatorEventAsync(SecurityEventKind kind, string actor, string? target, object? details, CancellationToken ct);
+
+    /// <summary>
+    /// Records the operator-only <see cref="SecurityEventKind.CrossTenantAccessDenied"/> when <paramref name="id"/>
+    /// exists in a tenant other than the current one, with both tenants in its details; returns whether it did.
+    /// The other tenant is never returned to the caller (research R30).
+    /// </summary>
+    Task<bool> RecordCrossTenantDenialAsync(ScopedIdKind kind, Guid id, string actor, string target, CancellationToken ct);
+}
+
+/// <summary>The kind of tenant-scoped ID a staff request names.</summary>
+public enum ScopedIdKind
+{
+    Claim,
+    Evidence,
 }

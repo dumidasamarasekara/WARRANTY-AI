@@ -1,4 +1,5 @@
 using Warranty.Api.Auth;
+using Warranty.Api.Tenancy;
 using Warranty.Application.Trace;
 
 namespace Warranty.Api.Endpoints.Trace;
@@ -22,5 +23,5 @@ public static class TraceEndpoints
     private static async Task<IResult> GetTraceAsync(Guid claimId, DecisionTraceQuery query, CancellationToken ct)
         => await query.GetAsync(claimId, ct) is { } trace
             ? Results.Ok(trace)
-            : Results.Problem(statusCode: StatusCodes.Status404NotFound);
+            : CrossTenantGuard.NotFound();
 }

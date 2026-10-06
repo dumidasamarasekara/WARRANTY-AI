@@ -71,6 +71,18 @@ public sealed class AuditTests
         sql.ShouldContain("GRANT EXECUTE ON FUNCTION audit.record_operator_event(text, text, text, jsonb, text) TO warranty_app");
     }
 
+    [Fact]
+    public void The_cross_tenant_functions_are_security_definer_and_execute_only_and_write_through_the_operator_function()
+    {
+        var sql = SqlScripts.Load(SqlDatabase.Warranty).Where(s => s.Name == "003_security_functions.sql").ShouldHaveSingleItem().Sql;
+
+        sql.ShouldContain("SECURITY DEFINER");
+        sql.ShouldContain("REVOKE ALL ON FUNCTION audit.exists_in_other_tenant(text, uuid, uuid) FROM PUBLIC");
+        sql.ShouldContain("GRANT EXECUTE ON FUNCTION audit.exists_in_other_tenant(text, uuid, uuid) TO warranty_app");
+        sql.ShouldContain("GRANT EXECUTE ON FUNCTION audit.record_cross_tenant_denial(text, uuid, uuid, text, text, text) TO warranty_app");
+        sql.ShouldContain("PERFORM audit.record_operator_event(");
+    }
+
     private static List<DecisionTrailEntry> Chain(int length)
     {
         var entries = new List<DecisionTrailEntry>();

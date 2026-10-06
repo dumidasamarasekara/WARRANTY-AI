@@ -85,12 +85,12 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     // ---- Staff endpoints: security events -------------------------------------------------------
 
     [Theory]
-    [InlineData("claim-detail", Skip = "Pending T078, T085")]
-    [InlineData("evidence-content", Skip = "Pending T078, T085")]
-    [InlineData("evidence-content-of-own-claim", Skip = "Pending T078, T085")]
-    [InlineData("trace", Skip = "Pending T078")]
-    [InlineData("review-decision", Skip = "Pending T078, T088")]
-    [InlineData("supplement", Skip = "Pending T078, T101")]
+    [InlineData("claim-detail", Skip = "Pending T085")]
+    [InlineData("evidence-content", Skip = "Pending T085")]
+    [InlineData("evidence-content-of-own-claim", Skip = "Pending T085")]
+    [InlineData("trace")]
+    [InlineData("review-decision", Skip = "Pending T088")]
+    [InlineData("supplement", Skip = "Pending T101")]
     public async Task Each_denied_lookup_writes_one_identical_access_denied_event_and_borealis_ids_also_an_operator_event(string endpointName)
     {
         var endpoint = StaffEndpoint.Named(endpointName);

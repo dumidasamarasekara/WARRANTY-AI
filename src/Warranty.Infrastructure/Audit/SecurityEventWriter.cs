@@ -66,6 +66,25 @@ internal sealed class SecurityEventWriter(
             ct);
     }
 
+    public async Task<bool> RecordCrossTenantDenialAsync(ScopedIdKind kind, Guid id, string actor, string target, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actor);
+        var kindName = kind switch
+        {
+            ScopedIdKind.Claim => "claim",
+            ScopedIdKind.Evidence => "evidence",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+
+        // audit.record_cross_tenant_denial (003) looks past row-level security for the owning tenant and keeps it in the database.
+        var recorded = await db.Database.SqlQuery<bool>(
+            $"""
+             SELECT audit.record_cross_tenant_denial({kindName}, {id}, {tenantContext.TenantId}, {Clip(actor, MaxActorLength)},
+                                                     {Clip(target, MaxTargetLength)}, {Clip(source.SourceIp, MaxSourceIpLength)}) AS "Value"
+             """).ToListAsync(ct);
+        return recorded.Single();
+    }
+
     private static string? Clip(string? value, int maxLength)
         => value is { Length: > 0 } && value.Length > maxLength ? value[..maxLength] : value;
 }
