@@ -148,6 +148,10 @@ public interface IReviewRepository
     Task<IReadOnlyList<ReviewDecision>> GetForClaimAsync(Guid claimId, CancellationToken ct);
 }
 
+/// <summary>
+/// AI operations records of the unit of work. The <c>Add*</c> methods are thread-safe (parallel model calls
+/// record their usage concurrently); the records are stored with the unit of work's next save.
+/// </summary>
 public interface IAiOpsRepository
 {
     void AddModelCall(ModelCall call);

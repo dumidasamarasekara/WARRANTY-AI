@@ -56,8 +56,18 @@ internal sealed class DecisionTrailWriter(WarrantyDbContext db, ITenantContext t
         var correlationId = tenantContext.CorrelationId;
         var hash = TrailHash.Compute(prevHash, tenantId, claimId, seq, occurredAt, step, actor, summary, canonicalPayload, correlationId);
 
-        db.DecisionTrailEntries.Add(DecisionTrailEntry.Create(
-            tenantId, claimId, seq, occurredAt, step, actor, summary, canonicalPayload, correlationId, prevHash, hash));
+        var entry = DecisionTrailEntry.Create(
+            tenantId, claimId, seq, occurredAt, step, actor, summary, canonicalPayload, correlationId, prevHash, hash);
+        db.DecisionTrailEntries.Add(entry);
         await db.SaveChangesAsync(ct);
+
+        // The next append reads its seq from the database, so an entry left pending here would be inserted
+        // later with a seq that is already taken — and a step could commit without it. Fail the step's
+        // transaction instead; the job then retries the step from its checkpoint.
+        if (db.Entry(entry).State != EntityState.Unchanged)
+        {
+            throw new InvalidOperationException(
+                $"Decision trail entry {seq} of claim {claimId} was not saved; the unit of work's change tracking is inconsistent.");
+        }
     }
 }
