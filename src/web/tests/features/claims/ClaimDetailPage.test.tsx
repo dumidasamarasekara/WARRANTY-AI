@@ -296,6 +296,25 @@ describe('ClaimDetailPage', () => {
     expect(screen.queryByRole('link', { name: 'Decision trace' })).not.toBeInTheDocument()
   })
 
+  it('gives auditors the decision trace and no review action on an escalated claim', async () => {
+    renderPage(`/staff/claims/${claimId}/decision`, ['auditor'])
+
+    expect(await screen.findByRole('region', { name: /AI decision/ })).toBeInTheDocument()
+    expect(screen.getByText('Escalated — a reviewer must decide.')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Open in review' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /approve|reject|override|request information/i })).not.toBeInTheDocument()
+
+    const tabs = within(screen.getByRole('navigation', { name: 'Claim sections' }))
+    expect(tabs.getByRole('link', { name: 'Decision trace' })).toHaveAttribute('href', `/staff/claims/${claimId}/trace`)
+  })
+
+  it('opens the trace tab for auditors', async () => {
+    renderPage(`/staff/claims/${claimId}/trace`, ['auditor'])
+
+    const tabs = within(await screen.findByRole('navigation', { name: 'Claim sections' }))
+    expect(tabs.getByRole('link', { name: 'Decision trace' })).toHaveAttribute('aria-current', 'page')
+  })
+
   it('shows the authorized original and the Evidence agent findings with its confidence', async () => {
     const user = renderPage(`/staff/claims/${claimId}/evidence?item=${photoId}`, ['claims-agent'])
 

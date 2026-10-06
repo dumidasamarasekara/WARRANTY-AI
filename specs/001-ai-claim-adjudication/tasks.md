@@ -287,7 +287,7 @@ an increment. Scenario IDs (S1–S23) refer to [quickstart.md §4](./quickstart.
 - [ ] T128 [US6] Build `src/web/src/features/audit/SecurityEventsPage.tsx` per ui-design.md §6.7 (kind badges, kind filter, pagination, empty state, no details), add the `/staff/security-events` route in `src/web/src/app/routes.tsx` behind `RequireRole` `auditor` and the "Security events" sidebar item for auditors in `src/web/src/app/Layout.tsx`
 - [ ] T104 [US6] Extend `src/Warranty.Application/Trace/DecisionTraceQuery.cs`: attach `aiops.model_calls`, `aiops.tool_calls` and `aiops.rag_queries` (namespaces, filters, result clause keys) to the matching steps by run and time, include guardrail check lists and review decisions, compute `integrity.hashChainValid` with `HashChainVerifier`
 - [ ] T105 [P] [US6] Build `src/web/src/features/trace/DecisionTracePage.tsx` and `src/web/src/features/trace/TraceEntryDetails.tsx`: vertical timeline (Claim received → … → final outcome), expandable AI call/tool/RAG details with tokens, cost and latency, integrity badge, link from `ClaimDetailPage`, per ui-design.md §6.3 "Decision trace" (actor tones from §4.3, operational/technical toggle)
-- [ ] T106 [P] [US6] Add auditor navigation in `src/web/src/app/routes.tsx` and `src/web/src/features/claims/ClaimsListPage.tsx`: read-only claims list for `auditor` with trace links; hide review actions for auditors (ui-design.md §6.1–§6.2)
+- [X] T106 [P] [US6] Add auditor navigation in `src/web/src/app/routes.tsx` and `src/web/src/features/claims/ClaimsListPage.tsx`: read-only claims list for `auditor` with trace links; hide review actions for auditors (ui-design.md §6.1–§6.2)
 
 **Checkpoint**: All user stories independently functional
 

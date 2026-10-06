@@ -117,6 +117,18 @@ describe('ClaimsListPage', () => {
     expect(screen.queryByRole('link', { name: 'New claim' })).not.toBeInTheDocument()
   })
 
+  it('gives auditors a read-only list with a trace link per claim', async () => {
+    renderPage(['auditor'])
+
+    expect(await screen.findByRole('link', { name: 'Decision trace of WC-2026-000102' })).toHaveAttribute(
+      'href',
+      '/staff/claims/22222222-2222-2222-2222-222222222222/trace',
+    )
+    expect(within(table()).getAllByRole('link', { name: /^Decision trace of/ })).toHaveLength(2)
+    expect(screen.queryByRole('link', { name: 'New claim' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /review/i })).not.toBeInTheDocument()
+  })
+
   it('filters by status and pages through the results', async () => {
     const user = renderPage(['auditor'])
     await screen.findByText('Showing 1–25 of 27')
