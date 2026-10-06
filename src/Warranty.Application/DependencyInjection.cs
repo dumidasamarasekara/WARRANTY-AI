@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
         services.AddScoped<ReviewQueueQuery>();
+        services.AddScoped<RecordReviewDecision>();
         return services;
     }
 }

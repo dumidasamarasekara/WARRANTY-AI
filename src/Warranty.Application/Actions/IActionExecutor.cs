@@ -1,3 +1,4 @@
+using Warranty.Domain.Review;
 using Warranty.Guardrails;
 
 namespace Warranty.Application.Actions;
@@ -28,6 +29,29 @@ public interface IActionExecutor
     /// claim that already reached a different outcome). Nothing is changed.
     /// </exception>
     Task<ActionExecution> ExecuteAsync(ApprovedAction action, CancellationToken ct);
+
+    /// <summary>
+    /// Records a reviewer's validated <paramref name="decision"/> on an <c>UnderReview</c> claim of the
+    /// current tenant and applies it, in one transaction: <c>Approve</c>/<c>Reject</c> finalize the claim
+    /// by <see cref="Warranty.Domain.Claims.DecidedBy.Reviewer"/> with the reviewer's claimant explanation
+    /// (approval also creates the simulated repair request; both notify the customer);
+    /// <c>RequestInformation</c> pauses it for the submitter and marks it reviewer-requested. The trail
+    /// records <c>ReviewerDecided</c> with the justification and the claimant explanation.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Warranty.Application.Review.RecordReviewDecision"/> enforces the request rules first; the
+    /// executor re-checks the ones that protect the claim (tenant, latest run, separation of duties,
+    /// claimant text screen) and fails closed.
+    /// </remarks>
+    /// <exception cref="ActionRefusedException">
+    /// The decision belongs to another tenant, its run is not the claim's latest, the reviewer submitted
+    /// the claim, or the claimant explanation fails the screen. Nothing is changed.
+    /// </exception>
+    /// <exception cref="Warranty.Domain.Claims.InvalidClaimTransitionException">The claim is not under review. Nothing is changed.</exception>
+    /// <exception cref="Warranty.Application.Abstractions.Persistence.ConcurrencyConflictException">
+    /// The claim changed since it was read. Nothing is changed.
+    /// </exception>
+    Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct);
 }
 
 /// <summary>What <see cref="IActionExecutor.ExecuteAsync"/> did.</summary>
