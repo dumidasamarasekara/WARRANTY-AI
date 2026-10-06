@@ -2,6 +2,8 @@ import { Navigate, Outlet, createBrowserRouter, type RouteObject } from 'react-r
 import { AccessClaimPage } from '../features/claimant/AccessClaimPage'
 import { ClaimStatusPage } from '../features/claimant/ClaimStatusPage'
 import { SubmitClaimPage } from '../features/claimant/SubmitClaimPage'
+import { ClaimDetailPage } from '../features/claims/ClaimDetailPage'
+import { ClaimsListPage } from '../features/claims/ClaimsListPage'
 import { NewClaimPage } from '../features/claims/NewClaimPage'
 import { PoliciesPage } from '../features/claims/PoliciesPage'
 import { ReviewQueuePage } from '../features/review/ReviewQueuePage'
@@ -28,7 +30,7 @@ const staffRoutes: RouteObject = {
       path: 'claims',
       handle: crumb('Claims'),
       children: [
-        { index: true, element: <PlaceholderPage title="Claims" /> },
+        { index: true, element: <ClaimsListPage /> },
         {
           path: 'new',
           handle: crumb('New claim'),
@@ -41,7 +43,7 @@ const staffRoutes: RouteObject = {
         {
           path: ':claimId/*',
           handle: crumb((params) => params.claimId ?? 'Claim'),
-          element: <PlaceholderPage title="Claim" />,
+          element: <ClaimDetailPage />,
         },
       ],
     },

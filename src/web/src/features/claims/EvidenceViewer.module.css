@@ -1,0 +1,223 @@
+/* Evidence tab — ui-design.md §6.3: list 260 px · viewer · findings 340 px. */
+.layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (width < 1280px) {
+  .layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .findings {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (width < 768px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fileList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-hover) var(--easing-standard);
+}
+
+.file:hover {
+  background: var(--color-bg);
+}
+
+.file:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.current,
+.current:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.ref {
+  flex: none;
+  font: var(--text-mono);
+  color: var(--tone-ai-ink);
+}
+
+.fileMeta {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+.viewer {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+
+.viewerHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--tone-system-bg);
+  color: var(--tone-system-ink);
+}
+
+.viewerHeader .fileName {
+  margin-left: auto;
+  font: var(--text-mono);
+  font-weight: 400;
+}
+
+.viewerTitle {
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+}
+
+.canvas {
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  padding: var(--space-4);
+  background: var(--color-bg);
+}
+
+.image {
+  max-width: 100%;
+  max-height: 640px;
+  object-fit: contain;
+}
+
+.pdf {
+  width: 100%;
+  height: 640px;
+  border: 0;
+}
+
+.findings {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.aiCard {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.caption {
+  font: var(--text-small);
+  color: var(--tone-ai-ink);
+}
+
+.block {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.label {
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.interpretation {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-ai-border);
+  border-radius: var(--radius-md);
+  background: var(--t-bg);
+}
+
+.interpretationHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.interpretationTitle {
+  font: var(--text-card-title);
+  color: var(--t-ink);
+}
+
+.observations {
+  color: var(--color-text-soft);
+}
+
+.consistency {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--text-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.consistency th,
+.consistency td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.consistency thead th {
+  border-top: 0;
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.consistency tbody th {
+  font-weight: 500;
+}
