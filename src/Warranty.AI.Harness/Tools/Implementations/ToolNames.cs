@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 
 namespace Warranty.AI.Harness.Tools.Implementations;
@@ -43,4 +44,21 @@ internal static class ToolSupport
     public static async Task<Claim> RequireClaimAsync(IClaimRepository claims, Guid claimId, CancellationToken ct)
         => await claims.GetAsync(claimId, ct)
             ?? throw new InvalidOperationException($"Claim {claimId} of the run was not found in the current tenant.");
+
+    /// <summary>
+    /// The claim's catalog product, only when the claimed serial is registered to it (FR-003, data-model.md
+    /// <c>catalog.product_serials</c>): a known model with an unknown serial is not in the catalog either. The
+    /// catalog is tenant-scoped, so another tenant's products and serials are never consulted. Null means the
+    /// claim is evaluated against the tenant's catalog-independent policy documents only.
+    /// </summary>
+    public static async Task<Product?> CatalogProductAsync(ICatalogRepository catalog, Claim claim, CancellationToken ct)
+    {
+        if (claim.ProductId is not { } productId)
+        {
+            return null;
+        }
+
+        var serial = await catalog.FindSerialAsync(claim.SerialNumber, ct);
+        return serial is not null && serial.ProductId == productId ? await catalog.GetProductAsync(productId, ct) : null;
+    }
 }

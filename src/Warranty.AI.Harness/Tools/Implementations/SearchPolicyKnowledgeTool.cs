@@ -48,7 +48,7 @@ public sealed class SearchPolicyKnowledgeTool(IKnowledgeRetriever retriever, ICl
         }
 
         var claim = await ToolSupport.RequireClaimAsync(claims, ctx.ClaimId, ct);
-        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        var product = await ToolSupport.CatalogProductAsync(catalog, claim, ct);
         var result = await retriever.SearchAsync(
             new KnowledgeSearchQuery(
                 arguments.GetProperty("query").GetString()!.Trim(),
@@ -83,11 +83,16 @@ public sealed class SearchPolicyKnowledgeTool(IKnowledgeRetriever retriever, ICl
             string.Create(CultureInfo.InvariantCulture, $"{clauses.Count} clauses: {string.Join(", ", clauses.Select(c => c.Ref))}"));
     }
 
-    /// <summary>The policy filters of a claim, as used by the run's policy retrieval.</summary>
+    /// <summary>
+    /// The policy filters of a claim, as used by the run's policy retrieval. <paramref name="product"/> is the
+    /// catalog product (<see cref="ToolSupport.CatalogProductAsync"/>); without one the product/serial pair is not
+    /// in the tenant's catalog, so the category and model filters are left out and only the tenant's
+    /// catalog-independent documents (category and model "all") apply.
+    /// </summary>
     public static PolicyApplicability ApplicabilityFor(Claim claim, Product? product)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        return new PolicyApplicability(product?.Category, product?.ModelCode ?? claim.ProductModelCode, claim.Region, claim.PurchaseDate);
+        return new PolicyApplicability(product?.Category, product?.ModelCode, claim.Region, claim.PurchaseDate);
     }
 }
 

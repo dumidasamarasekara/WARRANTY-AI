@@ -358,6 +358,9 @@ public sealed partial class AdjudicationRunner(
         var intake = RequireIntake(ctx);
         var evidence = state.EvidenceCompleted ? ctx.Evidence : null;
         var policy = state.PolicyCompleted ? ctx.Policy : null;
+
+        // A product/serial pair missing from the tenant's catalog has no product and so no claim value (never one
+        // borrowed from the model code alone or another tenant): PRODUCT_IN_CATALOG and CLAIM_VALUE_WITHIN_LIMIT fail.
         var facts = new CaseFacts(
             tenant.TenantId,
             ctx.ClaimId,

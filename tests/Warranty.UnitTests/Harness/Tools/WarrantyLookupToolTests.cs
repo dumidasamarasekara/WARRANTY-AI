@@ -2,6 +2,7 @@ using NSubstitute;
 using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Tools.Implementations;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Domain.Catalog;
 using Warranty.Domain.Adjudication;
 using Warranty.Domain.Common;
 using Warranty.Domain.Policies;
@@ -29,6 +30,7 @@ public sealed class WarrantyLookupToolTests
     {
         _claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(NewClaim());
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>()).Returns(NewProduct());
+        _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(Aurora, Serial, ProductId));
         _policies.GetPolicyAsync(PolicyId, Arg.Any<CancellationToken>()).Returns(WarrantyPolicy.Create(PolicyId, Aurora, "AUR-WP", "Aurora Limited Warranty"));
         _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns(
         [
@@ -131,6 +133,34 @@ public sealed class WarrantyLookupToolTests
         _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns([Version(2, new DateOnly(2026, 1, 1), null, categories: ["laptop"])]);
 
         (await Tool.LookupAsync(ClaimId, "SCREEN", TestContext.Current.CancellationToken)).Outcome.ShouldBe(PolicyVersionOutcome.NoApplicablePolicy);
+    }
+
+    [Theory]
+    [InlineData("serial-unknown")]
+    [InlineData("serial-of-another-product")]
+    [InlineData("model-unknown")]
+    public async Task A_product_serial_pair_missing_from_the_catalog_skips_the_category_filter_to_catalog_independent_versions(string variant)
+    {
+        switch (variant)
+        {
+            case "serial-unknown":
+                _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns((ProductSerial?)null);
+                break;
+            case "serial-of-another-product":
+                _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(Aurora, Serial, Guid.NewGuid()));
+                break;
+            default:
+                _claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(NewClaim(inCatalog: false));
+                break;
+        }
+
+        _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns(
+            [Version(2, new DateOnly(2026, 1, 1), null), Version(3, new DateOnly(2025, 6, 1), null, categories: ["tablet"])]);
+
+        var result = await Tool.LookupAsync(ClaimId, "SCREEN", TestContext.Current.CancellationToken);
+
+        result.Outcome.ShouldBe(PolicyVersionOutcome.Ok, "the tablet-only version does not apply without a catalog product");
+        result.Policy!.Version.ShouldBe(2);
     }
 
     [Fact]

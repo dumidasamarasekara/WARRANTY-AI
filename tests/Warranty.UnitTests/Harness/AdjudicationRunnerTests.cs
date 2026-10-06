@@ -73,6 +73,7 @@ public sealed class AdjudicationRunnerTests
     private bool _missingItems;
     private int _detectFailures;
     private Action<DecisionInput, AgentExecutionContext>? _onDecision;
+    private CaseProduct? _caseProduct = new(ProductId, "AUR-TAB10", "Aurora Tab 10", "tablet", 450m);
 
     public AdjudicationRunnerTests()
     {
@@ -119,6 +120,23 @@ public sealed class AdjudicationRunnerTests
             TrailStep.EvidenceAnalyzed, TrailStep.PolicyRetrieved, TrailStep.CoverageAssessed, TrailStep.RiskEvaluated,
             TrailStep.AiRecommended, TrailStep.GuardrailsEvaluated,
         ]);
+    }
+
+    [Fact]
+    public async Task A_case_not_in_the_catalog_reaches_the_guardrails_without_a_claim_value_and_goes_to_human_review()
+    {
+        _caseProduct = null;
+
+        await Runner().RunAsync(ClaimId, 1, Ct);
+
+        var evaluation = _store.Committed<GuardrailEvaluation>().ShouldHaveSingleItem();
+        evaluation.Disposition.ShouldBe(Disposition.HumanReview, "the AI recommends APPROVE, yet a claim without a catalog product is never decided automatically");
+        var catalog = evaluation.Checks.Single(c => c.Code == GuardrailCheckCode.ProductInCatalog);
+        var value = evaluation.Checks.Single(c => c.Code == GuardrailCheckCode.ClaimValueWithinLimit);
+        (catalog.Passed, value.Passed, value.Actual).ShouldBe((false, false, "unknown"));
+        evaluation.Reasons.ShouldContain(EscalationReason.ProductNotInCatalog);
+        evaluation.ApprovedActionJson!.ShouldContain("EscalateToReview");
+        await _actions.DidNotReceive().ExecuteAsync(Arg.Is<ApprovedAction>(a => a.Kind == ActionKind.FinalizeApproved), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -287,7 +305,7 @@ public sealed class AdjudicationRunnerTests
     {
         var tenant = new FakeTenantContext(Aurora);
         var cases = Substitute.For<ICaseKnowledgeProvider>();
-        cases.GetCaseContextAsync(ClaimId, 1, Arg.Any<CancellationToken>()).Returns(Case());
+        cases.GetCaseContextAsync(ClaimId, 1, Arg.Any<CancellationToken>()).Returns(Case() with { Product = _caseProduct });
         var claims = Substitute.For<IClaimRepository>();
         claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(_claim);
         var tenants = Substitute.For<ITenantRepository>();

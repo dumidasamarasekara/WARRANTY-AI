@@ -157,6 +157,34 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         _tools.Calls[1].Arguments.GetProperty("serialNumber").GetString().ShouldBe(Serial);
     }
 
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    public void Only_a_serial_registered_to_the_model_is_in_the_catalog(bool modelFound, bool serialRegistered, bool expected)
+    {
+        var lookup = new ProductLookupResult(modelFound, serialRegistered, modelFound ? "Aurora Tab 10" : null, modelFound ? "tablet" : null);
+
+        IntakeAgent.IsInCatalog(Case() with { Product = null }, lookup).ShouldBe(expected);
+        IntakeAgent.IsInCatalog(Case() with { Product = null }, null).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_known_model_with_an_unknown_serial_is_presented_to_the_model_as_not_in_the_catalog()
+    {
+        _tools.Product = new ProductLookupResult(true, false, "Aurora Tab 10", "tablet");
+        _model.Enqueue(ScriptedModelProvider.Completed(ValidExtraction));
+
+        var result = await RunAsync(Case() with { Product = null });
+
+        result.Status.ShouldBe(AgentStatus.Succeeded);
+        var text = string.Join('\n', _model.Requests.ShouldHaveSingleItem().Messages.SelectMany(m => m.Parts).SelectMany(TextsOf));
+        text.ShouldContain("- Product: the model and serial number are not in the catalog");
+        text.ShouldNotContain("category: tablet");
+        _tools.Calls.Select(c => c.ToolName).ShouldBe([ToolNames.CustomerLookup, ToolNames.ProductLookup], "only the tenant-scoped lookups run");
+        IntakeAgent.CaseFacts(Case(), _tools.Product).ShouldContain("- Product: Aurora Tab 10 (category: tablet)", customMessage: "the case's catalog product wins");
+    }
+
     [Fact]
     public async Task The_model_may_call_the_offered_lookup_tools_before_it_answers()
     {
@@ -562,6 +590,8 @@ public sealed class IntakeAgentTests : IAsyncDisposable
             new(ToolNames.ProductLookup, "Looks up a product.", Json("""{"type":"object","additionalProperties":false,"properties":{"modelCode":{"type":"string"},"serialNumber":{"type":"string"}},"required":["modelCode","serialNumber"]}""")),
         ];
 
+        public ProductLookupResult Product { get; set; } = new(true, true, "Aurora Tab 10", "tablet");
+
         public void Fail(string tool) => _failing.Add(tool);
 
         public Task<AiToolResult> InvokeAsync(AiToolCall call, CancellationToken ct)
@@ -572,7 +602,7 @@ public sealed class IntakeAgentTests : IAsyncDisposable
                 : call.ToolName switch
                 {
                     ToolNames.CustomerLookup => new CustomerLookupResult(true, "NA", 0),
-                    ToolNames.ProductLookup => new ProductLookupResult(true, true, "Aurora Tab 10", "tablet"),
+                    ToolNames.ProductLookup => Product,
                     _ => new { error = $"Tool '{call.ToolName}' is not available." },
                 };
             var isError = _failing.Contains(call.ToolName) || call.ToolName is not (ToolNames.CustomerLookup or ToolNames.ProductLookup);

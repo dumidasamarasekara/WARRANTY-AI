@@ -170,6 +170,26 @@ public sealed class DispositionRulesTests
     }
 
     [Theory]
+    [InlineData(AiDecision.Approve)]
+    [InlineData(AiDecision.Reject)]
+    public void A_product_not_in_the_catalog_has_no_claim_value_and_goes_to_review(AiDecision decision)
+    {
+        var scenario = Clear(decision);
+        scenario.ProductInCatalog = false;
+        scenario.ProductCategory = null;
+        scenario.ClaimValue = null;
+
+        var outcome = scenario.Evaluate();
+
+        outcome.Disposition.ShouldBe(Disposition.HumanReview);
+        ShouldFail(outcome, GuardrailCheckCode.ProductInCatalog);
+        ShouldFail(outcome, GuardrailCheckCode.ClaimValueWithinLimit);
+        outcome.Checks.Single(c => c.Code == GuardrailCheckCode.ClaimValueWithinLimit).Actual.ShouldBe("unknown");
+        outcome.Reasons.ShouldContain(EscalationReason.ProductNotInCatalog);
+        outcome.Reasons.ShouldNotContain(EscalationReason.ValueAboveLimit);
+    }
+
+    [Theory]
     [InlineData(AiDecision.Approve, Disposition.AutoApprove)]
     [InlineData(AiDecision.Reject, Disposition.AutoReject)]
     public void A_confidence_equal_to_the_minimum_is_allowed(AiDecision decision, Disposition expected)
