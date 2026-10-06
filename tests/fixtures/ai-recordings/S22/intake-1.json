@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "SCREEN_PHYSICAL_DAMAGE",
+    "component": "SCREEN",
+    "symptoms": [
+      "cracked screen glass",
+      "touch screen does not respond"
+    ],
+    "claimedCause": "UNKNOWN",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The claimant found the tablet on a kitchen counter next to the sink with a cracked screen; the touch screen no longer responds. The cause is unknown to the claimant."
+  },
+  "usage": {
+    "inputTokens": 1176,
+    "outputTokens": 124
+  }
+}

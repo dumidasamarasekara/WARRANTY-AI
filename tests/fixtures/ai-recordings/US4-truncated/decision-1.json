@@ -1,0 +1,8 @@
+{
+  "stop": "Truncated",
+  "text": "{\"decision\": \"APPROVE\", \"coverage\": \"COVERED\", \"confidence\": 93, \"risk\": {\"level\": \"LOW\", \"signals\": []}, \"evidenceRefs\": [{\"ref\": \"EV-1\", \"observation\": \"Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0028, 450.00 USD, dated on the stated purchase date.\"}, {\"ref\": \"EV-2\", \"observation\": \"Front photo: black, unlit screen; no cracks, dents or",
+  "usage": {
+    "inputTokens": 7840,
+    "outputTokens": 16000
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "stop": "Failed",
+  "failure": {
+    "kind": "ProviderError",
+    "message": "The AI provider returned HTTP 500 (api_error: Internal server error)."
+  }
+}

@@ -24,6 +24,13 @@
   { "serialNumber": "AT10-24-0023", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-18", "reservedFor": "golden G-AUR-06" },
   { "serialNumber": "AT10-24-0024", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-18", "reservedFor": "golden G-AUR-09" },
   { "serialNumber": "AT10-24-0025", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-25", "reservedFor": "golden G-AUR-11" },
+  { "serialNumber": "AT10-24-0026", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-11-25", "reservedFor": "US4-invalid-output" },
+  { "serialNumber": "AT10-24-0027", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-02", "reservedFor": "US4-refusal" },
+  { "serialNumber": "AT10-24-0028", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-02", "reservedFor": "US4-truncated" },
+  { "serialNumber": "AT10-24-0029", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-09", "reservedFor": "US4-consequential-tool" },
+  { "serialNumber": "AT10-24-0030", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-09", "reservedFor": "S7-reuse-original (earlier claim whose photo S7-reuse reuses)" },
+  { "serialNumber": "AT10-24-0031", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-16", "reservedFor": "S8-invoice" },
+  { "serialNumber": "AT10-24-0032", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-16", "reservedFor": "S8-photo" },
 
   { "serialNumber": "AP6-24-0001", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-01" },
   { "serialNumber": "AP6-24-0002", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-02" },

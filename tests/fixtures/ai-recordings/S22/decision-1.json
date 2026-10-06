@@ -1,0 +1,44 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "REJECT",
+    "coverage": "NOT_COVERED",
+    "confidence": 88,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0017, 450.00 USD, dated on the stated purchase date."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: cracked screen glass with crack lines across the display."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: serial label shows AT10-24-0017, matching the claim."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-5",
+        "relevance": "SUPPORTS_REJECTION"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "CONTEXT"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The claimant found the tablet next to the kitchen sink with a cracked, unresponsive screen (EV-2); the invoice (EV-1) and the serial label (EV-3) match the claim. Liquid exposure near the sink is the most likely cause of the failure, which POL-5 excludes. The claim is within the 12-month North America period (POL-1), but the failure is not a manufacturing defect. Recommend rejection.",
+    "claimantExplanation": "Thank you for your claim for your Aurora Tab 10. The Aurora Limited Warranty covers manufacturing defects. Damage caused by contact with liquid is not covered, so this repair is not covered under the warranty. An Aurora service center can still offer a paid repair.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7840,
+    "outputTokens": 471
+  }
+}

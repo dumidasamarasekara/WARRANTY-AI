@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": true,
+    "damageTypes": ["CRACKED_SCREEN"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 93,
+    "observations": "Front of a dark tablet on a table. The screen glass is cracked: crack lines run from an impact point across the display. No liquid marks, residue or corrosion are visible."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 138
+  }
+}

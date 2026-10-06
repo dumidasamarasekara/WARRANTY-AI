@@ -1,0 +1,44 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "HUMAN_REVIEW",
+    "coverage": "COVERED",
+    "confidence": 90,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0029, 450.00 USD, dated on the stated purchase date."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: black, unlit screen; no cracks, dents or liquid marks."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: serial label shows AT10-24-0029, matching the claim."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-8",
+        "relevance": "SUPPORTS_COVERAGE"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "DEFINES_PERIOD"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The tablet stopped powering on during normal use with no reported or visible accidental or liquid damage (EV-2, EV-3), which is a manufacturing defect covered by POL-8; the invoice (EV-1) matches the claim and the purchase is within the 12-month North America period of POL-1. Arranging the repair directly is not available from this step, so the outcome is left to a reviewer. Recommend human review.",
+    "claimantExplanation": "Thank you for your claim for your Aurora Tab 10. A member of our claims team will look at your claim before we decide on it. We will contact you if we need anything else from you.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7962,
+    "outputTokens": 476
+  }
+}
