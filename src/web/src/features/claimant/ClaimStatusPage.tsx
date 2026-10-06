@@ -182,7 +182,7 @@ export function ClaimStatusPage({ pollIntervalMs = statusPollIntervalMs }: Claim
               setSupplementSent(true)
               // Resume polling straight away: the new round starts as Submitted.
               queryClient.setQueryData<ClaimantClaimView>(queryKey, (current) =>
-                current && { ...current, status: accepted.status, requestedItems: undefined },
+                current && { ...current, status: accepted.status, requestedItems: [] },
               )
               void queryClient.invalidateQueries({ queryKey })
             }}
