@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Warranty.Api.Auth;
+using Warranty.Api.RateLimiting;
 using Warranty.Api.Tenancy;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Persistence;
@@ -38,7 +39,8 @@ public static class ClaimantEndpoints
             .WithSummary("Exchange claim reference + submitted contact for a claim-scoped token")
             .AllowAnonymous()
             .Produces<ClaimantAccessToken>()
-            .ProducesProblem(StatusCodes.Status401Unauthorized);
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .RequireClaimantAccessLimit();
 
         group.MapGet("/claims/{reference}", GetClaimAsync)
             .WithName("GetClaimantClaim")
