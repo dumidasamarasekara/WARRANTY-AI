@@ -65,6 +65,36 @@ public sealed class GoldenScenario
     /// <summary>The claim status the scenario's claim is expected to reach.</summary>
     public string? ExpectedStatus => (string?)Expected["status"];
 
+    /// <summary>The scenario's expectations (of its round-1 outcome, or of <see cref="Round"/>) with typed accessors.</summary>
+    public ScenarioExpectation Outcome => new(Expected);
+
+    /// <summary>The item codes the claim asks the submitter for (<c>expected.requestedItems</c>).</summary>
+    public IReadOnlyList<string> RequestedItems => Outcome.RequestedItems;
+
+    /// <summary>The claim round the scenario describes (<c>round</c>, on a <c>claimOf</c> scenario); 1 by default.</summary>
+    public int Round => (int?)_entry["round"] ?? 1;
+
+    /// <summary>The files the submitter supplies to start <see cref="Round"/> (<c>supplement</c>), if any.</summary>
+    public ScenarioSupplement? Supplement => _entry["supplement"] is JsonObject supplement ? new ScenarioSupplement(supplement) : null;
+
+    /// <summary>Later rounds of the scenario's own claim (<c>rounds</c>), in round order.</summary>
+    public IReadOnlyList<ScenarioRound> Rounds
+        => _entry["rounds"]?.AsArray()
+               .Select(r => r!.AsObject())
+               .Select(r => new ScenarioRound(
+                   (int)r["round"]!,
+                   new ScenarioSupplement(r["supplement"]!.AsObject()),
+                   new ScenarioExpectation(r["expected"]!.AsObject())))
+               .OrderBy(r => r.Round)
+               .ToList()
+           ?? [];
+
+    /// <summary>False when the scenario's own evidence has no invoice (a submission the claim submission API refuses).</summary>
+    public bool HasInvoice => _entry["evidence"]?["invoice"] is not null;
+
+    /// <summary>The scenario's photo files, paths under <c>seed/evidence/</c>, in upload order.</summary>
+    public IReadOnlyList<string> PhotoFiles => _entry["evidence"]!["photos"]!.AsArray().Select(p => (string)p!).ToList();
+
     /// <summary>The escalation reason codes the claim's latest run must include.</summary>
     public IReadOnlyList<string> ExpectedEscalationReasons => ExpectedList("escalationReasons");
 
@@ -198,8 +228,7 @@ public sealed class GoldenScenario
     /// </summary>
     public MultipartFormDataContent ToSubmission(Action<JsonObject>? adjust = null)
     {
-        var claim = _entry["claim"]!.DeepClone().AsObject();
-        claim["purchase"]!["date"] = PurchaseDate(DateOnly.FromDateTime(DateTime.UtcNow)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var claim = ClaimJson();
         adjust?.Invoke(claim);
 
         var form = new MultipartFormDataContent();
@@ -221,14 +250,27 @@ public sealed class GoldenScenario
         return form;
     }
 
+    /// <summary>The <c>claim</c> JSON (<c>ClaimSubmissionData</c>) of a claim submitted today (UTC), with its purchase date.</summary>
+    public JsonObject ClaimJson()
+    {
+        var claim = _entry["claim"]!.DeepClone().AsObject();
+        claim["purchase"]!["date"] = PurchaseDate(DateOnly.FromDateTime(DateTime.UtcNow)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return claim;
+    }
+
+    /// <summary>The bytes of an evidence file under <c>seed/evidence/</c>.</summary>
+    public static byte[] EvidenceBytes(string relativePath)
+        => File.ReadAllBytes(Path.Combine(RepositoryRoot(), "seed", "evidence", relativePath));
+
     private IReadOnlyList<string> ExpectedList(string name) => List(Expected, name);
 
     private static IReadOnlyList<string> List(JsonObject owner, string name)
         => owner[name]?.AsArray().Select(v => (string)v!).ToList() ?? [];
 
-    private static ByteArrayContent EvidencePart(string relativePath)
+    /// <summary>A multipart part with an evidence file under <c>seed/evidence/</c>, typed by its extension.</summary>
+    internal static ByteArrayContent EvidencePart(string relativePath)
     {
-        var content = new ByteArrayContent(File.ReadAllBytes(Path.Combine(RepositoryRoot(), "seed", "evidence", relativePath)));
+        var content = new ByteArrayContent(EvidenceBytes(relativePath));
         content.Headers.ContentType = new MediaTypeHeaderValue(Path.GetExtension(relativePath).ToLowerInvariant() switch
         {
             ".pdf" => "application/pdf",
@@ -258,3 +300,96 @@ public sealed class GoldenScenario
         throw new InvalidOperationException("Repository root (Warranty.slnx) not found.");
     }
 }
+
+/// <summary>
+/// An <c>expected</c> object of a scenario or of one of its <c>rounds</c> (the <c>$comment</c> of
+/// <c>seed/golden/scenarios.json</c> documents every key). List accessors return an empty list for a missing key;
+/// use <see cref="Has"/> where "missing" and "empty" mean different things (e.g. <c>riskSignals</c>).
+/// </summary>
+public sealed class ScenarioExpectation(JsonObject expected)
+{
+    public string? Status => (string?)expected["status"];
+
+    public string? Disposition => (string?)expected["disposition"];
+
+    public string? Recommendation => (string?)expected["recommendation"];
+
+    public string? Coverage => (string?)expected["coverage"];
+
+    public string? RiskLevel => (string?)expected["riskLevel"];
+
+    public string? DecidedBy => (string?)expected["decidedBy"];
+
+    /// <summary>The claim's automatic information-request count after the round.</summary>
+    public int? AutoInfoRequestCount => (int?)expected["autoInfoRequestCount"];
+
+    /// <summary>The label of the escalation reason shown to staff.</summary>
+    public string? EscalationReasonText => (string?)expected["escalationReasonText"];
+
+    /// <summary>The item codes the claim asks the submitter for.</summary>
+    public IReadOnlyList<string> RequestedItems => List("requestedItems");
+
+    /// <summary>The only agents whose model is called in the round.</summary>
+    public IReadOnlyList<string> ModelCalls => List("modelCalls");
+
+    /// <summary>The agents recorded as failed (<c>AiStepFailed</c>).</summary>
+    public IReadOnlyList<string> AiStepFailed => List("aiStepFailed");
+
+    /// <summary>The risk signal codes the run records (empty: none).</summary>
+    public IReadOnlyList<string> RiskSignals => List("riskSignals");
+
+    public IReadOnlyList<string> FailedGuardrails => List("failedGuardrails");
+
+    public IReadOnlyList<string> PassedGuardrails => List("passedGuardrails");
+
+    public IReadOnlyList<string> EscalationReasons => List("escalationReasons");
+
+    public IReadOnlyList<string> ReviewQueues => List("reviewQueues");
+
+    public IReadOnlyList<string> CitedClauseKeys => List("citedClauseKeys");
+
+    public IReadOnlyList<string> LastTrailEntries => List("lastTrailEntries");
+
+    /// <summary>The rounds the claim's adjudication runs cover.</summary>
+    public IReadOnlyList<int> RunRounds => expected["runRounds"]?.AsArray().Select(r => (int)r!).ToList() ?? [];
+
+    public bool Has(string key) => expected.ContainsKey(key);
+
+    private IReadOnlyList<string> List(string name) => expected[name]?.AsArray().Select(v => (string)v!).ToList() ?? [];
+}
+
+/// <summary>
+/// The files a submitter supplies to start a later round (<c>supplement</c>: same shape as <c>evidence</c>),
+/// sent as a <c>SupplementForm</c> (contracts/rest-api.openapi.yaml): an optional <c>note</c>, an <c>invoice</c>
+/// part and one <c>photos</c> part per photo.
+/// </summary>
+public sealed class ScenarioSupplement(JsonObject supplement)
+{
+    public string? Invoice => (string?)supplement["invoice"];
+
+    public IReadOnlyList<string> Photos => supplement["photos"]?.AsArray().Select(p => (string)p!).ToList() ?? [];
+
+    public MultipartFormDataContent ToForm(string? note = null)
+    {
+        var form = new MultipartFormDataContent();
+        if (note is not null)
+        {
+            form.Add(new StringContent(note), "note");
+        }
+
+        if (Invoice is { } invoice)
+        {
+            form.Add(GoldenScenario.EvidencePart(invoice), "invoice", Path.GetFileName(invoice));
+        }
+
+        foreach (var photo in Photos)
+        {
+            form.Add(GoldenScenario.EvidencePart(photo), "photos", Path.GetFileName(photo));
+        }
+
+        return form;
+    }
+}
+
+/// <summary>A later round of a scenario's own claim (<c>rounds[]</c>): the supplement that starts it and what it must produce.</summary>
+public sealed record ScenarioRound(int Round, ScenarioSupplement Supplement, ScenarioExpectation Expected);
