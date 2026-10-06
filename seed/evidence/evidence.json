@@ -454,6 +454,40 @@
       "modelCode": "AUR-BOOK15",
       "serial": "AB15-24-0002",
       "variant": 32
+    },
+    {
+      "scenario": "US3-no-recommendation",
+      "path": "US3/no-recommendation-invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-087041",
+      "purchaseDateOffsetMonths": -3,
+      "productName": "Aurora Book 15",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0003",
+      "amount": 1400.00,
+      "currency": "USD"
+    },
+    {
+      "scenario": "US3-no-recommendation",
+      "path": "US3/no-recommendation-photo-1.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-BOOK15",
+      "variant": 33
+    },
+    {
+      "scenario": "US3-no-recommendation",
+      "path": "US3/no-recommendation-photo-2.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "back",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0003",
+      "variant": 33
     }
   ]
 }

@@ -5,7 +5,7 @@
     "evidence: files under seed/evidence/ (rendered from seed/evidence/evidence.json by tools/Warranty.EvidenceGenerator), uploaded as the invoice part and the photos parts in this order.",
     "references: the run's harness-issued references the fixtures assume. EV-1 is the invoice and EV-2.. the photos in upload order. POL-n are issued for the retrieved clauses of the applicable policy version with Period and Exclusion clauses first in clause-key order, then Coverage clauses in clause-key order, then the other retrieved clauses by score (PolicyAgent.IssueOrder); only the references the fixtures use are listed.",
     "notInCatalog: true when the scenario's serial is deliberately missing from the tenant catalog. submitAfter: scenarios whose claims must be submitted (to their own tenants) before this one, e.g. the earlier claim whose photo is reused. absentRiskSignals: signal codes the claim must not have.",
-    "claimOf: the earlier scenario whose claim this one acts on instead of submitting its own (it shares that scenario's serial, evidence and fixtures); reviewer and reviewerDecision: who decides it and the decision they record. submittedBy: the staff user who submits an agent-channel claim (default agent.{tenant}). reviewQueues / absentFromReviewQueues: staff users whose review queue must / must not list the claim; escalationReasons: the claim's escalation reason codes.",
+    "claimOf: the earlier scenario whose claim this one acts on instead of submitting its own (it shares that scenario's serial, evidence and fixtures); reviewer and reviewerDecision: who decides it and the decision they record. submittedBy: the staff user who submits an agent-channel claim (default agent.{tenant}). reviewQueues / absentFromReviewQueues: staff users whose review queue must / must not list the claim; escalationReasons: the claim's escalation reason codes. decisionFailure: the failure the scenario's decision fixture returns, so the run has no valid recommendation.",
     "Fixture placeholders: {{claim.purchaseDate}} and {{claim.claimDate}} are replaced with the claim's dates (yyyy-MM-dd) when a fixture is replayed, so the invoice date always matches the stated purchase date.",
     "expected: labelled from the tenant's seeded policy text before any model run (research R19), never copied from model output. citedClauseKeys are the clauses the recommendation cites as SUPPORTS_COVERAGE, SUPPORTS_REJECTION or DEFINES_PERIOD."
   ],
@@ -843,6 +843,67 @@
         "selfReviewRefusedFor": "agent-reviewer.aurora",
         "securityEvents": ["SELF_REVIEW_REFUSED"],
         "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+      }
+    },
+    {
+      "scenarioId": "US3-no-recommendation",
+      "story": "US3",
+      "title": "Aurora AUR-BOOK15 like S5 whose decision call fails with a provider error: no valid recommendation, so a reviewer's approval overrides nothing and needs no justification (FR-035)",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AB15-24-0003",
+      "purchaseDateOffsetMonths": -3,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-14",
+          "email": "na14.customer@aurora.example.com",
+          "phone": "+1 555 010 0014",
+          "addressLine": "1400 Example Court",
+          "city": "Maplewood",
+          "postalCode": "00014",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-BOOK15",
+          "serialNumber": "AB15-24-0003"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 1400.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "The built-in display of my Aurora Book 15 suddenly went black while I was working. The laptop keeps running, the keyboard backlight is on and an external monitor shows the desktop, but the laptop screen stays dark. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US3/no-recommendation-invoice.pdf",
+        "photos": ["US3/no-recommendation-photo-1.jpg", "US3/no-recommendation-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "decisionFailure": "ProviderError",
+      "reviewer": "reviewer.aurora",
+      "reviewerDecision": {
+        "decision": "Approve",
+        "claimantExplanation": "Your Aurora Book 15 is covered by the Aurora Limited Warranty. Its built-in display stopped working during normal use and it was purchased within the warranty period, so we are arranging a free repair at an authorized service center."
+      },
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "escalationReasons": ["AI_UNAVAILABLE"],
+        "reviewQueues": ["reviewer.aurora"],
+        "overridesAi": false
       }
     }
   ]

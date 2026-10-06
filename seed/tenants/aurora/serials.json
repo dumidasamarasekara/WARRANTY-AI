@@ -43,7 +43,7 @@
 
   { "serialNumber": "AB15-24-0001", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-01", "reservedFor": "S5, S11" },
   { "serialNumber": "AB15-24-0002", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-01", "reservedFor": "S20" },
-  { "serialNumber": "AB15-24-0003", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-08" },
+  { "serialNumber": "AB15-24-0003", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-08", "reservedFor": "US3-no-recommendation" },
   { "serialNumber": "AB15-24-0004", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-08" },
   { "serialNumber": "AB15-24-0005", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-15" },
   { "serialNumber": "AB15-24-0006", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-07-15" },
