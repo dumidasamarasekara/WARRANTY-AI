@@ -11,7 +11,8 @@ namespace Warranty.Guardrails.Pipeline.Checks;
 /// A <c>REJECT</c> needs <c>NOT_COVERED</c>; inside the window it may rest on an exclusion (decided by
 /// <c>GROUNDED_IN_CLAUSE</c>), but citing a period clause as its ground contradicts the window. An
 /// undetermined coverage reading on an <c>APPROVE</c>/<c>REJECT</c> is ambiguous policy; a window that
-/// cannot be determined escalates on every path that has a policy result.
+/// cannot be determined escalates on every path that has a policy result. A disagreement with the window is
+/// reported as <see cref="ConflictRules.CoveragePeriodConflict"/> (US4 scenario 1).
 /// </summary>
 internal sealed class CoverageWindowAgreesCheck : IGuardrailCheck
 {
@@ -52,57 +53,28 @@ internal sealed class CoverageWindowAgreesCheck : IGuardrailCheck
         var actual = $"AI {Describe.Wire(context.Decision!.Value)}/{Describe.Wire(coverage)}; claim date "
             + $"{Describe.Date(context.Input.ClaimDate)} {(within ? "within" : "after")} coverage end {Describe.Date(end)}";
 
-        return context.Decision switch
+        var decision = context.Decision!.Value;
+        var inconsistent = (decision, coverage) switch
         {
-            AiDecision.Approve => EvaluateApprove(expected, actual, coverage, within),
-            AiDecision.Reject => EvaluateReject(context, expected, actual, coverage, within),
-            _ => coverage == CoverageDetermination.Covered && !within
-                ? Disagreement(expected, actual, "The AI reads the claim as covered, but the coverage window has ended.")
-                : CheckResult.Pass(expected, actual, "The AI coverage reading does not contradict the coverage window."),
+            (AiDecision.Approve or AiDecision.Reject, CoverageDetermination.Undetermined) => Undetermined(expected, actual),
+            (AiDecision.Approve, not CoverageDetermination.Covered) =>
+                Disagreement(expected, actual, "The AI approves a claim it reads as not covered."),
+            (AiDecision.Reject, not CoverageDetermination.NotCovered) =>
+                Disagreement(expected, actual, "The AI rejects a claim it reads as covered."),
+            _ => null,
         };
-    }
-
-    private static CheckResult EvaluateApprove(string expected, string actual, CoverageDetermination coverage, bool within)
-    {
-        if (coverage == CoverageDetermination.Undetermined)
+        if (inconsistent is not null)
         {
-            return Undetermined(expected, actual);
+            return inconsistent;
         }
 
-        if (coverage != CoverageDetermination.Covered)
-        {
-            return Disagreement(expected, actual, "The AI approves a claim it reads as not covered.");
-        }
-
-        return within
-            ? CheckResult.Pass(expected, actual, "The claim date is within the coverage window.")
-            : Disagreement(expected, actual, "The AI approves, but the claim date is after the coverage window.");
-    }
-
-    private static CheckResult EvaluateReject(
-        GuardrailContext context, string expected, string actual, CoverageDetermination coverage, bool within)
-    {
-        if (coverage == CoverageDetermination.Undetermined)
-        {
-            return Undetermined(expected, actual);
-        }
-
-        if (coverage != CoverageDetermination.NotCovered)
-        {
-            return Disagreement(expected, actual, "The AI rejects a claim it reads as covered.");
-        }
-
-        var citesExpiredPeriod = context.ValidRecommendation!.PolicyRefs.Any(citation =>
+        var rejectsOnPeriodClause = decision == AiDecision.Reject && recommendation.PolicyRefs.Any(citation =>
             citation.Relevance == PolicyRefRelevance.SupportsRejection
             && context.TryGetIssuedClause(citation.Ref, out var clause)
             && clause.ClauseType == ClauseType.Period);
-        if (within && citesExpiredPeriod)
-        {
-            return Disagreement(
-                expected, actual, "The AI rejects on the coverage period, but the claim date is within the coverage window.");
-        }
-
-        return CheckResult.Pass(expected, actual, "The AI coverage reading does not contradict the coverage window.");
+        return ConflictRules.CoverageWindow(decision, coverage, within, rejectsOnPeriodClause) is { } conflict
+            ? Disagreement(expected, actual, conflict)
+            : CheckResult.Pass(expected, actual, "The AI coverage reading does not contradict the coverage window.");
     }
 
     private static CheckResult Undetermined(string expected, string actual)

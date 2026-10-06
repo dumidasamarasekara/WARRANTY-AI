@@ -1,15 +1,17 @@
 using Warranty.Domain.Claims;
+using Warranty.Guardrails.Rules;
 
 namespace Warranty.Guardrails.Pipeline.Checks;
 
 /// <summary>
 /// <c>NO_CONFLICTS</c>: no claim-vs-evidence consistency check failed (FR-016). A field the evidence does
 /// not show is not a conflict (research R27); the checks themselves are computed with
-/// <c>EvidenceMatchRules</c>. Further conflict rules are added by T096.
+/// <c>EvidenceMatchRules</c>. An AI <c>APPROVE</c> against a failed check is called out, and an AI decision on
+/// coverage for a product/serial not in the tenant's catalog is a conflict too (<see cref="ConflictRules"/>).
 /// </summary>
 internal sealed class NoConflictsCheck : IGuardrailCheck
 {
-    private const string Expected = "claim and evidence consistent";
+    private const string Expected = "claim and evidence consistent; AI decision consistent with the catalog";
 
     public GuardrailCheckCode Code => GuardrailCheckCode.NoConflicts;
 
@@ -29,14 +31,25 @@ internal sealed class NoConflictsCheck : IGuardrailCheck
                 Expected, "no evidence result", "Evidence analysis did not complete.", EscalationReason.AiUnavailable);
         }
 
-        var conflicts = evidence.ConsistencyChecks
-            .Where(check => !check.Match && check.ClaimValue is not null && check.EvidenceValue is not null)
-            .Select(check => $"{check.Field}: claim '{check.ClaimValue}' vs evidence '{check.EvidenceValue}'")
-            .ToArray();
-        if (conflicts.Length > 0)
+        var conflicts = ConflictRules.EvidenceConflicts(evidence.ConsistencyChecks);
+        if (conflicts.Count > 0)
         {
             return CheckResult.Escalate(
-                Expected, Describe.List(conflicts), "The evidence conflicts with the claim.", EscalationReason.EvidenceConflict);
+                Expected,
+                Describe.List(conflicts),
+                ConflictRules.EvidenceConflictMessage(context.Decision),
+                EscalationReason.EvidenceConflict);
+        }
+
+        if (context.ValidRecommendation is { } recommendation
+            && ConflictRules.CatalogAssumption(context.Input.Case.ProductInCatalog, recommendation.Decision!.Value, recommendation.Coverage!.Value)
+                is { } catalogConflict)
+        {
+            return CheckResult.Escalate(
+                Expected,
+                $"AI {Describe.Wire(recommendation.Decision.Value)}/{Describe.Wire(recommendation.Coverage.Value)}; product not in catalog",
+                catalogConflict,
+                EscalationReason.AiDeterministicDisagreement);
         }
 
         var compared = evidence.ConsistencyChecks.Select(check => check.Field).Distinct(StringComparer.Ordinal);

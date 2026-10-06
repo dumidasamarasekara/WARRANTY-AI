@@ -31,13 +31,64 @@ public sealed class SafetyGuardrailTests
         ShouldIssue(outcome, ActionKind.EscalateToReview, scenario);
     }
 
-    [Fact(Skip = "Pending T096")]
+    [Fact]
     public void The_coverage_conflict_is_reported_as_a_conflict_with_the_coverage_period_check()
     {
         var outcome = ExpiredWindowApproval().Evaluate();
 
         Failed(outcome, GuardrailCheckCode.CoverageWindowAgrees).Message!
             .ShouldContain("AI recommendation conflicts with coverage-period check");
+    }
+
+    [Fact]
+    public void A_rejection_on_the_period_clause_inside_the_coverage_window_conflicts_with_the_coverage_period_check()
+    {
+        var scenario = GuardrailScenario.ClearReject();
+        scenario.CoverageEndDate = new DateOnly(2027, 1, 15);
+        scenario.WithinCoverageWindow = true;
+
+        var outcome = scenario.Evaluate();
+
+        outcome.Disposition.ShouldBe(Disposition.HumanReview);
+        outcome.Reasons.ShouldContain(EscalationReason.AiDeterministicDisagreement);
+        Failed(outcome, GuardrailCheckCode.CoverageWindowAgrees).Message!
+            .ShouldStartWith("AI recommendation conflicts with coverage-period check");
+    }
+
+    // ── AI vs failed invoice consistency and the catalog (T096) ─────────────────────────────────
+
+    [Fact]
+    public void An_AI_approval_against_a_failed_invoice_consistency_check_goes_to_review()
+    {
+        var scenario = GuardrailScenario.ClearApprove();
+        scenario.ConsistencyChecks.Add(new ConsistencyCheck("purchasePrice", "450.00", "460.00", false));
+
+        var outcome = scenario.Evaluate();
+
+        outcome.Disposition.ShouldBe(Disposition.HumanReview);
+        outcome.Reasons.ShouldBe([EscalationReason.EvidenceConflict]);
+        var check = Failed(outcome, GuardrailCheckCode.NoConflicts);
+        check.Actual!.ShouldContain("purchasePrice: claim '450.00' vs evidence '460.00'");
+        check.Message!.ShouldStartWith("The AI approves, but the claim conflicts with the evidence");
+        ShouldIssue(outcome, ActionKind.EscalateToReview, scenario);
+    }
+
+    [Theory]
+    [InlineData(AiDecision.Approve)]
+    [InlineData(AiDecision.Reject)]
+    public void An_AI_coverage_decision_for_a_product_not_in_the_catalog_is_a_conflict(AiDecision decision)
+    {
+        var scenario = decision == AiDecision.Reject ? GuardrailScenario.ClearReject() : GuardrailScenario.ClearApprove();
+        scenario.ProductInCatalog = false;
+        scenario.ProductCategory = null;
+        scenario.ClaimValue = null;
+
+        var outcome = scenario.Evaluate();
+
+        outcome.Disposition.ShouldBe(Disposition.HumanReview);
+        outcome.Reasons.ShouldContain(EscalationReason.ProductNotInCatalog);
+        outcome.Reasons.ShouldContain(EscalationReason.AiDeterministicDisagreement);
+        Failed(outcome, GuardrailCheckCode.NoConflicts).Actual!.ShouldContain("product not in catalog");
     }
 
     // ── AI cites an exclusion the deterministic terms do not contain (R26) ──────────────────────
