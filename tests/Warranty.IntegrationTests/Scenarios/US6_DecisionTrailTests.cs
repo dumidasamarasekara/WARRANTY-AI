@@ -24,8 +24,6 @@ namespace Warranty.IntegrationTests.Scenarios;
 [Collection(WarrantyAppCollection.Name)]
 public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
 {
-    private const string PendingAiOperations = "Pending T104";
-
     private const string OverrideScenario = "US6-override";
 
     /// <summary>The adjudication steps every evaluated claim has, in the order the pipeline guarantees.</summary>
@@ -102,7 +100,7 @@ public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
 
     // ---- AI call summaries -----------------------------------------------------------------------------
 
-    [Theory(Skip = PendingAiOperations)]
+    [Theory]
     [InlineData("S1", "Approved")]
     [InlineData("S2", "Rejected")]
     public async Task Every_model_call_of_the_claim_is_summarized_on_its_step_with_model_prompt_version_tokens_latency_and_cost(
@@ -118,9 +116,14 @@ public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
         {
             call.GetProperty("agent").GetString().ShouldNotBeNullOrWhiteSpace(step);
             call.GetProperty("model").GetString().ShouldNotBeNullOrWhiteSpace(step);
-            call.GetProperty("promptVersion").GetString().ShouldNotBeNullOrWhiteSpace(step);
             call.GetProperty("inputTokens").GetInt32().ShouldBeGreaterThan(0, step);
-            call.GetProperty("outputTokens").GetInt32().ShouldBeGreaterThan(0, step);
+            if (call.GetProperty("route").GetString() != "embedding")
+            {
+                // A generation call runs a versioned prompt and produces output; an embedding of the retrieval query has neither.
+                call.GetProperty("promptVersion").GetString().ShouldNotBeNullOrWhiteSpace(step);
+                call.GetProperty("outputTokens").GetInt32().ShouldBeGreaterThan(0, step);
+            }
+
             call.GetProperty("latencyMs").GetInt64().ShouldBeGreaterThanOrEqualTo(0, step);
             call.GetProperty("estimatedCost").GetDecimal().ShouldBeGreaterThanOrEqualTo(0m, step);
         }
