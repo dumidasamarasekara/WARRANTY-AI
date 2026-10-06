@@ -107,6 +107,48 @@ public sealed partial class GoldenScenarioFixturesTests
             var photos = evidence.GetProperty("photos").EnumerateArray().Select(p => p.GetString()!).ToList();
             photos.Count.ShouldBeInRange(0, 8, $"{id}: 1-8 photos (0 only for a missing-photo scenario)");
             photos.ShouldAllBe(photo => File.Exists(Path.Combine(EvidenceRoot(), photo)), $"{id}: a photo is missing");
+
+            // Files supplied to start a later round (a claimOf scenario's supplement, or each of the scenario's rounds).
+            var supplements = new List<JsonElement>();
+            if (scenario.TryGetProperty("supplement", out var own))
+            {
+                supplements.Add(own);
+            }
+
+            if (scenario.TryGetProperty("rounds", out var rounds))
+            {
+                supplements.AddRange(rounds.EnumerateArray().Select(r => r.GetProperty("supplement")));
+            }
+
+            foreach (var supplement in supplements)
+            {
+                var files = SupplementFiles(supplement);
+                files.ShouldNotBeEmpty($"{id}: a supplement supplies at least one file");
+                files.ShouldAllBe(file => File.Exists(Path.Combine(EvidenceRoot(), file)), $"{id}: a supplement file is missing");
+            }
+        }
+    }
+
+    [Fact]
+    public void Multi_round_scenarios_number_their_rounds_consecutively_from_one()
+    {
+        var scenarios = LoadScenarios();
+        foreach (var scenario in scenarios)
+        {
+            var id = scenario.GetProperty("scenarioId").GetString()!;
+            if (scenario.TryGetProperty("supplement", out _))
+            {
+                scenario.TryGetProperty("claimOf", out var claimOf).ShouldBeTrue($"{id}: a supplement round acts on the claim of an earlier scenario (claimOf)");
+                scenarios.ShouldContain(s => s.GetProperty("scenarioId").GetString() == claimOf.GetString(), $"{id}: claimOf names no scenario");
+            }
+
+            if (scenario.TryGetProperty("claimOf", out _))
+            {
+                continue;
+            }
+
+            RoundsOf(scenario, scenarios).Select(r => r.Number).ShouldBe(
+                Enumerable.Range(1, RoundsOf(scenario, scenarios).Count), $"{id}: rounds must be numbered 1..n without gaps");
         }
     }
 
@@ -188,19 +230,36 @@ public sealed partial class GoldenScenarioFixturesTests
             return;
         }
 
-        var scenario = Scenario(scenarioId);
+        var scenarios = LoadScenarios();
+        var scenario = scenarios.Single(s => s.GetProperty("scenarioId").GetString() == scenarioId);
         var invalidOutputs = StringList(scenario, "invalidOutputFixtures");
         var tenant = scenario.GetProperty("tenant").GetString()!;
-        var references = scenario.GetProperty("references").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!, StringComparer.Ordinal);
+
+        // The folder answers every round of the scenario's claim; a fixture may cite a reference issued in any of them.
+        var rounds = RoundsOf(scenario, scenarios);
+        var references = new Dictionary<string, string>(StringComparer.Ordinal);
         var clauseKeys = TenantClauseKeys(tenant);
-        foreach (var (reference, target) in references.Where(r => r.Key.StartsWith("POL-", StringComparison.Ordinal)))
+        foreach (var round in rounds)
         {
-            clauseKeys.ShouldContain(target, $"{scenarioId}: {reference} names {target}, which no {tenant} policy declares");
+            foreach (var (reference, target) in round.References)
+            {
+                if (reference.StartsWith("POL-", StringComparison.Ordinal))
+                {
+                    clauseKeys.ShouldContain(target, $"{scenarioId} round {round.Number}: {reference} names {target}, which no {tenant} policy declares");
+                    if (references.TryGetValue(reference, out var earlier))
+                    {
+                        target.ShouldBe(earlier, $"{scenarioId}: {reference} names different clauses in different rounds");
+                    }
+                }
+
+                references.TryAdd(reference, target);
+            }
         }
 
-        var photoCount = scenario.GetProperty("evidence").GetProperty("photos").GetArrayLength();
+        // Each round analyses every photo of the claim so far: one photo call per photo and round.
+        var photoCalls = rounds.Sum(r => r.PhotoCount);
         var fixtures = Fixtures(folder);
-        fixtures.Count(f => f.Agent == "evidence-photo").ShouldBeLessThanOrEqualTo(photoCount, $"{scenarioId}: one photo call per photo");
+        fixtures.Count(f => f.Agent == "evidence-photo").ShouldBeLessThanOrEqualTo(photoCalls, $"{scenarioId}: one photo call per photo");
 
         var outputs = fixtures
             .Where(f => !invalidOutputs.Contains(Path.GetFileName(f.Path)))
@@ -219,17 +278,25 @@ public sealed partial class GoldenScenarioFixturesTests
             }
         }
 
-        // Policy: the warranty_lookup tool is called once before the assessment.
+        // Policy: the warranty_lookup tool is called once before each assessment (one per round that reaches the policy step).
         var policy = outputs.Where(o => o.Agent == "policy").ToList();
-        if (policy.Any(o => o.Turn.StructuredOutput is not null))
+        var assessments = policy.Count(o => o.Turn.StructuredOutput is not null);
+        if (assessments > 0)
         {
-            policy.SelectMany(o => o.Turn.ToolCalls).Count(c => c.ToolName == "warranty_lookup").ShouldBe(1, $"{scenarioId}: one warranty_lookup call");
+            policy.SelectMany(o => o.Turn.ToolCalls).Count(c => c.ToolName == "warranty_lookup").ShouldBe(assessments, $"{scenarioId}: one warranty_lookup call per assessment");
         }
 
-        // Decision: the clauses it relies on are the scenario's labelled clause keys; the claimant text has no IDs.
+        // Every recommendation's claimant text is free of reference IDs and risk vocabulary.
+        foreach (var (_, name, turn) in outputs.Where(o => o.Agent == "decision" && o.Turn.StructuredOutput is not null))
+        {
+            var text = ClaimantTextScreen.Screen(turn.StructuredOutput!.Value.GetProperty("claimantExplanation").GetString()!);
+            text.IsSafe.ShouldBeTrue($"{name}: the claimant explanation contains '{text.OffendingTerm}'");
+        }
+
+        // Decision: the clauses the last recommendation relies on are the last round's labelled clause keys; the claimant text has no IDs.
         var decision = outputs.LastOrDefault(o => o.Agent == "decision" && o.Turn.StructuredOutput is not null);
         if (decision.Turn?.StructuredOutput is { } recommendation
-            && scenario.GetProperty("expected").TryGetProperty("citedClauseKeys", out var expectedKeys))
+            && rounds[^1].Expected.TryGetProperty("citedClauseKeys", out var expectedKeys))
         {
             var cited = recommendation.GetProperty("policyRefs").EnumerateArray()
                 .Where(r => r.GetProperty("relevance").GetString() != "CONTEXT")
@@ -320,6 +387,56 @@ public sealed partial class GoldenScenarioFixturesTests
             ? values.EnumerateArray().Select(v => v.GetString()!).ToHashSet(StringComparer.Ordinal)
             : [];
 
+    /// <summary>
+    /// The rounds of the claim a scenario submits, in round order: round 1 (the scenario itself), its <c>rounds</c>,
+    /// and the scenarios that act on its claim (<c>claimOf</c>) with a <c>supplement</c>. <see cref="Round.PhotoCount"/>
+    /// counts every photo of the claim up to that round, since each round analyses all of them.
+    /// </summary>
+    private static List<Round> RoundsOf(JsonElement scenario, IReadOnlyList<JsonElement> scenarios)
+    {
+        var id = scenario.GetProperty("scenarioId").GetString()!;
+        var later = new List<(int Number, JsonElement Supplement, JsonElement References, JsonElement Expected)>();
+        if (scenario.TryGetProperty("rounds", out var rounds))
+        {
+            later.AddRange(rounds.EnumerateArray().Select(r =>
+                (r.GetProperty("round").GetInt32(), r.GetProperty("supplement"), r.GetProperty("references"), r.GetProperty("expected"))));
+        }
+
+        later.AddRange(scenarios
+            .Where(s => s.TryGetProperty("claimOf", out var claimOf) && claimOf.GetString() == id && s.TryGetProperty("supplement", out _))
+            .Select(s => (s.GetProperty("round").GetInt32(), s.GetProperty("supplement"), s.GetProperty("references"), s.GetProperty("expected"))));
+
+        var photos = scenario.GetProperty("evidence").GetProperty("photos").GetArrayLength();
+        var result = new List<Round> { new(1, photos, ReferenceMap(scenario.GetProperty("references")), scenario.GetProperty("expected")) };
+        foreach (var round in later.OrderBy(r => r.Number))
+        {
+            photos += round.Supplement.TryGetProperty("photos", out var supplied) ? supplied.GetArrayLength() : 0;
+            result.Add(new Round(round.Number, photos, ReferenceMap(round.References), round.Expected));
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, string> ReferenceMap(JsonElement references)
+        => references.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!, StringComparer.Ordinal);
+
+    /// <summary>The evidence files of a <c>supplement</c> (an optional invoice and photos).</summary>
+    private static List<string> SupplementFiles(JsonElement supplement)
+    {
+        var files = new List<string>();
+        if (supplement.TryGetProperty("invoice", out var invoice) && invoice.ValueKind == JsonValueKind.String)
+        {
+            files.Add(invoice.GetString()!);
+        }
+
+        if (supplement.TryGetProperty("photos", out var photos))
+        {
+            files.AddRange(photos.EnumerateArray().Select(p => p.GetString()!));
+        }
+
+        return files;
+    }
+
     private static List<JsonElement> LoadScenarios()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(ScenariosPath()));
@@ -356,6 +473,9 @@ public sealed partial class GoldenScenarioFixturesTests
 
         throw new InvalidOperationException("Repository root (Warranty.slnx) not found.");
     }
+
+    /// <summary>One adjudication round of a scenario's claim: its number, the claim's photos so far, its references and expectations.</summary>
+    private sealed record Round(int Number, int PhotoCount, IReadOnlyDictionary<string, string> References, JsonElement Expected);
 
     [GeneratedRegex(@"^(?<agent>intake|evidence-invoice|evidence-photo|policy|decision)-(?<n>[1-9][0-9]*)\.json$")]
     private static partial Regex FixtureName();

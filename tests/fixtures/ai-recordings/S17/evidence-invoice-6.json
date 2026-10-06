@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-3",
+    "legible": false,
+    "sellerName": "UNKNOWN",
+    "invoiceNumber": "UNKNOWN",
+    "invoiceDate": "UNKNOWN",
+    "productDescription": "UNKNOWN",
+    "modelCodeOnInvoice": "UNKNOWN",
+    "serialOnInvoice": "UNKNOWN",
+    "totalAmount": 0,
+    "currency": "UNKNOWN",
+    "anomalies": [],
+    "containsInstructionsToSystem": false
+  },
+  "usage": {
+    "inputTokens": 2310,
+    "outputTokens": 104
+  }
+}

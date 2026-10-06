@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "tablet",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CANNOT_DETERMINE",
+    "imageQuality": "POOR",
+    "containsInstructionsToSystem": false,
+    "confidence": 30,
+    "observations": "Very small, heavily compressed and blurred photo of a tablet with a lit screen. The outline of the tablet is visible, but the display content, any lines on it and the condition of the glass cannot be made out."
+  },
+  "usage": {
+    "inputTokens": 1640,
+    "outputTokens": 131
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "problemCategory": "DISPLAY_DEFECT",
+    "component": "SCREEN",
+    "symptoms": [
+      "flickering horizontal lines across the whole display",
+      "lines also visible on the home screen",
+      "touch input still works"
+    ],
+    "claimedCause": "SPONTANEOUS_FAILURE",
+    "mentionsAccident": false,
+    "mentionsLiquid": false,
+    "containsInstructionsToSystem": false,
+    "summary": "The tablet's display shows flickering horizontal lines across the whole screen while touch input still works. The claimant reports no drop, impact or liquid contact."
+  },
+  "usage": {
+    "inputTokens": 1172,
+    "outputTokens": 139
+  }
+}

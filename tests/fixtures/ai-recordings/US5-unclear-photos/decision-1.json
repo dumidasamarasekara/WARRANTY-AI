@@ -1,0 +1,49 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "REQUEST_MORE_INFORMATION",
+    "coverage": "UNDETERMINED",
+    "confidence": 88,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0034, 450.00 USD, dated on the stated purchase date."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo too small and blurred to show the display or the reported lines."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Second front photo equally blurred; the display cannot be assessed."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-8",
+        "relevance": "CONTEXT"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "DEFINES_PERIOD"
+      }
+    ],
+    "missingInformation": [
+      {
+        "item": "PHOTO_OF_DAMAGE",
+        "reason": "The photos are too small and blurred to show the flickering lines on the display or the condition of the screen."
+      }
+    ],
+    "reasoningSummary": "Flickering lines on the display during normal use would be a manufacturing defect under POL-8, and the invoice (EV-1) confirms a purchase within the 12-month period of POL-1. Both photos (EV-2, EV-3) are too small and blurred to show the display, so the reported fault and the absence of impact or liquid damage cannot be confirmed. Nothing suggests a problem with the claim itself; request a clear photo of the display showing the lines before deciding.",
+    "claimantExplanation": "Thank you for your claim. The photos you sent are too small and blurred for us to see the problem with the display. Please add a clear, well-lit photo of the screen while the flickering lines are visible, taken straight on and in focus.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7612,
+    "outputTokens": 468
+  }
+}

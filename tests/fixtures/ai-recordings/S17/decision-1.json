@@ -1,0 +1,49 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "REQUEST_MORE_INFORMATION",
+    "coverage": "UNDETERMINED",
+    "confidence": 90,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Invoice copy is blurred and low-contrast; seller, product, serial, amount and date cannot be read."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: black, unlit screen; no visible damage."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: serial label shows AT10-24-0012, matching the claim."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-8",
+        "relevance": "CONTEXT"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "DEFINES_PERIOD"
+      }
+    ],
+    "missingInformation": [
+      {
+        "item": "LEGIBLE_INVOICE",
+        "reason": "The invoice cannot be read, so the purchase date, seller and product cannot be verified."
+      }
+    ],
+    "reasoningSummary": "The reported power failure would be a manufacturing defect under POL-8 if the purchase is confirmed, and the stated purchase date is within the 12-month period of POL-1. However, the invoice (EV-1) can be read, so the purchase date, seller and product cannot be verified. The photos (EV-2, EV-3) show an undamaged tablet with the claimed serial. Request a legible invoice before deciding.",
+    "claimantExplanation": "We could not read the invoice you sent: the copy is too blurred to make out the seller, the product or the purchase date. Please upload a clear, complete copy of the invoice or receipt, for example a PDF from the store or a sharp, well-lit photo of the whole page.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7612,
+    "outputTokens": 468
+  }
+}

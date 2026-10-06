@@ -1,0 +1,48 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "decision": "APPROVE",
+    "coverage": "COVERED",
+    "confidence": 94,
+    "risk": {
+      "level": "LOW",
+      "signals": []
+    },
+    "evidenceRefs": [
+      {
+        "ref": "EV-1",
+        "observation": "Legible invoice from Aurora Store for an Aurora Tab 10 (AUR-TAB10), serial AT10-24-0033, 450.00 USD, dated on the stated purchase date."
+      },
+      {
+        "ref": "EV-2",
+        "observation": "Front photo: black, unlit screen; no cracks, dents or liquid marks."
+      },
+      {
+        "ref": "EV-3",
+        "observation": "Back photo: undamaged housing; no serial label visible."
+      },
+      {
+        "ref": "EV-4",
+        "observation": "Serial label photo supplied on request: shows AT10-24-0033, matching the claim and the invoice."
+      }
+    ],
+    "policyRefs": [
+      {
+        "ref": "POL-8",
+        "relevance": "SUPPORTS_COVERAGE"
+      },
+      {
+        "ref": "POL-1",
+        "relevance": "DEFINES_PERIOD"
+      }
+    ],
+    "missingInformation": [],
+    "reasoningSummary": "The tablet stopped powering on during normal use with no reported or visible accidental or liquid damage (EV-2, EV-3), which is a manufacturing defect covered by POL-8. The serial label photo supplied on the reviewer's request (EV-4) shows the claimed serial, which also matches the invoice (EV-1); the invoice matches the claimed seller, model, price and purchase date, and the purchase in North America is within the 12-month warranty period of POL-1 as computed by warranty_lookup. No exclusion applies. Recommend approval and repair at an authorized service center.",
+    "claimantExplanation": "Thank you for sending the photo of the serial label. Your Aurora Tab 10 is covered by the Aurora Limited Warranty. It stopped powering on during normal use, which is a manufacturing defect, and it was purchased within the 12-month warranty period that applies in North America. We will confirm the repair at an authorized service center with you shortly.",
+    "manipulationDetected": false
+  },
+  "usage": {
+    "inputTokens": 7840,
+    "outputTokens": 521
+  }
+}
