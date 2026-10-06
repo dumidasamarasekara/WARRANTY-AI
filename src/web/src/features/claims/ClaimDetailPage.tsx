@@ -48,6 +48,7 @@ import {
   type ProgressStep,
   type Recommendation,
 } from './claimDetail'
+import { DecisionTracePage } from '../trace/DecisionTracePage'
 import { EvidenceThumbnail, EvidenceViewer } from './EvidenceViewer'
 
 type TabKey = 'case' | 'decision' | 'evidence' | 'trace'
@@ -637,7 +638,7 @@ export function ClaimDetailPage() {
       {tab === 'case' && <CaseFile {...context} />}
       {tab === 'decision' && <AiDecisionTab {...context} />}
       {tab === 'evidence' && <EvidenceTab {...context} />}
-      {tab === 'trace' && <EmptyState message="The decision trace is not available yet." />}
+      {tab === 'trace' && <DecisionTracePage claimId={detail.claimId} reference={detail.reference} />}
     </section>
   )
 }
