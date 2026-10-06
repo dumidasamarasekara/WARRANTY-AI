@@ -217,9 +217,13 @@ error (including `--mode live` without a key).
 `tests/fixtures/ai-recordings/golden/` yet (the scenario fixtures in `tests/fixtures/ai-recordings/S*`
 belong to the integration tests). A replay run therefore scores no quality metric: every case
 runs with all model calls failing and is only checked for the AI-unavailable fallback (none may
-be finalized automatically, FR-031). The T115 run reported 43 cases "without recordings" (fallback
-PASS) and 2 "failed" cases, G-AUR-16 and G-BOR-18, whose missing invoice/photo is rejected at
-submission before the pipeline runs. Recording the golden set needs a live run with `--record`.
+be finalized automatically, FR-031). A replay run reports all 45 cases "without recordings"
+(fallback PASS): 43 go to human review with `AI_UNAVAILABLE`, and G-AUR-16 / G-BOR-18 (no invoice /
+no photo) end in `RequestInformation` through the intake short-circuit. In these cases the failed
+intake skips the Policy step, so their `NO_APPLICABLE_POLICY` reason is marked "(policy step not
+run)" — it is not a policy lookup result. Submission requires an invoice and a photo, so the runner
+submits G-AUR-16 / G-BOR-18 with a placeholder in the missing part and deletes it before the run.
+Recording the golden set needs a live run with `--record`.
 
 Report (`artifacts/eval/<timestamp>/report.md` + `.json`) contains: extraction field accuracy,
 retrieval recall@k of expected clause keys, recommendation and disposition accuracy (target ≥ 85%,

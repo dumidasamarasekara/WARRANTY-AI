@@ -88,6 +88,20 @@ public sealed record CaseObservation
     /// <summary>The run's failure reason (an AI step that failed, refused or timed out), if any.</summary>
     public string? RunFailure { get; init; }
 
+    /// <summary>
+    /// True when the run recorded a policy assessment, i.e. the Policy step ran (its version lookup is
+    /// deterministic). It does not run after an intake short-circuit or a failed intake.
+    /// </summary>
+    public bool PolicyStepRan { get; init; }
+
+    /// <summary>
+    /// Escalation reasons that only say a step did not run, not what that step would have found: without a
+    /// policy result the guardrails' coverage-window check reports <c>NO_APPLICABLE_POLICY</c> (the window
+    /// cannot be computed), although no policy lookup was made. Empty when the Policy step ran.
+    /// </summary>
+    public IReadOnlyList<string> ReasonsFromSkippedSteps
+        => PolicyStepRan ? [] : EscalationReasons.Where(r => r == "NO_APPLICABLE_POLICY").ToList();
+
     /// <summary>Intake Agent output (intake-extraction schema).</summary>
     public JsonObject? IntakeExtraction { get; init; }
 

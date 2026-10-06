@@ -60,14 +60,30 @@ public sealed record CaseSummary(
     string? Status,
     IReadOnlyList<string> ExpectedEscalationReasons,
     IReadOnlyList<string> ActualEscalationReasons,
-    string? RunFailure);
+    string? RunFailure,
+    IReadOnlyList<string> ReasonsFromSkippedSteps);
 
 /// <summary>
 /// The AI-unavailable fallback check on replay cases that have no recordings: every model call fails, so
 /// FR-031/SC-004 require that none of them is finalized automatically. It measures the deterministic
 /// fallback only — never model quality.
 /// </summary>
-public sealed record FallbackCheck(int Cases, IReadOnlyList<string> AutoFinalized, IReadOnlyDictionary<string, int> Dispositions)
+/// <param name="WithoutAiUnavailable">
+/// Cases not routed to human review with <c>AI_UNAVAILABLE</c> among the reasons. Listed, not failed: an
+/// intake short-circuit (a missing invoice or photo, found without the model) requests that item even
+/// when the intake model call failed, which leaves the claim open without finalizing it.
+/// </param>
+/// <param name="PolicyStepNotRun">
+/// Cases whose Policy step did not run (a failed intake skips Evidence, Policy and Decision); their
+/// <c>NO_APPLICABLE_POLICY</c> reason, if any, says nothing about the tenant's policies
+/// (<see cref="CaseObservation.ReasonsFromSkippedSteps"/>).
+/// </param>
+public sealed record FallbackCheck(
+    int Cases,
+    IReadOnlyList<string> AutoFinalized,
+    IReadOnlyList<string> WithoutAiUnavailable,
+    IReadOnlyList<string> PolicyStepNotRun,
+    IReadOnlyDictionary<string, int> Dispositions)
 {
     public bool? Passed => Cases == 0 ? null : AutoFinalized.Count == 0;
 
@@ -78,6 +94,9 @@ public sealed record FallbackCheck(int Cases, IReadOnlyList<string> AutoFinalize
         return new FallbackCheck(
             list.Count,
             list.Where(o => o.Disposition is "AutoApprove" or "AutoReject").Select(o => o.CaseId).ToList(),
+            list.Where(o => o.Disposition != "HumanReview" || !o.EscalationReasons.Contains("AI_UNAVAILABLE", StringComparer.Ordinal))
+                .Select(o => o.CaseId).ToList(),
+            list.Where(o => !o.PolicyStepRan).Select(o => o.CaseId).ToList(),
             list.GroupBy(o => o.Disposition ?? "none", StringComparer.Ordinal)
                 .OrderBy(g => g.Key, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal));

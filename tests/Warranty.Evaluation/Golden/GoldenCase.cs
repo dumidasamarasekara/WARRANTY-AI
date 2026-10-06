@@ -46,6 +46,15 @@ public sealed class GoldenCase
     public IReadOnlyList<string> PhotoPaths
         => _entry["evidence"]?["photos"]?.AsArray().Select(p => (string)p!).ToList() ?? [];
 
+    /// <summary>
+    /// True when the case's round 1 has no invoice. Submission requires one (FR-007, <c>ClaimSubmissionForm</c>,
+    /// 400 otherwise), so the runner submits a <see cref="PlaceholderEvidence"/> invoice and removes it before the run.
+    /// </summary>
+    public bool NeedsInvoicePlaceholder => InvoicePath is null;
+
+    /// <summary>True when the case's round 1 has no photo; handled like <see cref="NeedsInvoicePlaceholder"/>.</summary>
+    public bool NeedsPhotoPlaceholder => PhotoPaths.Count == 0;
+
     /// <summary>The purchase date of a claim submitted on <paramref name="claimDate"/>.</summary>
     public DateOnly PurchaseDate(DateOnly claimDate)
         => _entry["purchaseDate"] is { } absolute
