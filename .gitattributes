@@ -1,0 +1,13 @@
+# Text files are stored and checked out with LF on every platform, so Windows checkouts
+# match Linux CI (tests read seed files and compare literal "\n" text).
+* text=auto eol=lf
+
+# Evidence and other binaries are never normalized (their SHA-256 hashes are asserted).
+*.pdf  binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+*.gif  binary
+*.ico  binary
+*.heic binary
