@@ -1,11 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Golden-dataset evaluation runner, separate from production; never referenced by src/. -->
+  <!--
+    Golden-dataset evaluation runner, separate from production; never referenced by src/.
+    It hosts the API composition in-process (WebApplicationFactory, worker disabled) against
+    Testcontainers PostgreSQL + Azurite seeded by the real migration service.
+  -->
   <PropertyGroup>
     <RootNamespace>Warranty.Evaluation</RootNamespace>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.Azurite" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Warranty.Domain\Warranty.Domain.csproj" />
@@ -16,6 +26,9 @@
     <ProjectReference Include="..\..\src\Warranty.Knowledge\Warranty.Knowledge.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Infrastructure\Warranty.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
+    <ProjectReference Include="..\..\src\Warranty.Api\Warranty.Api.csproj" />
+    <!-- Aliased: its top-level Program would clash with the API's Program used by WebApplicationFactory. -->
+    <ProjectReference Include="..\..\src\Warranty.MigrationService\Warranty.MigrationService.csproj" Aliases="migration" />
   </ItemGroup>
 
 </Project>
