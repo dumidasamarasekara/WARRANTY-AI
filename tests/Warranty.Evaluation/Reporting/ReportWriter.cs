@@ -53,8 +53,19 @@ public static class ReportWriter
             md.AppendLine($"| {t.Metric} | {t.Target} | {t.Actual} | {Verdict(t.Passed)} |");
         }
 
-        md.AppendLine(Inv($"| AI-unavailable fallback (cases without recordings) | none auto-finalized (FR-031) | {report.Fallback.AutoFinalized.Count} of {report.Fallback.Cases} auto-finalized | {Verdict(report.Fallback.Passed)} |"));
+        var fallback = report.Fallback;
+        md.AppendLine(Inv($"| AI-unavailable fallback (cases without recordings) | none auto-finalized (FR-031) | {fallback.AutoFinalized.Count} of {fallback.Cases} auto-finalized | {Verdict(fallback.Passed)} |"));
         md.AppendLine();
+
+        if (fallback.Cases > 0)
+        {
+            md.AppendLine("## AI-unavailable fallback (cases without recordings)").AppendLine();
+            md.AppendLine("- Dispositions: " + string.Join(", ", fallback.Dispositions.Select(d => Inv($"{d.Key} {d.Value}"))));
+            md.AppendLine($"- Auto-finalized: {List(fallback.AutoFinalized)}");
+            md.AppendLine($"- Not routed to review with AI_UNAVAILABLE: {List(fallback.WithoutAiUnavailable)} (an intake short-circuit requests a missing invoice or photo even when the intake model call failed)");
+            md.AppendLine(Inv($"- Policy step not run: {fallback.PolicyStepNotRun.Count} of {fallback.Cases}. A failed intake skips Evidence, Policy and Decision, so the guardrails' coverage-window check finds no policy result and reports NO_APPLICABLE_POLICY; for these cases that reason is marked \"(policy step not run)\" below and says nothing about the tenant's policies."));
+            md.AppendLine();
+        }
 
         md.AppendLine("## Recommendation and disposition accuracy").AppendLine();
         var tenants = m.Recommendation.ByTenant.Keys.Union(m.Disposition.ByTenant.Keys).Order(StringComparer.Ordinal).ToList();
@@ -143,7 +154,7 @@ public static class ReportWriter
         foreach (var c in report.Cases)
         {
             var actual = c.ActualRecommendation is null ? "none" : c.RecommendationValid ? c.ActualRecommendation : $"{c.ActualRecommendation} (invalid)";
-            md.AppendLine(Inv($"| {c.CaseId} | {c.Tenant} | {c.Outcome} | {c.ExpectedRecommendation ?? "none"} | {actual} | {c.Confidence?.ToString(CultureInfo.InvariantCulture) ?? ""} | {c.ExpectedDisposition} | {c.ActualDisposition ?? "none"} | {string.Join(", ", c.ActualEscalationReasons)} | {Escape(c.Note ?? c.RunFailure ?? string.Empty)} |"));
+            md.AppendLine(Inv($"| {c.CaseId} | {c.Tenant} | {c.Outcome} | {c.ExpectedRecommendation ?? "none"} | {actual} | {c.Confidence?.ToString(CultureInfo.InvariantCulture) ?? ""} | {c.ExpectedDisposition} | {c.ActualDisposition ?? "none"} | {string.Join(", ", c.ActualEscalationReasons.Select(r => c.ReasonsFromSkippedSteps.Contains(r) ? $"{r} (policy step not run)" : r))} | {Escape(c.Note ?? c.RunFailure ?? string.Empty)} |"));
         }
 
         return md.ToString();

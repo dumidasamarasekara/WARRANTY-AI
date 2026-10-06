@@ -203,7 +203,8 @@ internal sealed class EvaluationRunner(EvaluationOptions options, string reposit
             if (recorded < selected)
             {
                 notes.Add($"{selected - recorded} cases have no recordings: they ran with every model call failing, are excluded from every quality metric "
-                          + "and only checked for the AI-unavailable fallback (none may be finalized automatically, FR-031). No model output was invented for them.");
+                          + "and only checked for the AI-unavailable fallback (none may be finalized automatically, FR-031). "
+                          + "Their failed intake skips the Policy step, so a NO_APPLICABLE_POLICY reason on them is not a policy finding. No model output was invented for them.");
             }
         }
         else
@@ -243,5 +244,6 @@ internal sealed class EvaluationRunner(EvaluationOptions options, string reposit
             s.Observation.Status,
             s.Expected.EscalationReasons,
             s.Observation.EscalationReasons,
-            s.Observation.RunFailure);
+            s.Observation.RunFailure,
+            s.Observation.ReasonsFromSkippedSteps);
 }

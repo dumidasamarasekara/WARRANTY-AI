@@ -113,25 +113,55 @@ internal sealed class CaseRunner(IServiceProvider services, string ownerConnecti
         await sp.GetRequiredService<IUnitOfWork>().SaveChangesAsync(ct);
     }
 
-    /// <summary>Submits the claim with all its evidence through the claimant channel's use case (no job runs: the worker is off).</summary>
+    /// <summary>
+    /// Submits the claim with all its evidence through the claimant channel's use case (no job runs: the worker
+    /// is off). A part the case lacks is submitted as <see cref="PlaceholderEvidence"/> and removed again.
+    /// </summary>
     private async Task<Guid> SubmitAsync(GoldenCase golden, EvaluationTenant tenant, DateOnly claimDate, CancellationToken ct)
     {
         using var tenantScope = TenantContextScope.Begin(tenant.Id, tenant.Slug, ClaimantPrincipal);
         await using var scope = services.CreateAsyncScope();
         var data = golden.ClaimJson(claimDate).Deserialize<ClaimSubmissionData>(JsonSerializerOptions.Web);
-        var invoices = golden.InvoicePath is { } invoice ? new[] { Upload(invoice) } : [];
-        var photos = golden.PhotoPaths.Select(Upload).ToList();
+        var invoices = golden.InvoicePath is { } invoice ? [Upload(invoice)] : new[] { Placeholder() };
+        var photos = golden.NeedsPhotoPlaceholder ? [Placeholder()] : golden.PhotoPaths.Select(Upload).ToList();
 
         var result = await scope.ServiceProvider.GetRequiredService<SubmitClaim>()
             .ExecuteAsync(new SubmitClaimCommand(ClaimChannel.ClaimantPortal, data, invoices, photos), ct);
         return result switch
         {
-            SubmitClaimResult.Accepted accepted => accepted.ClaimId,
+            SubmitClaimResult.Accepted accepted => await RemovePlaceholdersAsync(golden, accepted.ClaimId, scope.ServiceProvider, ct),
             SubmitClaimResult.Invalid invalid => throw new InvalidOperationException(
                 $"{golden.CaseId}: submission rejected: {string.Join("; ", invalid.Errors.Select(e => $"{e.Key}: {string.Join(", ", e.Value)}"))}"),
             SubmitClaimResult.UnsupportedMediaType unsupported => throw new InvalidOperationException($"{golden.CaseId}: {unsupported.Detail}"),
             _ => throw new InvalidOperationException($"{golden.CaseId}: unexpected submission result {result}."),
         };
+    }
+
+    /// <summary>
+    /// Deletes the evidence rows of the placeholder parts, so the claim's round 1 lacks them as the case says.
+    /// Runs as the database owner (the app role may not delete evidence); the blob and the submission's
+    /// <c>EvidenceStored</c> trail entry stay, and neither is read by the harness.
+    /// </summary>
+    private async Task<Guid> RemovePlaceholdersAsync(GoldenCase golden, Guid claimId, IServiceProvider sp, CancellationToken ct)
+    {
+        if (!golden.NeedsInvoicePlaceholder && !golden.NeedsPhotoPlaceholder)
+        {
+            return claimId;
+        }
+
+        var placeholders = (await sp.GetRequiredService<IClaimRepository>().GetEvidenceAsync(claimId, ct))
+            .Where(e => e.Kind == EvidenceKind.Invoice ? golden.NeedsInvoicePlaceholder : golden.NeedsPhotoPlaceholder)
+            .Select(e => e.Id)
+            .ToArray();
+        await using var connection = new NpgsqlConnection(ownerConnectionString);
+        await connection.OpenAsync(ct);
+        await using var command = new NpgsqlCommand("DELETE FROM claims.claim_evidence WHERE claim_id = @claim AND id = ANY(@ids)", connection);
+        command.Parameters.AddWithValue("claim", claimId);
+        command.Parameters.AddWithValue("ids", placeholders);
+        var deleted = await command.ExecuteNonQueryAsync(ct);
+        return deleted == placeholders.Length && deleted > 0
+            ? claimId
+            : throw new InvalidOperationException($"{golden.CaseId}: expected to remove the placeholder evidence, removed {deleted} row(s).");
     }
 
     /// <summary>
@@ -215,6 +245,7 @@ internal sealed class CaseRunner(IServiceProvider services, string ownerConnecti
             RiskSignals = record?.Risk?.Signals.Select(s => WireName.Of(s.Code)).Distinct().ToList() ?? [],
             RequestedItems = claim.RequestedItems.Select(i => i.Item).ToList(),
             RunFailure = run?.FailureReason,
+            PolicyStepRan = record?.PolicyAssessment is not null,
             IntakeExtraction = ParseObject(record?.Intake?.ExtractionJson),
             InvoiceExtraction = ParseObject(findings.FirstOrDefault(f => f.Kind == EvidenceFindingKind.InvoiceExtraction)?.ResultJson),
             PhotoAnalyses = evidence
@@ -234,6 +265,9 @@ internal sealed class CaseRunner(IServiceProvider services, string ownerConnecti
         var bytes = File.ReadAllBytes(Path.Combine(evidenceRoot, relativePath));
         return new EvidenceUpload(Path.GetFileName(relativePath), bytes.Length, () => new MemoryStream(bytes, writable: false));
     }
+
+    private static EvidenceUpload Placeholder()
+        => new(PlaceholderEvidence.FileName, PlaceholderEvidence.Png.Length, () => new MemoryStream(PlaceholderEvidence.Png.ToArray(), writable: false));
 
     private static UsageTotals Totals(IReadOnlyCollection<ModelCall> calls)
         => new(
