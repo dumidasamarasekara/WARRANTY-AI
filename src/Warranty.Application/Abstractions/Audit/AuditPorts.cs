@@ -47,3 +47,16 @@ public enum ScopedIdKind
     Claim,
     Evidence,
 }
+
+/// <summary>One page of the current tenant's security events, newest first (FR-041a).</summary>
+public sealed record SecurityEventPageResult(IReadOnlyList<SecurityEvent> Events, int Total);
+
+/// <summary>
+/// Reads the current tenant's security events for the auditor view (FR-041a). Row-level security already
+/// limits the rows to the tenant and hides operator-only kinds (<c>tenant_id = NULL</c>); the reader also
+/// excludes operator-only kinds and never reads details or source IP.
+/// </summary>
+public interface ISecurityEventReader
+{
+    Task<SecurityEventPageResult> ListAsync(SecurityEventKind? kind, int page, int pageSize, CancellationToken ct);
+}

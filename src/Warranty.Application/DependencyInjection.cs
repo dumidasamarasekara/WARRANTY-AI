@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Actions;
 using Warranty.Application.Adjudication;
+using Warranty.Application.Audit;
 using Warranty.Application.Claims;
 using Warranty.Application.Policies;
 using Warranty.Application.Review;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<PolicyVersionsQuery>();
         services.AddScoped<ReviewQueueQuery>();
         services.AddScoped<RecordReviewDecision>();
+        services.AddScoped<SecurityEventQuery>();
         return services;
     }
 }
