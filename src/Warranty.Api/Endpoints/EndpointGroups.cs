@@ -1,6 +1,7 @@
 using Warranty.Api.Endpoints.Claims;
 using Warranty.Api.Endpoints.Public;
 using Warranty.Api.Endpoints.Reference;
+using Warranty.Api.Endpoints.Review;
 using Warranty.Api.Endpoints.Trace;
 using Warranty.Api.Tenancy;
 
@@ -27,7 +28,8 @@ public static class EndpointGroups
 
     /// <summary><c>/api/review-queue</c> and <c>/api/claims/{claimId}/review-decisions</c>.</summary>
     public static RouteGroupBuilder MapReviewEndpoints(this IEndpointRouteBuilder app)
-        => app.MapGroup("/api").WithTags("Review").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>();
+        => app.MapGroup("/api").WithTags("Review").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
+            .MapReviewRoutes();
 
     /// <summary><c>/api/claims/{claimId}/trace</c>.</summary>
     public static RouteGroupBuilder MapTraceEndpoints(this IEndpointRouteBuilder app)
