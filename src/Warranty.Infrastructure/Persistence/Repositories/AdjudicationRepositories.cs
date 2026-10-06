@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Adjudication;
@@ -85,19 +86,43 @@ internal sealed class ReviewRepository(WarrantyDbContext db) : IReviewRepository
         => await db.ReviewDecisions.Where(d => d.ClaimId == claimId).OrderBy(d => d.DecidedAt).ToListAsync(ct);
 }
 
-internal sealed class AiOpsRepository(WarrantyDbContext db) : IAiOpsRepository
+/// <summary>
+/// AI operations records join the unit of work like any other row, but they are recorded from parallel
+/// model calls (one per photo in the Evidence step), and a <c>DbContext</c> is not thread-safe: concurrent
+/// <c>Add</c> calls corrupt its change tracking (a lost update of the changed-entity count makes a later
+/// <c>SaveChanges</c> skip pending rows). The records are therefore queued thread-safely and handed to
+/// the context on the saving thread, when the next <c>SaveChanges</c> starts.
+/// </summary>
+internal sealed class AiOpsRepository : IAiOpsRepository
 {
-    public void AddModelCall(ModelCall call) => db.ModelCalls.Add(call);
+    private readonly WarrantyDbContext _db;
+    private readonly ConcurrentQueue<object> _pending = new();
 
-    public void AddToolCall(ToolCall call) => db.ToolCalls.Add(call);
+    public AiOpsRepository(WarrantyDbContext db)
+    {
+        _db = db;
+        _db.SavingChanges += (_, _) => Flush();
+    }
 
-    public void AddRagQuery(RagQuery query) => db.RagQueries.Add(query);
+    public void AddModelCall(ModelCall call) => _pending.Enqueue(call ?? throw new ArgumentNullException(nameof(call)));
+
+    public void AddToolCall(ToolCall call) => _pending.Enqueue(call ?? throw new ArgumentNullException(nameof(call)));
+
+    public void AddRagQuery(RagQuery query) => _pending.Enqueue(query ?? throw new ArgumentNullException(nameof(query)));
 
     public async Task<AiOpsRecords> GetForRunAsync(Guid runId, CancellationToken ct)
         => new(
-            await db.ModelCalls.AsNoTracking().Where(c => c.RunId == runId).OrderBy(c => c.StartedAt).ToListAsync(ct),
-            await db.ToolCalls.AsNoTracking().Where(c => c.RunId == runId).OrderBy(c => c.StartedAt).ToListAsync(ct),
-            await db.RagQueries.AsNoTracking().Where(q => q.RunId == runId).OrderBy(q => q.StartedAt).ToListAsync(ct));
+            await _db.ModelCalls.AsNoTracking().Where(c => c.RunId == runId).OrderBy(c => c.StartedAt).ToListAsync(ct),
+            await _db.ToolCalls.AsNoTracking().Where(c => c.RunId == runId).OrderBy(c => c.StartedAt).ToListAsync(ct),
+            await _db.RagQueries.AsNoTracking().Where(q => q.RunId == runId).OrderBy(q => q.StartedAt).ToListAsync(ct));
+
+    private void Flush()
+    {
+        while (_pending.TryDequeue(out var record))
+        {
+            _db.Add(record);
+        }
+    }
 }
 
 internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
