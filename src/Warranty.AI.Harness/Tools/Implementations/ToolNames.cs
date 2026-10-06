@@ -21,6 +21,10 @@ public static class ToolNames
     public const string SearchPolicyKnowledge = "search_policy_knowledge";
 
     public const string SearchGlobalKnowledge = "search_global_knowledge";
+
+    public const string CreateRepairRequest = "create_repair_request";
+
+    public const string NotifyCustomer = "notify_customer";
 }
 
 /// <summary>Helpers shared by the tool implementations.</summary>
