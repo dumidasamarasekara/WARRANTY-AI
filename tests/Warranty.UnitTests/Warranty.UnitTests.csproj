@@ -30,6 +30,8 @@
     <ProjectReference Include="..\..\src\Warranty.Integrations.Simulated\Warranty.Integrations.Simulated.csproj" />
     <ProjectReference Include="..\..\src\Warranty.Api\Warranty.Api.csproj" />
     <ProjectReference Include="..\..\src\Warranty.MigrationService\Warranty.MigrationService.csproj" />
+    <!-- Metric calculations of the golden-set evaluation runner (pure functions; unit tests never run the runner). -->
+    <ProjectReference Include="..\Warranty.Evaluation\Warranty.Evaluation.csproj" />
   </ItemGroup>
 
   <ItemGroup>
