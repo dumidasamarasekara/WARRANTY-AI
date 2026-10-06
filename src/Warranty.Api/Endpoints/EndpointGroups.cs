@@ -24,7 +24,8 @@ public static class EndpointGroups
 
     public static RouteGroupBuilder MapClaimEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api/claims").WithTags("Claims").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
-            .MapClaimRoutes();
+            .MapClaimRoutes()
+            .MapEvidenceRoutes();
 
     /// <summary><c>/api/review-queue</c> and <c>/api/claims/{claimId}/review-decisions</c>.</summary>
     public static RouteGroupBuilder MapReviewEndpoints(this IEndpointRouteBuilder app)

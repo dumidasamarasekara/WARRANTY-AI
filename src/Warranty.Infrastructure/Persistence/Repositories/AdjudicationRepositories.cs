@@ -48,6 +48,33 @@ internal sealed class AdjudicationRepository(WarrantyDbContext db) : IAdjudicati
             await db.Recommendations.SingleOrDefaultAsync(r => r.RunId == runId, ct),
             await db.GuardrailEvaluations.SingleOrDefaultAsync(g => g.RunId == runId, ct));
     }
+
+    public async Task<IReadOnlyDictionary<Guid, LatestRunOutcome>> GetLatestOutcomesAsync(IReadOnlyCollection<Guid> claimIds, CancellationToken ct)
+    {
+        if (claimIds.Count == 0)
+        {
+            return new Dictionary<Guid, LatestRunOutcome>();
+        }
+
+        var ids = claimIds.Distinct().ToArray();
+        var latest = (await db.AdjudicationRuns.AsNoTracking()
+                .Where(r => ids.Contains(r.ClaimId))
+                .Select(r => new { r.Id, r.ClaimId, r.Round, r.Disposition })
+                .ToListAsync(ct))
+            .GroupBy(r => r.ClaimId)
+            .Select(g => g.MaxBy(r => r.Round)!)
+            .ToList();
+
+        var runIds = latest.Select(r => r.Id).ToArray();
+        var decisions = await db.Recommendations.AsNoTracking()
+            .Where(r => runIds.Contains(r.RunId))
+            .Select(r => new { r.RunId, r.Decision })
+            .ToDictionaryAsync(r => r.RunId, r => r.Decision, ct);
+
+        return latest.ToDictionary(
+            r => r.ClaimId,
+            r => new LatestRunOutcome(r.ClaimId, r.Id, decisions.GetValueOrDefault(r.Id), r.Disposition));
+    }
 }
 
 internal sealed class ReviewRepository(WarrantyDbContext db) : IReviewRepository

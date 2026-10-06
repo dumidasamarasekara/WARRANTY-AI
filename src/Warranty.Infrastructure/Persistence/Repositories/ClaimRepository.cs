@@ -3,6 +3,7 @@ using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
+using Warranty.Infrastructure.Persistence.Configurations;
 
 namespace Warranty.Infrastructure.Persistence.Repositories;
 
@@ -112,4 +113,10 @@ internal sealed class ClaimRepository(WarrantyDbContext db) : IClaimRepository
             .ToListAsync(ct);
         return new ClaimPage(items, page, pageSize, total);
     }
+
+    public async Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct)
+        => await db.Claims.AsNoTracking()
+            .Where(c => c.Id == claimId)
+            .Select(c => (uint?)EF.Property<uint>(c, ClaimConfiguration.RowVersion))
+            .SingleOrDefaultAsync(ct);
 }

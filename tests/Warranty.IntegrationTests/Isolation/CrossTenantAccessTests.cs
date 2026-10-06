@@ -47,9 +47,9 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     // ---- Staff endpoints: identical 404s --------------------------------------------------------
 
     [Theory]
-    [InlineData("claim-detail", Skip = "Pending T085")]
-    [InlineData("evidence-content", Skip = "Pending T085")]
-    [InlineData("evidence-content-of-own-claim", Skip = "Pending T085")]
+    [InlineData("claim-detail")]
+    [InlineData("evidence-content")]
+    [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
     [InlineData("review-decision", Skip = "Pending T088")]
     [InlineData("supplement", Skip = "Pending T101")]
@@ -85,9 +85,9 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
     // ---- Staff endpoints: security events -------------------------------------------------------
 
     [Theory]
-    [InlineData("claim-detail", Skip = "Pending T085")]
-    [InlineData("evidence-content", Skip = "Pending T085")]
-    [InlineData("evidence-content-of-own-claim", Skip = "Pending T085")]
+    [InlineData("claim-detail")]
+    [InlineData("evidence-content")]
+    [InlineData("evidence-content-of-own-claim")]
     [InlineData("trace")]
     [InlineData("review-decision", Skip = "Pending T088")]
     [InlineData("supplement", Skip = "Pending T101")]
@@ -129,7 +129,7 @@ public sealed class CrossTenantAccessTests(WarrantyAppFixture fixture)
 
     // ---- Lists ----------------------------------------------------------------------------------
 
-    [Fact(Skip = "Pending T085")]
+    [Fact]
     public async Task The_claim_list_of_every_aurora_staff_user_holds_only_aurora_claims()
     {
         var (aurora, borealis) = await SubmitClaimsAsync();

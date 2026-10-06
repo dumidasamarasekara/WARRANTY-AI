@@ -92,6 +92,9 @@ public interface IClaimRepository
     Task<int> CountCustomerClaimsAsync(Guid customerId, DateTimeOffset createdBefore, CancellationToken ct);
 
     Task<ClaimPage> ListAsync(ClaimStatus? status, int page, int pageSize, CancellationToken ct);
+
+    /// <summary>The claim's current row version (PostgreSQL <c>xmin</c>), used as its ETag; null when the claim is not visible.</summary>
+    Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct);
 }
 
 public sealed record ClaimPage(IReadOnlyList<Claim> Items, int Page, int PageSize, int Total);
@@ -119,7 +122,13 @@ public interface IAdjudicationRepository
     void AddGuardrailEvaluation(GuardrailEvaluation evaluation);
 
     Task<RunRecord?> GetRunRecordAsync(Guid runId, CancellationToken ct);
+
+    /// <summary>The AI decision and disposition of the latest run of each given claim that has a run (claim lists).</summary>
+    Task<IReadOnlyDictionary<Guid, LatestRunOutcome>> GetLatestOutcomesAsync(IReadOnlyCollection<Guid> claimIds, CancellationToken ct);
 }
+
+/// <summary>The outcome of a claim's latest run: the recommendation's decision and the guardrail disposition, when recorded.</summary>
+public sealed record LatestRunOutcome(Guid ClaimId, Guid RunId, AiDecision? AiDecision, Disposition? Disposition);
 
 /// <summary>Everything persisted for one run, as read back for claim detail, review and trace views.</summary>
 public sealed record RunRecord(
