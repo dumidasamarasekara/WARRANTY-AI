@@ -107,8 +107,8 @@ public sealed partial class SubmitClaim(
         var now = time.GetUtcNow();
         var claimDate = DateOnly.FromDateTime(now.UtcDateTime);
 
-        var files = await InspectFilesAsync(command, ct);
-        if (files.Any(f => f.Type == EvidenceFileType.Heic))
+        var files = await EvidenceUploads.InspectAsync(command.Invoices, command.Photos, ct);
+        if (EvidenceUploads.HasHeic(files))
         {
             return new SubmitClaimResult.UnsupportedMediaType(HeicMessage);
         }
@@ -138,7 +138,7 @@ public sealed partial class SubmitClaim(
         var evidence = new List<ClaimEvidence>(files.Count);
         foreach (var file in files)
         {
-            evidence.Add(await StoreAsync(claimId, claim.CurrentRound, file, now, ct));
+            evidence.Add(await EvidenceUploads.StoreAsync(documents, tenant.TenantId, claimId, claim.CurrentRound, file, now, ct));
         }
 
         var job = ClaimJob.Enqueue(Guid.CreateVersion7(), tenant.TenantId, claimId, claim.CurrentRound, tenant.CorrelationId, now);
@@ -298,88 +298,27 @@ public sealed partial class SubmitClaim(
             : RegionResolver.TryFromCountry(customerCountry, out region) ? region
             : null;
 
-    private static void AddFileErrors(Dictionary<string, List<string>> errors, SubmitClaimCommand command, IReadOnlyList<InspectedFile> files)
+    private static void AddFileErrors(Dictionary<string, List<string>> errors, SubmitClaimCommand command, IReadOnlyList<InspectedEvidence> files)
     {
-        void Add(string key, string message)
-        {
-            if (!errors.TryGetValue(key, out var list))
-            {
-                errors[key] = list = [];
-            }
-
-            list.Add(message);
-        }
-
         if (command.Invoices.Count == 0)
         {
-            Add("invoice", "Add the invoice.");
+            EvidenceUploads.AddError(errors, EvidenceUploads.InvoiceKey, "Add the invoice.");
         }
         else if (command.Invoices.Count > 1)
         {
-            Add("invoice", "Add one invoice file.");
+            EvidenceUploads.AddError(errors, EvidenceUploads.InvoiceKey, "Add one invoice file.");
         }
 
         if (command.Photos.Count == 0)
         {
-            Add("photos", "Add at least one photo of the product.");
+            EvidenceUploads.AddError(errors, EvidenceUploads.PhotosKey, "Add at least one photo of the product.");
         }
         else if (command.Photos.Count > MaxPhotos)
         {
-            Add("photos", $"Add at most {MaxPhotos} photos.");
+            EvidenceUploads.AddError(errors, EvidenceUploads.PhotosKey, $"Add at most {MaxPhotos} photos.");
         }
 
-        foreach (var file in files)
-        {
-            var key = file.Kind == EvidenceKind.Invoice ? "invoice" : "photos";
-            var name = ClaimEvidence.SanitizeFileName(file.Upload.FileName);
-            if (file.Upload.Length <= 0)
-            {
-                Add(key, $"{name} is empty.");
-            }
-            else if (file.Upload.Length > ClaimEvidence.MaxSizeBytes)
-            {
-                Add(key, $"{name} is larger than 15 MB.");
-            }
-            else if (file.ContentType is null)
-            {
-                Add(key, $"{name} can't be used: send a PDF, JPG, PNG or WebP file.");
-            }
-            else if (file.Kind == EvidenceKind.Photo && file.Type == EvidenceFileType.Pdf)
-            {
-                Add(key, $"{name} can't be used as a photo: send a JPG, PNG or WebP image.");
-            }
-        }
-    }
-
-    private static async Task<List<InspectedFile>> InspectFilesAsync(SubmitClaimCommand command, CancellationToken ct)
-    {
-        var files = new List<InspectedFile>(command.Invoices.Count + command.Photos.Count);
-        foreach (var (upload, kind) in command.Invoices.Select(u => (u, EvidenceKind.Invoice))
-                     .Concat(command.Photos.Select(u => (u, EvidenceKind.Photo))))
-        {
-            var type = EvidenceFileType.Unknown;
-            if (upload.Length > 0)
-            {
-                await using var stream = upload.OpenReadStream();
-                type = await EvidenceFileSignature.DetectAsync(stream, ct);
-            }
-
-            files.Add(new InspectedFile(upload, kind, type, EvidenceFileSignature.ContentTypeOf(type)));
-        }
-
-        return files;
-    }
-
-    private async Task<ClaimEvidence> StoreAsync(Guid claimId, int round, InspectedFile file, DateTimeOffset now, CancellationToken ct)
-    {
-        var evidenceId = Guid.CreateVersion7();
-        var contentType = file.ContentType!;
-        var path = ClaimEvidence.BlobPathFor(claimId, round, evidenceId, contentType);
-        await using var content = file.Upload.OpenReadStream();
-        var stored = await documents.UploadEvidenceAsync(path, content, contentType, ct);
-        return ClaimEvidence.Create(
-            evidenceId, tenant.TenantId, claimId, round, file.Kind, file.Upload.FileName ?? string.Empty, contentType, stored.SizeBytes,
-            stored.Sha256, now);
+        EvidenceUploads.AddFileErrors(errors, files);
     }
 
     /// <summary>A random reference not yet used in the tenant (collisions are improbable at 50 bits, but checked).</summary>
@@ -451,15 +390,7 @@ public sealed partial class SubmitClaim(
             new
             {
                 round = claim.CurrentRound,
-                evidence = evidence.Select(e => new
-                {
-                    evidenceId = e.Id,
-                    kind = e.Kind.ToString(),
-                    contentType = e.ContentType,
-                    sizeBytes = e.SizeBytes,
-                    sha256 = e.Sha256,
-                    blobPath = e.BlobPath,
-                }).ToList(),
+                evidence = evidence.Select(EvidenceUploads.TrailPayload).ToList(),
             },
             ct);
     }
@@ -498,8 +429,6 @@ public sealed partial class SubmitClaim(
 
     [GeneratedRegex("^[A-Z]{3}$")]
     private static partial Regex CurrencyPattern();
-
-    private sealed record InspectedFile(EvidenceUpload Upload, EvidenceKind Kind, EvidenceFileType Type, string? ContentType);
 
     private sealed record NormalizedSubmission(
         string FullName,
