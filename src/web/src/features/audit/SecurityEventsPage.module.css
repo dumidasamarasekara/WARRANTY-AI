@@ -1,0 +1,40 @@
+/* Security events — ui-design.md §6.7. */
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+}
+
+.filters {
+  display: flex;
+  gap: var(--space-4);
+  max-width: 260px;
+}
+
+.filters > * {
+  flex: 1;
+}
+
+.tableCard {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.time {
+  font: var(--text-mono);
+  color: var(--color-system);
+  white-space: nowrap;
+}
+
+.none {
+  color: var(--color-text-muted);
+}

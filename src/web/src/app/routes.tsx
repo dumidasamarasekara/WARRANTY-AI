@@ -1,4 +1,5 @@
 import { Navigate, Outlet, createBrowserRouter, type RouteObject } from 'react-router'
+import { SecurityEventsPage } from '../features/audit/SecurityEventsPage'
 import { AccessClaimPage } from '../features/claimant/AccessClaimPage'
 import { ClaimStatusPage } from '../features/claimant/ClaimStatusPage'
 import { SubmitClaimPage } from '../features/claimant/SubmitClaimPage'
@@ -12,7 +13,7 @@ import { ClaimantLayout } from './ClaimantLayout'
 import { Layout } from './Layout'
 import { RequireRole, RequireSignIn } from './RequireRole'
 import type { RouteHandle } from './routeHandle'
-import { NotFoundPage, PlaceholderPage, StaffLanding } from './ShellPages'
+import { NotFoundPage, StaffLanding } from './ShellPages'
 
 const crumb = (value: RouteHandle['crumb']): RouteHandle => ({ crumb: value })
 
@@ -62,7 +63,7 @@ const staffRoutes: RouteObject = {
       handle: crumb('Security events'),
       element: (
         <RequireRole roles={['auditor']}>
-          <PlaceholderPage title="Security events" />
+          <SecurityEventsPage />
         </RequireRole>
       ),
     },
