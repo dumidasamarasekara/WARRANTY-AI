@@ -4,17 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-WARRANTY-AI is a **Spec-Driven Development (SDD)** project scaffolded with [GitHub Spec Kit](https://github.com/github/spec-kit) v0.16.3, configured for the **Claude** integration using **PowerShell** helper scripts (Windows). There is no application code yet — the repo currently contains only the Spec Kit tooling. Features are built by first writing a specification, then a plan, then tasks, then implementing against them.
+WARRANTY-AI is a **Spec-Driven Development (SDD)** project scaffolded with [GitHub Spec Kit](https://github.com/github/spec-kit) v0.16.3, configured for the **Claude** integration using **PowerShell** helper scripts (Windows). Features are built by first writing a specification, then a plan, then tasks, then implementing against them. The first feature, `specs/001-ai-claim-adjudication` (an AI-powered warranty claim adjudication PoC), is implemented in `src/` and `tests/`.
 
-## Tech stack and commands (planned in `specs/001-ai-claim-adjudication/plan.md`)
+## Tech stack and commands (see `specs/001-ai-claim-adjudication/plan.md`)
 
-The stack is chosen but the code is not yet implemented (`/speckit-implement` creates it). Planned stack: .NET 10 / ASP.NET Core modular monolith (`src/Warranty.*`), React + TypeScript + Vite SPA (`src/web`), PostgreSQL + pgvector, Azurite blobs, Keycloak, Ollama embeddings, Anthropic models via a provider-agnostic AI Gateway, orchestrated locally by .NET Aspire on **Podman**. The SPA's look and behaviour follow the WarrantyOS design system in `specs/001-ai-claim-adjudication/ui-design.md` (tokens, component kit, AI/human/system visual language, screen layouts); the Claude Design source it was taken from is in that feature's `design/` folder (reference only — don't import it). Planned commands (verify once the projects exist):
+Stack: .NET 10 / ASP.NET Core modular monolith (`src/Warranty.*`), React + TypeScript + Vite SPA (`src/web`), PostgreSQL + pgvector, Azurite blobs, Keycloak, Ollama embeddings, Anthropic models via a provider-agnostic AI Gateway, orchestrated locally by .NET Aspire on **Podman**. The SPA's look and behaviour follow the WarrantyOS design system in `specs/001-ai-claim-adjudication/ui-design.md` (tokens, component kit, AI/human/system visual language, screen layouts); the Claude Design source it was taken from is in that feature's `design/` folder (reference only — don't import it). Commands (run from the repo root; full setup in the feature's `quickstart.md`):
 
-- Run everything: `aspire run` (requires `DOTNET_ASPIRE_CONTAINER_RUNTIME=podman`; Anthropic key in AppHost user secrets as `Parameters:anthropic-api-key`)
-- Backend tests (xunit.v3 on Microsoft Testing Platform — `global.json` opts `dotnet test` into MTP mode): `dotnet test --project tests/Warranty.UnitTests`, `dotnet test --project tests/Warranty.IntegrationTests` (Testcontainers on Podman: set `DOCKER_HOST`, `TESTCONTAINERS_RYUK_DISABLED=true`), whole solution `dotnet test --solution Warranty.slnx`; single test: `dotnet test --project tests/Warranty.UnitTests -- --filter-method "*<Name>*"` (also `--filter-class`, `--filter-trait`). Exit code 8 means zero tests ran. The Aspire smoke test (trait `Category=Smoke`, boots the whole AppHost in replay mode on its fixed ports) is excluded from CI with `-- --filter-not-trait "Category=Smoke"`; run it alone with `-- --filter-trait "Category=Smoke"` (`DOTNET_ASPIRE_CONTAINER_RUNTIME=podman`, no `aspire run` active).
-- Build: `dotnet build Warranty.slnx` (warnings are errors; `nuget.config` restricts restore to nuget.org)
-- Frontend: `npm --prefix src/web install`, `npm --prefix src/web test`
-- AI evaluation (separate from production): `dotnet run --project tests/Warranty.Evaluation -- --mode replay` (`--mode live` costs money)
+- Build: `dotnet build Warranty.slnx` (warnings are errors; `nuget.config` restricts restore to nuget.org).
+- Backend tests (xunit.v3 on Microsoft Testing Platform — `global.json` opts `dotnet test` into MTP mode): `dotnet test --project tests/Warranty.UnitTests`; `dotnet test --project tests/Warranty.IntegrationTests -- --filter-not-trait "Category=Smoke"`; whole solution `dotnet test --solution Warranty.slnx -- --filter-not-trait "Category=Smoke"`. Single test: `dotnet test --project tests/Warranty.UnitTests -- --filter-method "*<Name>*"` (also `--filter-class`, `--filter-trait`). Exit code 8 means zero tests ran. Integration tests and the evaluation runner use Testcontainers on Podman: `$env:DOCKER_HOST = "npipe://./pipe/podman-machine-default"` (exactly two slashes after `npipe:`) and `$env:TESTCONTAINERS_RYUK_DISABLED = "true"`, with the Podman machine running.
+- Aspire smoke test (trait `Category=Smoke`; boots the whole AppHost in replay mode on its fixed ports and completes S1; pulls every image incl. Ollama and Keycloak): excluded from CI and from the commands above by `--filter-not-trait "Category=Smoke"`; run it alone with `-- --filter-trait "Category=Smoke"` (`DOTNET_ASPIRE_CONTAINER_RUNTIME=podman`, no `aspire run` active).
+- Frontend: `npm --prefix src/web ci`, then `npm --prefix src/web run lint`, `npm --prefix src/web test`, `npm --prefix src/web run build` (what CI runs). Prefer `ci` to `install`: `npm install` (and `aspire run`, which runs it for the `web` resource) rewrites `src/web/package-lock.json` (drops `"peer": true` lines) — don't commit that churn, `git checkout -- src/web/package-lock.json`. Vitest timeouts can appear when the integration tests run at the same time; rerun alone.
+- Run everything: `aspire run` (needs `DOTNET_ASPIRE_CONTAINER_RUNTIME=podman`). The AppHost defaults to `AiGateway:Mode=live`, which needs the Anthropic key in AppHost user secrets as `Parameters:anthropic-api-key`; `$env:AiGateway__Mode = "replay"` runs on recordings with no key.
+- AI evaluation (separate from production; isolated Testcontainers database): `dotnet run --project tests/Warranty.Evaluation -- --mode replay`. Options: `--mode replay|live`, `--record` (live only: rewrites fixtures), `--tenants a,b`, `--cases G-AUR-01,...`, `--output <dir>` (default `artifacts/eval/{timestamp}/report.md` + `report.json`), `--review-db <conn>`, `--embeddings <conn>`. Replay reads `tests/fixtures/ai-recordings/golden/{caseId}/`; no golden case has recordings yet, so replay only checks the AI-unavailable fallback. **Never run `--mode live` unasked** — it costs money and needs `ANTHROPIC_API_KEY`.
+
+Other mechanics: public-endpoint rate limits are configurable in the API's `RateLimiting` section (`ClaimSubmission`, `ClaimantAccess`: `PermitLimit`, `Window`); `.gitattributes` checks text files out with LF on every platform (tests compare literal `\n`), binaries (evidence images/PDFs) are never normalized.
 
 Architecture rules that tests enforce: only `Warranty.AI.Gateway` references a vendor AI SDK; `Warranty.Guardrails` and `Warranty.Domain` reference no AI project; consequential actions run only through `ActionExecutor` with a guardrail-issued `ApprovedAction`; tenant identity never comes from request bodies or model output. See `quickstart.md` in the feature folder for full setup.
 
@@ -22,7 +25,7 @@ Architecture rules that tests enforce: only `Warranty.AI.Gateway` references a v
 
 Features flow through a fixed pipeline, each stage invoked as a Claude skill (slash command). The canonical order:
 
-1. `/speckit-constitution` — fill in `.specify/memory/constitution.md` (see below; currently an unfilled template).
+1. `/speckit-constitution` — create or amend `.specify/memory/constitution.md` (see below).
 2. `/speckit-specify <description>` — create a new feature: scaffolds `specs/NNN-<short-name>/spec.md` (the *what* and *why*, no implementation details) plus a `checklists/requirements.md` quality gate.
 3. `/speckit-clarify` *(optional)* — ask up to 5 targeted questions and encode answers back into the spec. Run before planning if the spec has open questions.
 4. `/speckit-plan` — generate design artifacts in the feature dir: `plan.md` (tech stack + architecture) and, as needed, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`.
@@ -71,7 +74,7 @@ Several developers — people on their own clones and Claude Code sessions/agent
 
 ## The constitution
 
-`.specify/memory/constitution.md` is meant to hold project-wide principles and governance constraints that every spec/plan/implementation must respect. **It is still the unfilled template** (contains `[PLACEHOLDER]` tokens). Run `/speckit-constitution` to populate it before doing serious feature work; once filled, it is loaded by `specify`, `plan`, and `implement` as binding guidance.
+`.specify/memory/constitution.md` (v1.0.0, ratified 2026-10-02) holds the project-wide principles every spec/plan/implementation must respect — among them security-first tenant isolation, AI never directly controlling critical business operations, explainable decisions, human-in-the-loop for high-risk decisions, model independence and observable AI. It is loaded by `specify`, `plan`, and `implement` as binding guidance; amend it only through `/speckit-constitution`.
 
 ## Editing guidance
 
