@@ -71,7 +71,7 @@ public sealed class WarrantyLookupTool(IClaimRepository claims, ICatalogReposito
             return result;
         }
 
-        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        var product = await ToolSupport.CatalogProductAsync(catalog, claim, ct);
         var applicable = (await policies.GetVersionsAsync(ct))
             .Where(v => v.AppliesTo(claim.PurchaseDate, region, product?.Category))
             .ToList();

@@ -178,6 +178,24 @@ public sealed class PolicyAgentTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_case_not_in_the_catalog_retrieves_only_catalog_independent_clauses_although_the_model_code_is_known()
+    {
+        _model.Enqueue(ScriptedModelProvider.Completed(ValidAssessment));
+
+        // The claim row still points at the AUR-TAB10 product (resolved by model code at submission); the serial is not registered.
+        await RunAsync(Input() with { Case = Case() with { Product = null } });
+
+        var query = RetrievalQuery();
+        query.ProductCategory.ShouldBeEmpty("no category filter: only documents for all categories match");
+        query.ProductModel.ShouldBeNull();
+        (query.Region, query.PurchaseDate).ShouldBe((Region.NA, PurchaseDate));
+        query.QueryText.ShouldStartWith("power failure of the mainboard of a product:");
+        await _catalog.DidNotReceive().GetProductAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        var facts = string.Join("\n", _model.Requests[0].Messages.SelectMany(m => m.Parts).OfType<TextPart>().Select(p => p.Text));
+        facts.ShouldContain("- Product: not found in the catalog");
+    }
+
+    [Fact]
     public async Task Without_an_extraction_the_query_names_the_product_only_and_the_component_is_unknown()
     {
         _model.Enqueue(ScriptedModelProvider.Completed(ValidAssessment));

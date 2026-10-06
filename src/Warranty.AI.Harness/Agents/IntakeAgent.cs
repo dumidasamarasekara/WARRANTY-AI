@@ -246,17 +246,31 @@ public sealed class IntakeAgent(
             : Extraction.Failed(AgentStatus.InvalidOutput, [.. validation.Errors]);
     }
 
-    /// <summary>Case facts for the user turn: product, dates and region only — never customer identifiers (FR-006a).</summary>
-    private static string CaseFacts(CaseContext input, ProductLookupResult? lookup)
+    /// <summary>
+    /// Whether the claim's product/serial pair is in the tenant's catalog: the case's product (set only when the
+    /// serial is registered to it), else a <c>product_lookup</c> that found the model with the serial registered
+    /// to it. A known model with an unknown serial is not in the catalog (FR-003); the lookup is tenant-scoped,
+    /// so another tenant's catalog is never consulted.
+    /// </summary>
+    public static bool IsInCatalog(CaseContext input, ProductLookupResult? lookup)
     {
-        var name = input.Product?.Name ?? (lookup is { Found: true } ? lookup.ProductName : null);
-        var category = input.Product?.Category ?? (lookup is { Found: true } ? lookup.Category : null);
+        ArgumentNullException.ThrowIfNull(input);
+        return input.Product is not null || lookup is { Found: true, SerialRegistered: true };
+    }
+
+    /// <summary>Case facts for the user turn: product, dates and region only — never customer identifiers (FR-006a).</summary>
+    public static string CaseFacts(CaseContext input, ProductLookupResult? lookup)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var inCatalog = IsInCatalog(input, lookup);
+        var name = input.Product?.Name ?? (inCatalog ? lookup!.ProductName : null);
+        var category = input.Product?.Category ?? (inCatalog ? lookup!.Category : null);
         var region = input.Region ?? input.Customer.Region;
         var facts = new StringBuilder("Case facts:\n");
         facts.Append(CultureInfo.InvariantCulture, $"- Product model code: {input.ProductModelCode}\n");
         facts.Append(CultureInfo.InvariantCulture, $"- Serial number: {input.SerialNumber}\n");
-        facts.Append(name is null
-            ? "- Product: not found in the catalog\n"
+        facts.Append(!inCatalog || name is null
+            ? "- Product: the model and serial number are not in the catalog\n"
             : string.Create(CultureInfo.InvariantCulture, $"- Product: {name} (category: {category ?? "unknown"})\n"));
         facts.Append(CultureInfo.InvariantCulture, $"- Region: {region?.ToString() ?? "unknown"}\n");
         facts.Append(CultureInfo.InvariantCulture, $"- Purchase date: {Iso(input.PurchaseDate)}\n");

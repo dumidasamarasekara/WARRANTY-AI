@@ -209,7 +209,11 @@ public sealed class RiskAssessor(
         var signals = new List<RiskSignal>();
         if (@case.Product is null)
         {
-            signals.Add(Deterministic(RiskSignalCode.ProductNotInCatalog, "The product model and serial number are not in the catalog."));
+            // The case's product is set only when the serial is registered to the claimed model in this tenant's
+            // catalog (CaseKnowledgeProvider); a known model with an unknown serial lands here too (FR-003).
+            signals.Add(Deterministic(
+                RiskSignalCode.ProductNotInCatalog,
+                "The product model and serial number are not in the tenant's catalog; no claim value can be determined."));
         }
 
         if (history.DuplicateClaimsForSerial > 0)

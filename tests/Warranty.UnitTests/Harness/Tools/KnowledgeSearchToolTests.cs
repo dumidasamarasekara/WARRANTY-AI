@@ -4,6 +4,7 @@ using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Tools.Implementations;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Domain.Catalog;
 using Warranty.Domain.Common;
 using Warranty.Domain.Policies;
 using static Warranty.UnitTests.Harness.Tools.ToolTestKit;
@@ -23,6 +24,7 @@ public sealed class KnowledgeSearchToolTests
     {
         _claims.GetAsync(ClaimId, Arg.Any<CancellationToken>()).Returns(NewClaim());
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>()).Returns(NewProduct());
+        _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(Aurora, Serial, ProductId));
         _retriever.SearchAsync(Arg.Do<KnowledgeSearchQuery>(q => _queries.AddRange(q is null ? [] : [q])), Arg.Any<CancellationToken>())
             .Returns(new RetrievalResult([Chunk("tenant-aurora", "AUR-WP-3.2", ClauseType.Exclusion, ExclusionCode.AccidentalDamage)], RetrievalOutcome.Ok));
     }
@@ -55,6 +57,19 @@ public sealed class KnowledgeSearchToolTests
         (clause.GetProperty("clauseKey").GetString(), clause.GetProperty("clauseType").GetString(), clause.GetProperty("exclusionCode").GetString())
             .ShouldBe(("AUR-WP-3.2", "Exclusion", "ACCIDENTAL_DAMAGE"));
         _references.Resolve("POL-1", ReferenceKind.Policy).Chunk!.ClauseKey.ShouldBe("AUR-WP-3.2");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Without_the_serial_in_the_catalog_the_policy_search_matches_only_catalog_independent_documents(bool serialOfAnotherProduct)
+    {
+        _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>())
+            .Returns(serialOfAnotherProduct ? ProductSerial.Create(Aurora, Serial, Guid.NewGuid()) : null);
+
+        await PolicyTool.InvokeAsync(Args("""{"query":"screen defect"}"""), Context(AgentNames.Policy, _references), TestContext.Current.CancellationToken);
+
+        _queries.ShouldHaveSingleItem().Applicability.ShouldBe(new PolicyApplicability(null, null, Region.EU, PurchaseDate));
     }
 
     [Fact]

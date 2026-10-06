@@ -110,7 +110,9 @@ public sealed class PolicyAgent(
         }
 
         var claim = await ToolSupport.RequireClaimAsync(claims, ctx.Run.ClaimId, ct);
-        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        // The case's product is set only when the claimed serial is registered to it; otherwise the claim is
+        // not in the tenant's catalog and only catalog-independent documents apply (FR-003).
+        var product = input.Case.Product is { } known ? await catalog.GetProductAsync(known.ProductId, ct) : null;
         var applicability = SearchPolicyKnowledgeTool.ApplicabilityFor(claim, product);
         var component = ComponentOf(extraction);
 
