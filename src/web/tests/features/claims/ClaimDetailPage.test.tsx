@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ClaimDetailPage } from '../../../src/features/claims/ClaimDetailPage'
 import { progressSteps, type ClaimDetail } from '../../../src/features/claims/claimDetail'
 import { setStaffAccessTokenProvider } from '../../../src/shared/api/client'
+import { useNodeMultipartClasses } from '../../support/multipart'
 
 const auth = vi.hoisted(() => ({ roles: ['claims-reviewer'] as string[] }))
 
@@ -357,5 +358,97 @@ describe('ClaimDetailPage', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Not found')
     expect(alert).toHaveTextContent('c0ffee')
+  })
+})
+
+describe('Add supplement', () => {
+  /** A claim waiting for the customer, with item codes as the API stores them. */
+  const pendingView: ClaimDetail = {
+    ...agentView,
+    status: 'PendingInformation',
+    requestedItems: [{ item: 'PHOTO_OF_SERIAL_LABEL', reason: 'Please upload a photo of the label showing the serial number.' }],
+  }
+
+  interface ReceivedSupplement {
+    authorization: string | null
+    note: FormDataEntryValue | null
+    photos: string[]
+  }
+  let supplements: ReceivedSupplement[] = []
+  let detailRequests = 0
+
+  beforeEach(async () => {
+    supplements = []
+    detailRequests = 0
+    detail = pendingView
+    await useNodeMultipartClasses()
+    server.use(
+      http.get('*/api/claims/:claimId', () => {
+        detailRequests++
+        return HttpResponse.json(detail as object)
+      }),
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  function onSupplement(response: () => Response) {
+    server.use(
+      http.post('*/api/claims/:claimId/supplements', async ({ request }) => {
+        const form = await request.formData()
+        supplements.push({
+          authorization: request.headers.get('Authorization'),
+          note: form.get('note'),
+          photos: form.getAll('photos').map((part) => (typeof part === 'string' ? part : part.name)),
+        })
+        return response()
+      }),
+    )
+  }
+
+  it('shows the requested items by label and offers no supplement to reviewers', async () => {
+    renderPage(`/staff/claims/${claimId}/case`, ['claims-reviewer'])
+
+    const waiting = await screen.findByText('Waiting for the customer to send more information')
+    expect(waiting.closest('[role="status"]')).toHaveTextContent('Photo of the serial number label')
+    expect(screen.queryByText(/PHOTO_OF_SERIAL_LABEL/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add supplement' })).not.toBeInTheDocument()
+  })
+
+  it('lets a claims agent add a supplement, then reloads the claim', async () => {
+    onSupplement(() => HttpResponse.json({ claimId, reference: pendingView.reference, status: 'Submitted', round: 2 }, { status: 202 }))
+    const user = renderPage(`/staff/claims/${claimId}/case`, ['claims-agent'])
+
+    await user.click(await screen.findByRole('button', { name: 'Add supplement' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Add supplement' }))
+    expect(dialog.getByRole('region', { name: 'Requested from the customer' })).toHaveTextContent('Photo of the serial number label')
+
+    await user.type(dialog.getByRole('textbox', { name: /Note/ }), 'Customer sent the label photo by email.')
+    await user.upload(dialog.getByLabelText(/Photos/), new File([new Uint8Array(64)], 'label.jpg', { type: 'image/jpeg' }))
+    detail = { ...pendingView, status: 'Submitted', requestedItems: [] }
+    await user.click(dialog.getByRole('button', { name: 'Add supplement' }))
+
+    expect(await screen.findByText('Supplement added')).toBeInTheDocument()
+    expect(screen.getByText('Evaluation round 2 has started.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(supplements).toEqual([{ authorization: 'Bearer staff-token', note: 'Customer sent the label photo by email.', photos: ['label.jpg'] }])
+    await vi.waitFor(() => expect(detailRequests).toBe(2))
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Add supplement' })).not.toBeInTheDocument())
+  })
+
+  it('keeps the dialog open with the conflict when the claim is no longer pending', async () => {
+    onSupplement(() => HttpResponse.json({ title: 'Conflict', status: 409, correlationId: 'corr-1' }, { status: 409 }))
+    const user = renderPage(`/staff/claims/${claimId}/case`, ['claims-agent'])
+
+    await user.click(await screen.findByRole('button', { name: 'Add supplement' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Add supplement' }))
+    await user.type(dialog.getByRole('textbox', { name: /Note/ }), 'Purchase date confirmed by phone.')
+    await user.click(dialog.getByRole('button', { name: 'Add supplement' }))
+
+    const alert = await dialog.findByRole('alert')
+    expect(alert).toHaveTextContent('The claim is no longer Pending information')
+    expect(alert).toHaveTextContent('corr-1')
+
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

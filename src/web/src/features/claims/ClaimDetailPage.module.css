@@ -232,6 +232,11 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Add supplement (claims-agent on a Pending information claim) */
+.supplementButton {
+  justify-self: start;
+}
+
 /* Case file */
 .quote {
   display: grid;

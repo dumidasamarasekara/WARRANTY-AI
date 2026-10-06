@@ -48,11 +48,9 @@
   font-weight: 600;
 }
 
-.requested {
+.live {
   display: grid;
-  gap: var(--space-1);
-  margin: 0;
-  padding-left: var(--space-5);
+  gap: var(--space-3);
 }
 
 .stepTitle {

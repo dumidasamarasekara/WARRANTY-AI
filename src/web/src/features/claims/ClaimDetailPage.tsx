@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { useMe } from '../../app/staffQueries'
 import { useStaffSession } from '../../app/useStaffSession'
-import { ApiProblem } from '../../shared/api/client'
+import { ApiProblem, api, unwrap } from '../../shared/api/client'
+import { SupplementForm } from '../claimant/SupplementForm'
+import { asSupplementForm } from '../claimant/supplement'
 import {
   aiDecisionPresentation,
   checkResultPresentation,
@@ -13,6 +16,7 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
+  requestedItemLabel,
   riskSignalSourceActor,
   type Disposition,
 } from '../../shared/presentation'
@@ -21,10 +25,12 @@ import {
   AiPanel,
   Alert,
   Badge,
+  Button,
   Card,
   ConfidenceMeter,
   cx,
   DecidedByBadge,
+  Dialog,
   DispositionBanner,
   EmptyState,
   FactorRow,
@@ -40,6 +46,7 @@ import {
 import tones from '../../shared/ui/tone.module.css'
 import styles from './ClaimDetailPage.module.css'
 import {
+  claimQueryKey,
   humanize,
   progressSteps,
   useClaimDetail,
@@ -61,6 +68,54 @@ interface Context {
   currency: string | undefined
   tenantName: string
   isReviewer: boolean
+  /** `claims-agent` may supplement a Pending information claim (FR-010). */
+  canSupplement: boolean
+}
+
+const submitStaffSupplement = (claimId: string, body: FormData) =>
+  unwrap(api.POST('/api/claims/{claimId}/supplements', { params: { path: { claimId } }, body: asSupplementForm(body) }))
+
+/** **Add supplement** and its dialog (ui-design.md §6.3); after a supplement the claim is reloaded. */
+function SupplementAction({ detail }: { detail: ClaimDetail }) {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [startedRound, setStartedRound] = useState<number | null>(null)
+
+  return (
+    <>
+      {startedRound !== null && (
+        <Alert tone="ok" title="Supplement added">
+          Evaluation round {startedRound} has started.
+        </Alert>
+      )}
+      {detail.status === 'PendingInformation' && (
+        <Button className={styles.supplementButton} onClick={() => setOpen(true)}>
+          Add supplement
+        </Button>
+      )}
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        submitting={pending}
+        title="Add supplement"
+        description="Add what the customer sent in. Saving starts a new evaluation round."
+      >
+        <SupplementForm
+          variant="staff"
+          requestedItems={detail.requestedItems ?? []}
+          submit={(body) => submitStaffSupplement(detail.claimId, body)}
+          onCancel={() => setOpen(false)}
+          onPendingChange={setPending}
+          onSubmitted={(accepted) => {
+            setOpen(false)
+            setStartedRound(accepted.round)
+            void queryClient.invalidateQueries({ queryKey: claimQueryKey(detail.claimId) })
+          }}
+        />
+      </Dialog>
+    </>
+  )
 }
 
 const reasonLabels = (evaluation: ClaimEvaluation | undefined) => (evaluation?.guardrails?.reasons ?? []).map(escalationReasonLabel)
@@ -188,7 +243,7 @@ function AiStateAlerts({ evaluation }: { evaluation: ClaimEvaluation | undefined
   )
 }
 
-function CaseFile({ detail, basePath, tenantName }: Context) {
+function CaseFile({ detail, basePath, tenantName, canSupplement }: Context) {
   const evaluation = detail.latestEvaluation
   const recommendation = evaluation?.recommendation
   const extraction = evaluation?.extraction
@@ -205,7 +260,7 @@ function CaseFile({ detail, basePath, tenantName }: Context) {
             <ul className={styles.list}>
               {detail.requestedItems!.map((item) => (
                 <li key={item.item}>
-                  <strong>{humanize(item.item)}</strong> — {item.reason}
+                  <strong>{requestedItemLabel(item.item)}</strong> — {item.reason}
                 </li>
               ))}
             </ul>
@@ -342,6 +397,7 @@ function CaseFile({ detail, basePath, tenantName }: Context) {
             Open AI decision
           </Link>
         )}
+        {canSupplement && <SupplementAction detail={detail} />}
       </aside>
     </div>
   )
@@ -381,7 +437,7 @@ function ReviewDecisions({ detail }: { detail: ClaimDetail }) {
               <ul className={styles.list}>
                 {decision.requestedItems!.map((item) => (
                   <li key={item.item}>
-                    {humanize(item.item)} — {item.reason}
+                    {requestedItemLabel(item.item)} — {item.reason}
                   </li>
                 ))}
               </ul>
@@ -629,6 +685,7 @@ export function ClaimDetailPage() {
     currency: me.data?.tenantCurrency,
     tenantName: me.data?.tenantDisplayName ?? 'This tenant',
     isReviewer,
+    canSupplement: roles.includes('claims-agent'),
   }
 
   return (
