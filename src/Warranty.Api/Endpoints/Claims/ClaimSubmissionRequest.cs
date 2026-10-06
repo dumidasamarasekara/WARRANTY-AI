@@ -30,6 +30,8 @@ internal static class ClaimSubmissionRequest
 
     public const string PhotosPart = "photos";
 
+    public const string NotePart = "note";
+
     private const int MaxClaimJsonBytes = 64 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -49,25 +51,10 @@ internal static class ClaimSubmissionRequest
     public static async Task<IResult> SubmitAsync(
         HttpRequest request, SubmitClaim submitClaim, ClaimChannel channel, Func<SubmitClaimResult.Accepted, IResult> accepted, CancellationToken ct)
     {
-        if (!request.HasFormContentType)
+        var (form, failure) = await ReadFormAsync(request, "Send the claim as multipart/form-data.", ct);
+        if (form is null)
         {
-            return Results.Problem(
-                statusCode: StatusCodes.Status415UnsupportedMediaType, detail: "Send the claim as multipart/form-data.");
-        }
-
-        IFormCollection form;
-        try
-        {
-            form = await request.ReadFormAsync(ct);
-        }
-        catch (BadHttpRequestException e) when (e.StatusCode == StatusCodes.Status413PayloadTooLarge)
-        {
-            return TooLarge();
-        }
-        catch (InvalidDataException)
-        {
-            // The multipart reader's own limits (body length, part headers).
-            return TooLarge();
+            return failure!;
         }
 
         var command = new SubmitClaimCommand(
@@ -85,6 +72,70 @@ internal static class ClaimSubmissionRequest
                 statusCode: StatusCodes.Status415UnsupportedMediaType, title: "Unsupported file type", detail: unsupported.Detail),
             var other => throw new InvalidOperationException($"Unexpected submission result {other.GetType().Name}."),
         };
+    }
+
+    /// <summary>
+    /// Supplements a claim through <see cref="SupplementClaim"/> from the multipart <c>SupplementForm</c>
+    /// (<c>note</c>, one <c>invoice</c> part, one <c>photos</c> part per photo) and maps the result to
+    /// HTTP: 202 <c>SubmissionAccepted</c>, 404, 409, 400 ValidationProblem, 413 or 415 ProblemDetails.
+    /// </summary>
+    public static async Task<IResult> SupplementAsync(
+        HttpRequest request,
+        SupplementClaim supplementClaim,
+        ClaimChannel channel,
+        Guid claimId,
+        string? reference,
+        Func<SupplementClaimResult.Accepted, IResult> accepted,
+        CancellationToken ct)
+    {
+        var (form, failure) = await ReadFormAsync(request, "Send the supplement as multipart/form-data.", ct);
+        if (form is null)
+        {
+            return failure!;
+        }
+
+        var command = new SupplementClaimCommand(
+            channel,
+            claimId,
+            reference,
+            form[NotePart].ToString(),
+            form.Files.GetFiles(InvoicePart).Select(ToUpload).ToList(),
+            form.Files.GetFiles(PhotosPart).Select(ToUpload).ToList());
+
+        return await supplementClaim.ExecuteAsync(command, ct) switch
+        {
+            SupplementClaimResult.Accepted ok => accepted(ok),
+            SupplementClaimResult.NotFound => Results.Problem(statusCode: StatusCodes.Status404NotFound),
+            SupplementClaimResult.Conflict conflict => Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: conflict.Detail),
+            SupplementClaimResult.Invalid invalid => Results.ValidationProblem(
+                invalid.Errors, detail: "The supplement has missing or invalid information; nothing was added to the claim."),
+            SupplementClaimResult.UnsupportedMediaType unsupported => Results.Problem(
+                statusCode: StatusCodes.Status415UnsupportedMediaType, title: "Unsupported file type", detail: unsupported.Detail),
+            var other => throw new InvalidOperationException($"Unexpected supplement result {other.GetType().Name}."),
+        };
+    }
+
+    /// <summary>The request's multipart form, or the 415 (not multipart) or 413 (over the limits) to return instead.</summary>
+    private static async Task<(IFormCollection? Form, IResult? Failure)> ReadFormAsync(HttpRequest request, string notMultipartDetail, CancellationToken ct)
+    {
+        if (!request.HasFormContentType)
+        {
+            return (null, Results.Problem(statusCode: StatusCodes.Status415UnsupportedMediaType, detail: notMultipartDetail));
+        }
+
+        try
+        {
+            return (await request.ReadFormAsync(ct), null);
+        }
+        catch (BadHttpRequestException e) when (e.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return (null, TooLarge());
+        }
+        catch (InvalidDataException)
+        {
+            // The multipart reader's own limits (body length, part headers).
+            return (null, TooLarge());
+        }
     }
 
     /// <summary>The <c>claim</c> part, or null when it is missing or not valid JSON (reported as a <c>claim</c> field error).</summary>

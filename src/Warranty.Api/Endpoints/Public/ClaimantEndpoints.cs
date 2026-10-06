@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Warranty.Api.Auth;
+using Warranty.Api.Endpoints.Claims;
 using Warranty.Api.RateLimiting;
 using Warranty.Api.Tenancy;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Claims;
+using Warranty.Domain.Claims;
 
 namespace Warranty.Api.Endpoints.Public;
 
@@ -50,6 +52,16 @@ public static class ClaimantEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/claims/{reference}/supplements", SupplementAsync)
+            .WithName("SupplementClaimAsClaimant")
+            .WithSummary("Supplement a claim that is Pending Information")
+            .RequireAuthorization(AuthPolicies.Claimant)
+            .WithSubmissionLimits()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireClaimSubmissionLimit();
+
         return group;
     }
 
@@ -79,5 +91,29 @@ public static class ClaimantEndpoints
         return await access.GetViewAsync(claimId, reference, ct) is { } view
             ? Results.Ok(view)
             : Results.Problem(statusCode: StatusCodes.Status404NotFound);
+    }
+
+    /// <summary>
+    /// The claim is the token's; the path reference must name the same claim (404 otherwise). The
+    /// response carries no internal IDs.
+    /// </summary>
+    private static async Task<IResult> SupplementAsync(
+        string reference, ClaimsPrincipal user, HttpRequest request, SupplementClaim supplementClaim, CancellationToken ct)
+    {
+        if (!Guid.TryParse(user.FindFirst(TrustedClaimTypes.ClaimId)?.Value, out var claimId))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return await ClaimSubmissionRequest.SupplementAsync(
+            request,
+            supplementClaim,
+            ClaimChannel.ClaimantPortal,
+            claimId,
+            reference,
+            accepted => Results.Accepted(
+                $"/api/public/claims/{accepted.Reference}",
+                new SubmissionAccepted(null, accepted.Reference, accepted.Status, accepted.Round)),
+            ct);
     }
 }
