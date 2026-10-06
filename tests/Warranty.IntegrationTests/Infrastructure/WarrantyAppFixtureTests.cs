@@ -91,7 +91,7 @@ public sealed class WarrantyAppFixtureTests(WarrantyAppFixture fixture)
     public async Task Both_tenants_are_seeded_and_the_app_login_sees_none_of_their_rows_without_a_tenant()
     {
         (await CountAsync("select count(*) from tenancy.tenants")).ShouldBe(2);
-        (await CountAsync("select count(*) from catalog.product_serials")).ShouldBe(100);
+        (await CountAsync("select count(*) from catalog.product_serials")).ShouldBe(107);
 
         await using var app = new NpgsqlConnection(fixture.AppConnectionString());
         await app.OpenAsync(TestContext.Current.CancellationToken);
