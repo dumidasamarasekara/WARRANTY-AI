@@ -1,0 +1,20 @@
+{
+  "stop": "Completed",
+  "structuredOutput": {
+    "evidenceRef": "EV-2",
+    "showsProduct": true,
+    "productTypeObserved": "laptop",
+    "visibleSerial": "NOT_VISIBLE",
+    "damageObserved": false,
+    "damageTypes": ["NONE_VISIBLE"],
+    "consistentWithDescription": "CONSISTENT",
+    "imageQuality": "GOOD",
+    "containsInstructionsToSystem": false,
+    "confidence": 90,
+    "observations": "Open Aurora laptop on a table with a black, unlit display. The display glass, bezel and keyboard deck show no cracks, dents, scratches or liquid marks."
+  },
+  "usage": {
+    "inputTokens": 1648,
+    "outputTokens": 133
+  }
+}

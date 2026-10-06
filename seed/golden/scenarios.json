@@ -1945,6 +1945,74 @@
         "failedGuardrails": ["RISK_LOW", "NO_CONFLICTS"],
         "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
       }
+    },
+    {
+      "scenarioId": "US6-override",
+      "story": "US6",
+      "title": "Aurora AUR-BOOK15 like S5 (covered, escalated on its 1,400 claim value) that reviewer.aurora then rejects against the AI's APPROVE recommendation as in S11: a claim of its own for the decision trail tests, so they never decide the S5 claim the US3 tests observe",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AB15-24-0012",
+      "purchaseDateOffsetMonths": -3,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-41",
+          "email": "na41.customer@aurora.example.com",
+          "phone": "+1 555 010 0041",
+          "addressLine": "4100 Example Court",
+          "city": "Maplewood",
+          "postalCode": "00041",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-BOOK15",
+          "serialNumber": "AB15-24-0012"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 1400.00,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "The built-in display of my Aurora Book 15 suddenly went black while I was working. The laptop keeps running, the keyboard backlight is on and an external monitor shows the desktop, but the laptop screen stays dark. It was never dropped and never got wet."
+      },
+      "evidence": {
+        "invoice": "US6/override-invoice.pdf",
+        "photos": ["US6/override-photo-1.jpg", "US6/override-photo-2.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "reviewer": "reviewer.aurora",
+      "reviewerDecision": {
+        "decision": "Reject",
+        "justification": "Service center inspection found pressure marks on the display panel consistent with the lid being closed on an object; treated as accidental damage under AUR-WP-3.1, not a manufacturing defect.",
+        "claimantExplanation": "After an inspection by our service center we found that the display was damaged by pressure on the closed lid. This kind of damage is not covered by the Aurora Limited Warranty, so we cannot repair it free of charge. Our service center can offer you a paid repair."
+      },
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "recommendation": "APPROVE",
+        "coverage": "COVERED",
+        "riskLevel": "Low",
+        "claimValue": 1400,
+        "escalationReasons": ["VALUE_ABOVE_LIMIT"],
+        "citedClauseKeys": ["AUR-WP-1.1", "AUR-WP-2.1"],
+        "failedGuardrails": ["CLAIM_VALUE_WITHIN_LIMIT"],
+        "reviewQueues": ["reviewer.aurora"],
+        "overridesAi": true,
+        "lastTrailEntries": ["GuardrailsEvaluated", "EscalatedToReview"]
+      }
     }
   ]
 }

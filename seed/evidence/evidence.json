@@ -1050,6 +1050,40 @@
       "modelCode": "AUR-TAB10",
       "serial": "AT10-24-0019",
       "variant": 56
+    },
+    {
+      "scenario": "US6-override",
+      "path": "US6/override-invoice.pdf",
+      "kind": "invoice",
+      "seller": "Aurora Store",
+      "sellerAddress": "1200 Example Market Street\nSpringfield, US 00001",
+      "invoiceNumber": "AS-2026-088164",
+      "purchaseDateOffsetMonths": -3,
+      "productName": "Aurora Book 15",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0012",
+      "amount": 1400.0,
+      "currency": "USD"
+    },
+    {
+      "scenario": "US6-override",
+      "path": "US6/override-photo-1.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "front",
+      "screen": "off",
+      "modelCode": "AUR-BOOK15",
+      "variant": 70
+    },
+    {
+      "scenario": "US6-override",
+      "path": "US6/override-photo-2.jpg",
+      "kind": "photo",
+      "device": "laptop",
+      "view": "back",
+      "modelCode": "AUR-BOOK15",
+      "serial": "AB15-24-0012",
+      "variant": 70
     }
   ]
 }
