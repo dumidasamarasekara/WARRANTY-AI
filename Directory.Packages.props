@@ -48,6 +48,7 @@
 
   <ItemGroup Label="Storage, imaging, parsing">
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.30.0" />
+    <PackageVersion Include="Docnet.Core" Version="2.6.0" />
     <PackageVersion Include="SkiaSharp" Version="4.153.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />

@@ -55,7 +55,21 @@ aspire run          # from the repo root; or: dotnet run --project src/Warranty.
 # Without an Anthropic key: answer model calls from tests/fixtures/ai-recordings/ (the AppHost
 # defaults to AiGateway:Mode=live and then requires the anthropic-api-key parameter)
 $env:AiGateway__Mode = "replay"; aspire run
+
+# Without an Anthropic key, on real (local, free) models: every chat route goes to the Ollama
+# server on this machine (install Ollama for Windows, then `ollama pull qwen3-vl:4b-instruct`)
+$env:AiGateway__ChatProvider = "ollama"; aspire run
 ```
+
+With `AiGateway:ChatProvider=ollama` the AppHost asks for no Anthropic key and routes `extraction`,
+`vision`, `policy-reasoning` and `adjudication` to `AiGateway:OllamaChatModel` (default
+`qwen3-vl:4b-instruct`) at `AiGateway:OllamaEndpoint` (default `http://localhost:11434`), with a
+180-second call timeout. The model must read images (invoices and photos; PDF pages are rendered to
+images) and call tools; the API logs a warning at startup when the routed model lacks either. Use
+the non-thinking ("instruct") variant: thinking variants are several times slower. Context length,
+temperature and PDF page limit are in the API's `AiGateway:Ollama` section. A 4B model on a 6 GB
+GPU takes about 2.5 minutes per claim and is far less accurate than the Anthropic models — use it
+to exercise the flow, not to judge decision quality.
 
 The AppHost binds fixed ports (web 5173, Keycloak 8080), so run it from one checkout at a time.
 It runs `npm install` for the `web` resource, which rewrites `src/web/package-lock.json`; discard
