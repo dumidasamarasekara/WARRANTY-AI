@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using Warranty.AI.Gateway.Providers.Anthropic;
 using Warranty.AI.Gateway.Providers.Embeddings;
+using Warranty.AI.Gateway.Providers.Ollama;
 using Warranty.AI.Gateway.Providers.Replay;
 
 namespace Warranty.AI.Gateway.Routing;
@@ -78,6 +79,11 @@ internal sealed class AiGatewayOptionsValidator : IValidateOptions<AiGatewayOpti
             failures.Add("AiGateway:RateLimits:PerTenantRequestsPerMinute must be positive.");
         }
 
+        if (options.Routes.Values.Any(r => r.Dimensions is null && r.Provider == OllamaModelProvider.ProviderName))
+        {
+            ValidateOllama(options.Ollama, failures);
+        }
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
@@ -85,6 +91,25 @@ internal sealed class AiGatewayOptionsValidator : IValidateOptions<AiGatewayOpti
     internal static bool DeclaresNoTraining(AiGatewayOptions options, string provider) => provider switch
     {
         AnthropicModelProvider.ProviderName => options.Anthropic.NoTraining,
+        OllamaModelProvider.ProviderName => options.Ollama.NoTraining,
         _ => false,
     };
+
+    private static void ValidateOllama(OllamaProviderOptions ollama, List<string> failures)
+    {
+        if (ollama.Endpoint is not { IsAbsoluteUri: true })
+        {
+            failures.Add("AiGateway:Ollama:Endpoint must be an absolute URI.");
+        }
+
+        if (ollama.ContextLength < 1024)
+        {
+            failures.Add("AiGateway:Ollama:ContextLength must be at least 1024 tokens.");
+        }
+
+        if (ollama.MaxPdfPages < 1)
+        {
+            failures.Add("AiGateway:Ollama:MaxPdfPages must be positive.");
+        }
+    }
 }
