@@ -6,8 +6,13 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var repoRoot = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
 
-// "live" calls Anthropic with the anthropic-api-key secret; "replay" answers from recordings and needs no key.
+// "live" calls the chat provider; "replay" answers from recordings and needs no key.
 var aiMode = builder.Configuration["AiGateway:Mode"] ?? "live";
+
+// Live chat provider: "anthropic" (the anthropic-api-key secret) or "ollama" (a self-hosted Ollama
+// server, by default the one on this machine — not the embeddings container — with no key and no cost).
+var chatProvider = builder.Configuration["AiGateway:ChatProvider"] ?? "anthropic";
+string[] chatRoutes = ["extraction", "vision", "policy-reasoning", "adjudication"];
 
 // The API connects as warranty_app (research R8); the migration service sets this password on every start.
 var appRolePassword = builder.AddParameter(
@@ -55,7 +60,20 @@ var api = builder.AddProject<Projects.Warranty_Api>("api")
     .WaitForCompletion(migrations)
     .WaitFor(keycloak);
 
-if (aiMode == "live")
+if (aiMode == "live" && chatProvider == "ollama")
+{
+    // One vision + tools model serves every chat route, so only one model has to fit in GPU memory.
+    // Local models are slower than the API, so each call gets a longer timeout.
+    var ollamaModel = builder.Configuration["AiGateway:OllamaChatModel"] ?? "qwen3-vl:4b-instruct";
+    api.WithEnvironment("AiGateway__Ollama__Endpoint", builder.Configuration["AiGateway:OllamaEndpoint"] ?? "http://localhost:11434");
+    foreach (var route in chatRoutes)
+    {
+        api.WithEnvironment($"AiGateway__Routes__{route}__Provider", "ollama")
+            .WithEnvironment($"AiGateway__Routes__{route}__Model", ollamaModel)
+            .WithEnvironment($"AiGateway__Routes__{route}__TimeoutSeconds", "180");
+    }
+}
+else if (aiMode == "live")
 {
     var anthropicApiKey = builder.AddParameter("anthropic-api-key", secret: true);
     api.WithEnvironment("AiGateway__Anthropic__ApiKey", anthropicApiKey);

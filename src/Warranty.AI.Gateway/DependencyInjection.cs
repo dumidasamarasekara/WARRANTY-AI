@@ -10,6 +10,7 @@ using Warranty.AI.Gateway.Prompts;
 using Warranty.AI.Gateway.Providers;
 using Warranty.AI.Gateway.Providers.Anthropic;
 using Warranty.AI.Gateway.Providers.Embeddings;
+using Warranty.AI.Gateway.Providers.Ollama;
 using Warranty.AI.Gateway.Providers.Replay;
 using Warranty.AI.Gateway.RateLimiting;
 using Warranty.AI.Gateway.Redaction;
@@ -58,6 +59,14 @@ public static class DependencyInjection
         services.AddSingleton<AnthropicModelProvider>();
         services.AddSingleton<IModelProvider>(sp => sp.GetRequiredService<AnthropicModelProvider>());
         services.AddHostedService<AnthropicModelProfileLoader>();
+
+        // Ollama: self-hosted chat models (AiGateway:Ollama); nothing is called unless a route uses it.
+        services.AddSingleton<PdfRasterizer>();
+        services.AddSingleton<OllamaClient>();
+        services.AddSingleton<OllamaModelCatalog>();
+        services.AddSingleton<OllamaModelProvider>();
+        services.AddSingleton<IModelProvider>(sp => sp.GetRequiredService<OllamaModelProvider>());
+        services.AddHostedService<OllamaModelProfileLoader>();
 
         // Replay: recordings chosen by the claim's serial number; when recording, it wraps the Anthropic provider.
         services.AddSingleton<ReplayCallCounter>();

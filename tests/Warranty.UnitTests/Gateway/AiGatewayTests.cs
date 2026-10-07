@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -104,16 +105,19 @@ public sealed class AiGatewayTests : IDisposable
     }
 
     [Fact]
-    public async Task A_slow_provider_is_a_timeout_failure()
+    public async Task A_slow_provider_is_a_timeout_failure_after_the_longer_of_the_request_and_route_timeouts()
     {
         _anthropic.Next = async ct =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             return Completed("{}");
         };
+        _options.Routes["adjudication"].TimeoutSeconds = 1;
+        var started = Stopwatch.GetTimestamp();
 
         var result = await Gateway().CompleteAsync(Request(timeout: TimeSpan.FromMilliseconds(50)), TestContext.Current.CancellationToken);
 
+        Stopwatch.GetElapsedTime(started).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(900));
         result.Stop.ShouldBe(AiStopKind.Failed);
         result.Failure!.Kind.ShouldBe(AiFailureKind.Timeout);
         _aiOps.Received(1).AddModelCall(Arg.Is<ModelCall>(c => c.Status == ModelCallStatus.Timeout));

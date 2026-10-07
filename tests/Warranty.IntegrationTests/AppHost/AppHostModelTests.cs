@@ -51,9 +51,17 @@ public sealed class AppHostModelTests
         }
     }
 
-    private static async Task<IDistributedApplicationTestingBuilder> Model(string aiMode)
+    [Fact]
+    public async Task The_local_ollama_chat_provider_needs_no_anthropic_key()
+    {
+        await using var app = await Model("live", "AiGateway:ChatProvider=ollama");
+
+        app.Resources.OfType<ParameterResource>().ShouldNotContain(p => p.Name == "anthropic-api-key");
+    }
+
+    private static async Task<IDistributedApplicationTestingBuilder> Model(string aiMode, params string[] settings)
         => await DistributedApplicationTestingBuilder.CreateAsync<apphost::Projects.Warranty_AppHost>(
-            [$"AiGateway:Mode={aiMode}"], TestContext.Current.CancellationToken);
+            [$"AiGateway:Mode={aiMode}", .. settings], TestContext.Current.CancellationToken);
 
     /// <summary>The resource's distinct start dependencies as <c>name:waitType</c>, ordered by name.</summary>
     private static List<string> Waits(IResource resource)

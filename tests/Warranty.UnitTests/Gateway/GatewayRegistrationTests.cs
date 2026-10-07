@@ -13,6 +13,7 @@ using Warranty.AI.Gateway;
 using Warranty.AI.Gateway.Providers;
 using Warranty.AI.Gateway.Providers.Anthropic;
 using Warranty.AI.Gateway.Providers.Embeddings;
+using Warranty.AI.Gateway.Providers.Ollama;
 using Warranty.AI.Gateway.Providers.Replay;
 using Warranty.AI.Gateway.Routing;
 using Warranty.Application.Abstractions;
@@ -27,7 +28,7 @@ public sealed class GatewayRegistrationTests
     private const string OllamaConnection = "Endpoint=http://ollama.test:11434;Model=nomic-embed-text";
 
     [Fact]
-    public void The_api_configuration_is_valid_and_resolves_the_gateway_with_both_chat_providers()
+    public void The_api_configuration_is_valid_and_resolves_the_gateway_with_every_chat_provider()
     {
         using var provider = Build(ApiConfiguration());
         using var scope = provider.CreateScope();
@@ -36,14 +37,16 @@ public sealed class GatewayRegistrationTests
         options.Mode.ShouldBe(AiGatewayOptions.LiveMode);
         options.Routes.Keys.ShouldBe(["extraction", "vision", "policy-reasoning", "adjudication", "embedding"], ignoreOrder: true);
         options.Anthropic.NoTraining.ShouldBeTrue();
+        options.Ollama.NoTraining.ShouldBeTrue();
         options.Pricing.Keys.ShouldBe(["claude-opus-5-5", "claude-haiku-4-5"], ignoreOrder: true);
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
         scope.ServiceProvider.GetRequiredService<IAiGateway>().ShouldNotBeNull();
         scope.ServiceProvider.GetServices<IModelProvider>().Select(p => p.Name)
-            .ShouldBe([AnthropicModelProvider.ProviderName, ReplayModelProvider.ProviderName], ignoreOrder: true);
+            .ShouldBe([AnthropicModelProvider.ProviderName, OllamaModelProvider.ProviderName, ReplayModelProvider.ProviderName], ignoreOrder: true);
         provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>().ShouldBeOfType<OllamaEmbeddingProvider>();
         provider.GetServices<IHostedService>().ShouldContain(s => s is AnthropicModelProfileLoader);
+        provider.GetServices<IHostedService>().ShouldContain(s => s is OllamaModelProfileLoader);
     }
 
     [Fact]
