@@ -77,6 +77,37 @@ public sealed class SimulatedIntegrationTests
     }
 
     [Fact]
+    public async Task Service_network_lists_active_centres_by_priority_then_name_and_flags_those_serving_the_category()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        var zeta = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Zeta", ["tablet"], priority: 10);
+        var beta = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Beta", ["phone"], priority: 20);
+        var alpha = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Alpha", ["Tablet"], priority: 20);
+        var closed = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Closed", ["tablet"], isActive: false, priority: 1);
+        integration.GetServiceCentersAsync(Region.NA, Ct).Returns([beta, closed, zeta, alpha]);
+
+        var eligible = await new SimulatedServiceNetwork(integration).ListEligibleAsync(Region.NA, " Tablet ", Ct);
+
+        eligible.Select(c => c.Id).ShouldBe([zeta.Id, alpha.Id, beta.Id]);
+        eligible.Select(c => c.ServesClaim).ShouldBe([true, true, false]);
+    }
+
+    [Fact]
+    public async Task A_deduplicated_notification_carries_its_key()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 9, 0, 0, TimeSpan.Zero));
+        var claimId = Guid.NewGuid();
+
+        var result = await new SimulatedNotificationService(integration, new FakeTenantContext(Aurora), time)
+            .EnqueueAsync(claimId, "RepairReadyForCollection", "repair-ready:42", Ct);
+
+        result.AlreadyQueued.ShouldBeFalse();
+        integration.Received(1).AddNotification(Arg.Is<Notification>(n =>
+            n.Id == result.NotificationId && n.TenantId == Aurora && n.ClaimId == claimId && n.DedupeKey == "repair-ready:42"));
+    }
+
+    [Fact]
     public async Task Repair_requests_and_notifications_are_added_to_the_unit_of_work_for_the_current_tenant()
     {
         var integration = Substitute.For<IIntegrationRepository>();
