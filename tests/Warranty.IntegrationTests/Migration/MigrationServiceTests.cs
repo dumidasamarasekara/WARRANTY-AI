@@ -88,6 +88,61 @@ public sealed class MigrationServiceTests : IAsyncLifetime
         rows.ShouldAllBe(r => r.Entries == 2 && r.Marked);
     }
 
+    /// <summary>
+    /// Feature 002: every policy version gets its tenant's remedy rules (tasks.md "Fixed identifiers"), stored
+    /// as the schema's JSON, and every region of every tenant has at least two active repair centres with the
+    /// address and opening hours claimants see (FR-045).
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "002")]
+    public async Task Seeds_the_remedy_rules_of_each_policy_version_and_two_active_repair_centres_per_region()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+
+        const string aurora =
+            """{ "coveredDefect": { "remedy": "Repair" }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Replacement" }, "protectionPlan": { "liftsAccidentalDamageExclusion": false } }""";
+        const string borealis =
+            """{ "coveredDefect": { "remedy": "Repair" }, "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" }, "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" } }""";
+        await using (var versions = new NpgsqlCommand(
+                         """
+                         select p.code || ' v' || v.version,
+                                v.remedy_rules::jsonb = (case p.code when 'AUR-WP' then @aurora else @borealis end)::jsonb
+                         from policy.policy_versions v join policy.warranty_policies p on p.id = v.policy_id
+                         order by 1
+                         """,
+                         warranty))
+        {
+            versions.Parameters.AddWithValue("aurora", aurora);
+            versions.Parameters.AddWithValue("borealis", borealis);
+            await using var reader = await versions.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            var rows = new List<(string Version, bool Matches)>();
+            while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+            {
+                rows.Add((reader.GetString(0), !reader.IsDBNull(1) && reader.GetBoolean(1)));
+            }
+
+            rows.Select(r => r.Version).ShouldBe(["AUR-WP v1", "AUR-WP v2", "BOR-WP v1"]);
+            rows.Where(r => !r.Matches).Select(r => r.Version).ShouldBeEmpty("versions whose remedy rules differ from the fixed rule set");
+        }
+
+        (await ScalarAsync(
+                warranty,
+                """
+                select count(*) from (
+                    select tenant_id, region from integration.service_centers group by tenant_id, region
+                    having count(*) filter (where is_active) < 2) regions
+                """))
+            .ShouldBe(0, "tenant regions with fewer than two active repair centres");
+        (await ScalarAsync(
+                warranty,
+                """
+                select count(*) from integration.service_centers
+                where is_active and (coalesce(trim(address), '') = '' or coalesce(trim(opening_hours), '') = '')
+                """))
+            .ShouldBe(0, "active repair centres without address or opening hours");
+    }
+
     [Fact]
     public async Task The_app_role_logs_in_with_the_configured_password_and_sees_no_tenant_rows_without_a_tenant()
     {
