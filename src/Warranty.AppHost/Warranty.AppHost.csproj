@@ -17,6 +17,8 @@
     <PackageReference Include="Aspire.Hosting.Keycloak" />
     <PackageReference Include="Aspire.Hosting.JavaScript" />
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama" />
+    <!-- Security pin, see Directory.Packages.props. -->
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>

@@ -17,6 +17,8 @@
     <PackageReference Include="Testcontainers.Azurite" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Aspire.Hosting.Testing" />
+    <!-- Security pin, see Directory.Packages.props. -->
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>

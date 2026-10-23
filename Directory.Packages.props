@@ -10,6 +10,10 @@
     <PackageVersion Include="Aspire.Hosting.Keycloak" Version="13.6.0-preview.1.26479.8" />
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.6.0" />
+    <!-- Security pin: Aspire.Hosting 13.6.0 pulls MessagePack 2.5.302 (GHSA-qhrr-8q5h-9q3h, fixed in
+         2.5.303). Referenced directly by Warranty.AppHost and Warranty.IntegrationTests; drop it once
+         Aspire depends on a patched version. -->
+    <PackageVersion Include="MessagePack" Version="2.5.303" />
   </ItemGroup>
 
   <ItemGroup Label="Aspire client integrations">
