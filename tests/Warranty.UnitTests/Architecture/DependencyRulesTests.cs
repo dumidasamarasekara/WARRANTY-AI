@@ -6,7 +6,7 @@ namespace Warranty.UnitTests.Architecture;
 /// <summary>
 /// The module boundaries of plan.md: the guardrails and the domain stay free of AI code, only the
 /// gateway talks to an AI vendor SDK, and consequential actions need a guardrail-issued
-/// <c>ApprovedAction</c>.
+/// <c>ApprovedAction</c> and run only in the <c>ActionExecutor</c>.
 /// </summary>
 public sealed class DependencyRulesTests
 {
@@ -35,6 +35,10 @@ public sealed class DependencyRulesTests
 
     public static TheoryData<string> AssembliesOtherThanGateway =>
         new(ProductionAssemblies.Where(name => name != Gateway));
+
+    /// <summary>The simulated adapter implements the port (and registers it), so it is the one assembly left out.</summary>
+    public static TheoryData<string> AssembliesOtherThanTheRefundAdapter =>
+        new(ProductionAssemblies.Where(name => name != Simulated));
 
     public static TheoryData<string> AssembliesThatMayNotUseSimulatedIntegrations =>
         new(ProductionAssemblies.Where(name => name is not (Simulated or Api or MigrationService)));
@@ -86,6 +90,33 @@ public sealed class DependencyRulesTests
             .ShouldNotContain(constructor => constructor.IsFamily || constructor.IsFamilyOrAssembly,
                 "a protected constructor would let a subclass outside the guardrails create one");
     }
+
+    /// <summary>
+    /// Refunds are a consequential action (constitution II, research R10): only the <c>ActionExecutor</c>
+    /// (with its compiler-generated nested types) may depend on <c>IRefundService</c>; the port itself is
+    /// the only other type allowed to mention it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AssembliesOtherThanTheRefundAdapter))]
+    public void Only_the_ActionExecutor_depends_on_the_refund_service(string assembly)
+    {
+        const string refundService = "Warranty.Application.Abstractions.Integrations.IRefundService";
+        const string executor = "Warranty.Application.Actions.ActionExecutor";
+
+        var result = Types.InAssembly(Assembly.Load(assembly)).ShouldNot().HaveDependencyOn(refundService).GetResult();
+
+        (result.FailingTypeNames ?? [])
+            .Where(name => name != refundService && name != executor && !name.StartsWith(executor + "+", StringComparison.Ordinal)
+                && !name.StartsWith(executor + "/", StringComparison.Ordinal))
+            .ShouldBeEmpty("only the ActionExecutor may request a refund");
+    }
+
+    /// <summary>Positive control: the rule does see a dependency on the refund port.</summary>
+    [Fact]
+    public void The_refund_rule_sees_the_simulated_refund_adapter() =>
+        Types.InAssembly(Assembly.Load(Simulated)).That()
+            .HaveDependencyOn("Warranty.Application.Abstractions.Integrations.IRefundService")
+            .GetTypes().Select(type => type.Name).ShouldContain("SimulatedRefundService");
 
     /// <summary>
     /// Checks both the types (NetArchTest, by namespace prefix) and the compiled assembly references,
