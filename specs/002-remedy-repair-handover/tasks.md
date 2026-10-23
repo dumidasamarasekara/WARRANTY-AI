@@ -76,7 +76,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Foundational tests
 
-- [ ] T216 [P] Write `tests/Warranty.UnitTests/Domain/RemedyRulesTests.cs` (valid examples from the schema; `remedy` and `allowed` together, a one-item `allowed`, limit 0 or 101, attempts 0 or 6, plan lifting without remedy all throw) and update `tests/Warranty.UnitTests/Seed/SeedFilesTests.cs` and `tests/Warranty.UnitTests/Seed/SeedDataTests.cs` for the remedy rules and repair centres
+- [X] T216 [P] Write `tests/Warranty.UnitTests/Domain/RemedyRulesTests.cs` (valid examples from the schema; `remedy` and `allowed` together, a one-item `allowed`, limit 0 or 101, attempts 0 or 6, plan lifting without remedy all throw) and update `tests/Warranty.UnitTests/Seed/SeedFilesTests.cs` and `tests/Warranty.UnitTests/Seed/SeedDataTests.cs` for the remedy rules and repair centres
 - [ ] T217 [P] Extend `tests/Warranty.IntegrationTests/Isolation/RowLevelSecurityTests.cs` with raw-SQL probes as the other tenant on every new table, add an append-only check for `audit.repair_events` (UPDATE and DELETE rejected), and extend `tests/Warranty.IntegrationTests/Migration/MigrationServiceTests.cs` to assert seeded remedy rules per version and at least two active centres per region
 - [ ] T218 [P] Add an architecture rule that only `ActionExecutor` depends on `IRefundService` in `tests/Warranty.UnitTests/Architecture/DependencyRulesTests.cs`
 

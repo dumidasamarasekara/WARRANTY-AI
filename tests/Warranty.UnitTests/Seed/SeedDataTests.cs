@@ -5,7 +5,10 @@ using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Policies;
 using Warranty.Knowledge.Ingestion;
+using Warranty.UnitTests.Domain;
 using Warranty.UnitTests.Infrastructure;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Warranty.UnitTests.Seed;
 
@@ -124,6 +127,54 @@ public sealed class SeedDataTests
         }
     }
 
+    public static TheoryData<string, string, string> PolicyRemedyRules => new()
+    {
+        { "aurora", "AUR-WP-v1.md", nameof(RemedyRulesContract.Aurora) },
+        { "aurora", "AUR-WP-v2.md", nameof(RemedyRulesContract.Aurora) },
+        { "borealis", "BOR-WP-v1.md", nameof(RemedyRulesContract.Borealis) },
+    };
+
+    [Theory(Skip = "Pending T215")]
+    [MemberData(nameof(PolicyRemedyRules))]
+    public void Every_policy_version_carries_its_tenants_remedy_rules_valid_against_the_schema(string slug, string file, string expected)
+    {
+        var block = RemediesBlock(slug, file);
+        block.ShouldNotBeNull($"{file} has no remedies block");
+
+        var json = JsonSerializer.SerializeToElement(block, RemedyRulesContract.Json);
+        RemedyRulesContract.SchemaErrors(json).ShouldBeEmpty(file);
+        var rules = RemedyRulesContract.Deserialize(json);
+        Should.NotThrow(rules.Validate, file);
+        RemedyRulesContract.ShouldBeSameRules(
+            rules, expected == nameof(RemedyRulesContract.Aurora) ? RemedyRulesContract.Aurora : RemedyRulesContract.Borealis);
+    }
+
+    [Theory(Skip = "Pending T215")]
+    [MemberData(nameof(Tenants))]
+    public void Every_region_has_two_active_repair_centres_seeded_with_address_opening_hours_contact_and_priority(string slug)
+    {
+        var centers = Json(slug, "service-centers.json").EnumerateArray().ToList();
+        centers.Select(c => c.GetProperty("id").GetGuid()).Distinct().Count().ShouldBe(centers.Count, slug);
+
+        var active = centers.Where(c => !c.TryGetProperty("isActive", out var flag) || flag.GetBoolean()).ToList();
+        foreach (var region in centers.Select(c => c.GetProperty("region").GetString()!).Distinct())
+        {
+            active.Count(c => c.GetProperty("region").GetString() == region).ShouldBeGreaterThanOrEqualTo(2, $"{slug} {region}");
+        }
+
+        foreach (var center in active)
+        {
+            var name = center.GetProperty("name").GetString();
+            foreach (var field in new[] { "address", "openingHours", "contact" })
+            {
+                (center.TryGetProperty(field, out var value) && !string.IsNullOrWhiteSpace(value.GetString()))
+                    .ShouldBeTrue($"{name} has no {field}");
+            }
+
+            center.GetProperty("priority").GetInt32().ShouldBeGreaterThanOrEqualTo(0, name);
+        }
+    }
+
     [Fact]
     public void Tenant_settings_and_ids_match_the_data_model_and_the_keycloak_realm()
     {
@@ -177,6 +228,56 @@ public sealed class SeedDataTests
         => PolicyVersion.Create(
             Guid.NewGuid(), tenantId, Guid.NewGuid(), source.Version, source.EffectiveFrom!.Value, source.EffectiveTo,
             source.Regions, source.ProductCategories, source.Terms!, source.SourcePath, "checksum");
+
+    /// <summary>
+    /// The <c>remedies</c> front-matter block of a policy file, read independently of the seed loader so the
+    /// seed data is checked against the schema on its own; null when the version has no block.
+    /// </summary>
+    private static RemediesYaml? RemediesBlock(string slug, string file)
+    {
+        var lines = File.ReadAllLines(Path.Combine(SeedRoot, "tenants", slug, "policies", file));
+        lines[0].ShouldBe("---", file);
+        var end = Array.IndexOf(lines, "---", 1);
+        end.ShouldBeGreaterThan(0, file);
+
+        var yaml = string.Join('\n', lines[1..end]);
+        var front = new DeserializerBuilder()
+            .WithNamingConvention(CamelCaseNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .Build()
+            .Deserialize<PolicyFrontMatterYaml>(yaml);
+        return front.Remedies;
+    }
+
+    private sealed class PolicyFrontMatterYaml
+    {
+        public RemediesYaml? Remedies { get; set; }
+    }
+
+    /// <summary>The <c>remedies</c> block as written in YAML; serialized without nulls it is the schema's JSON.</summary>
+    private sealed class RemediesYaml
+    {
+        public RemedyRowYaml? CoveredDefect { get; set; }
+
+        public RemedyRowYaml? RepairNotEconomical { get; set; }
+
+        public RemedyRowYaml? RepairFailed { get; set; }
+
+        public RemedyRowYaml? ProtectionPlan { get; set; }
+    }
+
+    private sealed class RemedyRowYaml
+    {
+        public string? Remedy { get; set; }
+
+        public List<string>? Allowed { get; set; }
+
+        public int? LimitPercentOfClaimValue { get; set; }
+
+        public int? AfterFailedAttempts { get; set; }
+
+        public bool? LiftsAccidentalDamageExclusion { get; set; }
+    }
 
     private static JsonElement Json(string slug, string file)
     {
