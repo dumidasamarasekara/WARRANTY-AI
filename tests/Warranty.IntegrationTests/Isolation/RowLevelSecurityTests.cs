@@ -21,6 +21,16 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
         "integration.service_centers", "policy.warranty_policies", "policy.policy_versions",
     ];
 
+    /// <summary>
+    /// Tables of feature 002 (AddRemediesAndRepairs). They live in the existing claims and audit schemas, so
+    /// 001_roles_and_rls.sql isolates them (and makes audit.repair_events append-only) without new SQL.
+    /// </summary>
+    private static readonly string[] RemedyAndRepairTables =
+    [
+        "claims.claim_remedies", "claims.remedy_decisions", "claims.remedy_completions", "claims.repairs",
+        "claims.repair_handovers", "claims.repair_attempts", "audit.repair_events",
+    ];
+
     [Fact]
     public async Task Every_tenant_owned_table_shows_only_the_current_tenants_rows()
     {
@@ -30,6 +40,7 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
         tables.ShouldContain("audit.decision_trail_entries");
         tables.ShouldContain("audit.security_events");
         tables.ShouldNotContain("tenancy.tenant_channels");
+        RemedyAndRepairTables.Except(tables).ShouldBeEmpty("remedy and repair tables without the tenant policy");
 
         await using var owner = await OpenOwnerAsync();
         foreach (var table in SeededForBothTenants)
@@ -114,6 +125,34 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
         (await SqlStateInRolledBackTransactionAsync(owner, "delete from audit.decision_trail_entries"))
             .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+    }
+
+    [Fact]
+    public async Task Every_audit_table_including_repair_events_has_the_append_only_trigger_and_no_app_update_or_delete()
+    {
+        await using var owner = await OpenOwnerAsync();
+        (await ScalarAsync<long>(
+                owner,
+                """
+                select count(*) from information_schema.tables t
+                where t.table_schema = 'audit' and t.table_type = 'BASE TABLE'
+                  and not exists (
+                      select 1 from pg_trigger g
+                      where g.tgrelid = format('%I.%I', t.table_schema, t.table_name)::regclass
+                        and g.tgname = 'append_only' and not g.tgisinternal)
+                """))
+            .ShouldBe(0, "audit tables without the append_only trigger");
+        (await ScalarAsync<long>(
+                owner,
+                "select count(*) from pg_trigger where tgrelid = 'audit.repair_events'::regclass and tgname = 'append_only'"))
+            .ShouldBe(1);
+        (await ScalarAsync<bool>(
+                owner,
+                "select has_table_privilege('warranty_app', 'audit.repair_events', 'UPDATE') or " +
+                "has_table_privilege('warranty_app', 'audit.repair_events', 'DELETE')"))
+            .ShouldBeFalse();
+        (await ScalarAsync<bool>(owner, "select has_table_privilege('warranty_app', 'audit.repair_events', 'INSERT')"))
+            .ShouldBeTrue();
     }
 
     [Fact]
