@@ -22,7 +22,34 @@ public sealed class ServiceCenter
     /// <summary>Product categories the center can repair.</summary>
     public IReadOnlyList<string> Capabilities { get; private set; }
 
-    public static ServiceCenter Create(Guid id, Guid tenantId, Region region, string name, IEnumerable<string> capabilities)
+    /// <summary>Postal address shown to claimants; required for active centres once seeded.</summary>
+    public string? Address { get; private set; }
+
+    /// <summary>Opening hours shown to claimants, e.g. <c>Mon–Fri 09:00–17:00</c>.</summary>
+    public string? OpeningHours { get; private set; }
+
+    /// <summary>Staff-only phone/email of the centre; never shown to claimants.</summary>
+    public string? Contact { get; private set; }
+
+    /// <summary>Inactive centres are never suggested or selectable.</summary>
+    public bool IsActive { get; private set; } = true;
+
+    /// <summary>Lower value is suggested first; ties are broken by name.</summary>
+    public int Priority { get; private set; } = DefaultPriority;
+
+    public const int DefaultPriority = 100;
+
+    public static ServiceCenter Create(
+        Guid id,
+        Guid tenantId,
+        Region region,
+        string name,
+        IEnumerable<string> capabilities,
+        string? address = null,
+        string? openingHours = null,
+        string? contact = null,
+        bool isActive = true,
+        int priority = DefaultPriority)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         return new ServiceCenter
@@ -32,8 +59,15 @@ public sealed class ServiceCenter
             Region = region,
             Name = name.Trim(),
             Capabilities = capabilities.Select(c => c.Trim().ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToArray(),
+            Address = NullIfBlank(address),
+            OpeningHours = NullIfBlank(openingHours),
+            Contact = NullIfBlank(contact),
+            IsActive = isActive,
+            Priority = priority,
         };
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public enum RepairRequestStatus
@@ -97,7 +131,19 @@ public sealed class Notification
 
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public static Notification Create(Guid id, Guid tenantId, Guid claimId, string template, DateTimeOffset createdAt)
+    /// <summary>
+    /// Optional idempotency key, unique per tenant when set (e.g. <c>repair-ready:{attemptId}</c>); null for
+    /// notifications that need no de-duplication.
+    /// </summary>
+    public string? DedupeKey { get; private set; }
+
+    public static Notification Create(
+        Guid id,
+        Guid tenantId,
+        Guid claimId,
+        string template,
+        DateTimeOffset createdAt,
+        string? dedupeKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
         return new Notification
@@ -108,6 +154,7 @@ public sealed class Notification
             Channel = NotificationChannel.Email,
             Template = template,
             CreatedAt = createdAt,
+            DedupeKey = string.IsNullOrWhiteSpace(dedupeKey) ? null : dedupeKey.Trim(),
         };
     }
 }
