@@ -13,4 +13,13 @@
     <ProjectReference Include="..\Warranty.AI.Gateway\Warranty.AI.Gateway.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Byte-for-byte copy of specs/002-remedy-repair-handover/contracts/remedy-rules.schema.json; validates the seed's remedies block. -->
+    <EmbeddedResource Include="Seeding\Schemas\*.schema.json" LogicalName="Warranty.MigrationService.Seeding.Schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

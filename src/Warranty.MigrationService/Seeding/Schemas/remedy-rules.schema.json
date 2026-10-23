@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warranty-ai.local/schemas/remedy-rules.schema.json",
+  "title": "Remedy rules of one policy version",
+  "description": "The `remedies` front-matter block of a policy version (seed/tenants/*/policies/*.md), stored as policy.policy_versions.remedy_rules. Read only by the deterministic RemedyPolicyEvaluator (research R1, R2). Every row is optional; a missing row gives no remedy for that scenario and sends the remedy to manual review (FR-012).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "coveredDefect": {
+      "description": "Remedy for a covered defect, including damage covered by the version's own accidental-damage allowance.",
+      "$ref": "#/$defs/remedyChoice"
+    },
+    "repairNotEconomical": {
+      "description": "Applies when the repair centre's estimate is strictly above the limit (FR-004).",
+      "allOf": [
+        { "$ref": "#/$defs/remedyChoice" },
+        {
+          "type": "object",
+          "required": ["limitPercentOfClaimValue"],
+          "properties": {
+            "limitPercentOfClaimValue": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Percentage of the product's claim value (catalog.products.claim_value). An estimate equal to the limit is economical."
+            }
+          }
+        }
+      ]
+    },
+    "repairFailed": {
+      "description": "Applies when the number of failed repair attempts reaches afterFailedAttempts (FR-005). Below it, a new repair attempt starts.",
+      "allOf": [
+        { "$ref": "#/$defs/remedyChoice" },
+        {
+          "type": "object",
+          "required": ["afterFailedAttempts"],
+          "properties": {
+            "afterFailedAttempts": { "type": "integer", "minimum": 1, "maximum": 5 }
+          }
+        }
+      ]
+    },
+    "protectionPlan": {
+      "description": "Whether a confirmed additional protection plan lifts the accidental-damage exclusion, and the remedy then (FR-006).",
+      "type": "object",
+      "required": ["liftsAccidentalDamageExclusion"],
+      "properties": {
+        "liftsAccidentalDamageExclusion": { "type": "boolean" },
+        "remedy": { "$ref": "#/$defs/remedyType" },
+        "allowed": { "$ref": "#/$defs/remedyList" }
+      },
+      "additionalProperties": false,
+      "if": { "properties": { "liftsAccidentalDamageExclusion": { "const": true } } },
+      "then": { "oneOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ] },
+      "else": { "not": { "anyOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ] } }
+    }
+  },
+  "$defs": {
+    "remedyType": { "type": "string", "enum": ["Repair", "Replacement", "Refund"] },
+    "remedyList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/remedyType" },
+      "minItems": 2,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "description": "Two or more allowed remedies without an order: a reviewer chooses (FR-003)."
+    },
+    "remedyChoice": {
+      "type": "object",
+      "description": "Exactly one of `remedy` (set automatically) or `allowed` (reviewer chooses).",
+      "properties": {
+        "remedy": { "$ref": "#/$defs/remedyType" },
+        "allowed": { "$ref": "#/$defs/remedyList" },
+        "limitPercentOfClaimValue": true,
+        "afterFailedAttempts": true
+      },
+      "additionalProperties": false,
+      "oneOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ]
+    }
+  },
+  "examples": [
+    {
+      "coveredDefect": { "remedy": "Repair" },
+      "repairFailed": { "afterFailedAttempts": 2, "remedy": "Replacement" },
+      "protectionPlan": { "liftsAccidentalDamageExclusion": false }
+    },
+    {
+      "coveredDefect": { "remedy": "Repair" },
+      "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] },
+      "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" },
+      "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" }
+    }
+  ]
+}
