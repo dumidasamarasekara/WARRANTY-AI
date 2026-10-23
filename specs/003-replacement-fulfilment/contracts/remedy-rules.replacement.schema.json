@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warranty-ai.local/schemas/remedy-rules.replacement.schema.json",
+  "title": "Replacement members of the remedy rules of one policy version",
+  "description": "Members added by feature 003 to the `remedies` front-matter block (specs/002-remedy-repair-handover/contracts/remedy-rules.schema.json). The first 003 domain task merges these two properties into that schema's `properties` (research R1). Read only by the deterministic RemedyPolicyEvaluator and ReplacementPolicy. Both members are optional; without `replacement` the defaults SameModel, AtCollection and 0 apply; without `replacementNotAvailable` the remedy goes to manual review (002 FR-012).",
+  "type": "object",
+  "properties": {
+    "replacement": {
+      "description": "How a Replacement remedy is carried out (FR-001 to FR-003).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "productRule": {
+          "type": "string",
+          "enum": ["SameModel", "SameCategoryAtLeastClaimValue"],
+          "default": "SameModel",
+          "description": "SameCategoryAtLeastClaimValue: another model of the same product category whose claim value is at least the original's, approved by a reviewer (FR-002, FR-024)."
+        },
+        "returnRule": {
+          "type": "string",
+          "enum": ["AtCollection", "BeforeReservation"],
+          "default": "AtCollection",
+          "description": "When the faulty product must be returned (FR-003)."
+        },
+        "minimumCoverMonths": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 36,
+          "default": 0,
+          "description": "A replacement unit is covered until the later of the original coverage end and the hand-over date plus these months (FR-029)."
+        }
+      }
+    },
+    "replacementNotAvailable": {
+      "description": "Remedy when no allowed replacement is available (FR-004, FR-026). Same shape as the 002 rows: exactly one of `remedy` or `allowed`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "remedy": { "type": "string", "enum": ["Repair", "Replacement", "Refund"] },
+        "allowed": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["Repair", "Replacement", "Refund"] },
+          "minItems": 2,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "oneOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ]
+    }
+  },
+  "examples": [
+    {
+      "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "AtCollection", "minimumCoverMonths": 0 },
+      "replacementNotAvailable": { "remedy": "Refund" }
+    },
+    {
+      "replacement": { "productRule": "SameModel", "returnRule": "BeforeReservation", "minimumCoverMonths": 6 },
+      "replacementNotAvailable": { "remedy": "Refund" }
+    }
+  ]
+}
