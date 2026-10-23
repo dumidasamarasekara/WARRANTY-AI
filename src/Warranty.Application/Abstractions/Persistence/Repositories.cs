@@ -5,6 +5,7 @@ using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Crm;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
@@ -182,6 +183,37 @@ public interface IIntegrationRepository
     void AddRepairRequest(RepairRequest request);
 
     void AddNotification(Notification notification);
+}
+
+/// <summary>Remedies of the current tenant's claims (<c>claims.claim_remedies</c>, <c>remedy_decisions</c>, <c>remedy_completions</c>).</summary>
+public interface IRemedyRepository
+{
+    /// <summary>The claim's current remedy (tracked), or null when none has been set.</summary>
+    Task<ClaimRemedy?> GetAsync(Guid claimId, CancellationToken ct);
+
+    void Add(ClaimRemedy remedy);
+
+    /// <summary>Remedy decisions are append-only: there is no update or delete.</summary>
+    void AddDecision(RemedyDecision decision);
+
+    Task<IReadOnlyList<RemedyDecision>> GetDecisionsAsync(Guid claimId, CancellationToken ct);
+
+    /// <summary>The claim's completion record (Replacement or Refund), or null when not completed.</summary>
+    Task<RemedyCompletion?> GetCompletionAsync(Guid claimId, CancellationToken ct);
+
+    void AddCompletion(RemedyCompletion completion);
+}
+
+/// <summary>Repairs of the current tenant's claims (<c>claims.repairs</c> with hand-overs, attempts and events).</summary>
+public interface IRepairRepository
+{
+    /// <summary>The claim's repair (tracked) with its hand-overs, attempts and events, or null when it has none.</summary>
+    Task<Repair?> GetByClaimAsync(Guid claimId, CancellationToken ct);
+
+    void Add(Repair repair);
+
+    /// <summary>Repair events are append-only: there is no update or delete.</summary>
+    void AddEvent(RepairEvent repairEvent);
 }
 
 public sealed record AiOpsRecords(IReadOnlyList<ModelCall> ModelCalls, IReadOnlyList<ToolCall> ToolCalls, IReadOnlyList<RagQuery> RagQueries);
