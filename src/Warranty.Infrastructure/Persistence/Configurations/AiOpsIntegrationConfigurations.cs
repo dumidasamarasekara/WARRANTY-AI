@@ -72,11 +72,14 @@ internal sealed class ServiceCenterConfiguration : IEntityTypeConfiguration<Serv
         builder.Property(s => s.Region).HasWireName();
         builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
         builder.PrimitiveCollection(s => s.Capabilities);
-        builder.Ignore(s => s.Address); // T210 maps this
-        builder.Ignore(s => s.OpeningHours); // T210 maps this
-        builder.Ignore(s => s.Contact); // T210 maps this
-        builder.Ignore(s => s.IsActive); // T210 maps this
-        builder.Ignore(s => s.Priority); // T210 maps this
+        builder.Property(s => s.Address).HasMaxLength(300);
+        builder.Property(s => s.OpeningHours).HasMaxLength(200);
+        builder.Property(s => s.Contact).HasMaxLength(200);
+
+        // No model default: EF would then skip an explicit false/100 on insert. Existing rows get
+        // is_active = true and priority = 100 from the migration's column defaults (data-model.md).
+        builder.Property(s => s.IsActive);
+        builder.Property(s => s.Priority);
     }
 }
 
@@ -101,6 +104,9 @@ internal sealed class RepairRequestConfiguration : IEntityTypeConfiguration<Repa
 
 internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 {
+    /// <summary>Unique <c>(tenant_id, dedupe_key)</c> where set: a second row with the same key is "already queued" (research R7).</summary>
+    public const string DedupeKeyIndex = "ux_notifications_tenant_dedupe_key";
+
     public void Configure(EntityTypeBuilder<Notification> builder)
     {
         builder.ToTable("notifications", "integration");
@@ -112,6 +118,10 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .OnDelete(DeleteBehavior.Restrict);
         builder.Property(n => n.Channel).HasWireName();
         builder.Property(n => n.Template).HasMaxLength(100).IsRequired();
-        builder.Ignore(n => n.DedupeKey); // T210 maps this
+        builder.Property(n => n.DedupeKey).HasMaxLength(200);
+        builder.HasIndex(n => new { n.TenantId, n.DedupeKey })
+            .IsUnique()
+            .HasFilter("dedupe_key IS NOT NULL")
+            .HasDatabaseName(DedupeKeyIndex);
     }
 }

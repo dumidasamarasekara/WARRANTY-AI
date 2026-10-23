@@ -7,6 +7,7 @@ using Warranty.Domain.Audit;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Crm;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
@@ -86,6 +87,20 @@ public sealed class WarrantyDbContext(DbContextOptions<WarrantyDbContext> option
     public DbSet<RepairRequest> RepairRequests => Set<RepairRequest>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<ClaimRemedy> ClaimRemedies => Set<ClaimRemedy>();
+
+    public DbSet<RemedyDecision> RemedyDecisions => Set<RemedyDecision>();
+
+    public DbSet<RemedyCompletion> RemedyCompletions => Set<RemedyCompletion>();
+
+    public DbSet<Repair> Repairs => Set<Repair>();
+
+    public DbSet<RepairHandover> RepairHandovers => Set<RepairHandover>();
+
+    public DbSet<RepairAttempt> RepairAttempts => Set<RepairAttempt>();
+
+    public DbSet<RepairEvent> RepairEvents => Set<RepairEvent>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

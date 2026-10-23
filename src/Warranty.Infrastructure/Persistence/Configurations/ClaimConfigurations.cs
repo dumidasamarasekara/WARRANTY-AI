@@ -50,8 +50,6 @@ internal sealed class ClaimConfiguration : IEntityTypeConfiguration<Claim>
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .HasJsonConversion();
 
-        builder.Ignore(c => c.HasProtectionPlan); // T210 maps this
-        builder.Ignore(c => c.ProtectionPlanConfirmed); // T210 maps this
         builder.Property<uint>(RowVersion).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
     }
 }

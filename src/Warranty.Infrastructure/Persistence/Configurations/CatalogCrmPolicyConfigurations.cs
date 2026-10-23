@@ -91,7 +91,7 @@ internal sealed class PolicyVersionConfiguration : IEntityTypeConfiguration<Poli
         builder.PrimitiveCollection(v => v.Regions).ElementType(e => e.HasConversion<string>());
         builder.PrimitiveCollection(v => v.ProductCategories);
         builder.Property(v => v.Terms).HasJsonConversion();
-        builder.Ignore(v => v.RemedyRules); // T210 maps this
+        builder.Property(v => v.RemedyRules).HasJsonConversion();
         builder.Property(v => v.SourceBlobPath).HasMaxLength(500).IsRequired();
         builder.Property(v => v.Checksum).HasMaxLength(64).IsRequired();
     }

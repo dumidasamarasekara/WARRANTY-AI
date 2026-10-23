@@ -23,9 +23,9 @@ internal static class ModelBuilderExtensions
                 s => s == null ? null : WireName.Parse<TEnum>(s))
             .HasColumnType("text");
 
-    /// <summary>Stores a value object (usually a read-only list) as jsonb in the shared persistence JSON format.</summary>
+    /// <summary>Stores a value object (usually a read-only list) as jsonb in the shared persistence JSON format; null stays SQL NULL.</summary>
     public static PropertyBuilder<T> HasJsonConversion<T>(this PropertyBuilder<T> property)
-        where T : class
+        where T : class?
     {
         var comparer = new ValueComparer<T>(
             (a, b) => Serialize(a) == Serialize(b),
