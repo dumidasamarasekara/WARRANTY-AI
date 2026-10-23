@@ -72,6 +72,11 @@ internal sealed class ServiceCenterConfiguration : IEntityTypeConfiguration<Serv
         builder.Property(s => s.Region).HasWireName();
         builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
         builder.PrimitiveCollection(s => s.Capabilities);
+        builder.Ignore(s => s.Address); // T210 maps this
+        builder.Ignore(s => s.OpeningHours); // T210 maps this
+        builder.Ignore(s => s.Contact); // T210 maps this
+        builder.Ignore(s => s.IsActive); // T210 maps this
+        builder.Ignore(s => s.Priority); // T210 maps this
     }
 }
 
@@ -107,5 +112,6 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .OnDelete(DeleteBehavior.Restrict);
         builder.Property(n => n.Channel).HasWireName();
         builder.Property(n => n.Template).HasMaxLength(100).IsRequired();
+        builder.Ignore(n => n.DedupeKey); // T210 maps this
     }
 }
