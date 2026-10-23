@@ -12,8 +12,6 @@ namespace Warranty.UnitTests.Guardrails.Remedies;
 /// </summary>
 public sealed class RemedyPolicyEvaluatorTests
 {
-    private const string Pending = "Pending T224";
-
     /// <summary>Claim value of BOR-SLATE11 in quickstart R10: 60% is 288.00.</summary>
     private const decimal SlateClaimValue = 480m;
 
@@ -25,7 +23,7 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Covered defect and protection plan (initial scenario, R13) ------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_covered_defect_gets_Repair_set_by_policy_at_both_companies()
     {
         foreach (var rules in new[] { Aurora, Borealis })
@@ -34,18 +32,18 @@ public sealed class RemedyPolicyEvaluatorTests
         }
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_protection_plan_that_lifts_the_exclusion_gives_its_remedy()
         => Expect(
             Evaluator.Evaluate(Borealis, RemedyScenario.ProtectionPlanDamage), "protectionPlan", [RemedyType.Repair], single: RemedyType.Repair);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_protection_plan_that_does_not_lift_the_exclusion_gives_no_remedy_and_needs_a_reviewer()
         => Expect(
             Evaluator.Evaluate(Aurora, RemedyScenario.ProtectionPlanDamage), "protectionPlan", [],
             reason: RemedyPendingReason.NoRemedyRule);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void An_allowed_list_needs_a_reviewer_and_gives_no_recommendation()
     {
         var rules = new RemedyRules(
@@ -62,7 +60,7 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Missing rules, rows or information (FR-012) -------------------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RemedyScenario.CoveredDefect, "coveredDefect")]
     [InlineData(RemedyScenario.ProtectionPlanDamage, "protectionPlan")]
     [InlineData(RemedyScenario.RepairFailed, "repairFailed")]
@@ -72,7 +70,7 @@ public sealed class RemedyPolicyEvaluatorTests
             Evaluator.Evaluate(null, scenario, failedAttempts: 2, estimate: 400m, claimValue: SlateClaimValue), row, [],
             reason: RemedyPendingReason.NoRemedyRule);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_missing_row_sends_the_scenario_to_a_reviewer()
     {
         var empty = new RemedyRules(null, null, null, null);
@@ -84,13 +82,13 @@ public sealed class RemedyPolicyEvaluatorTests
             reason: RemedyPendingReason.NoRemedyRule);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Without_an_economic_limit_any_estimate_keeps_the_repair_going()
         => Expect(
             Evaluator.Evaluate(Aurora, RemedyScenario.RepairNotEconomical, estimate: 10_000m, claimValue: 450m), "repairNotEconomical", [],
             continueRepair: true);
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null, 480.0)]
     [InlineData(300.0, null)]
     public void A_missing_estimate_or_claim_value_sends_the_remedy_to_a_reviewer_instead_of_guessing(double? estimate, double? claimValue)
@@ -101,14 +99,14 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Repair failed (FR-005, FR-030, FR-031) ------------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void One_failed_attempt_below_the_limit_of_two_continues_the_repair()
     {
         Expect(Evaluator.Evaluate(Aurora, RemedyScenario.RepairFailed, failedAttempts: 1), "repairFailed", [], continueRepair: true);
         Expect(Evaluator.Evaluate(Borealis, RemedyScenario.RepairFailed, failedAttempts: 1), "repairFailed", [], continueRepair: true);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(2)]
     [InlineData(3)]
     public void At_or_above_the_limit_the_repair_failed_row_is_recommended_and_a_reviewer_confirms_it(int failedAttempts)
@@ -124,7 +122,7 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Repair not economical (FR-004, FR-032, quickstart R10) ---------------------------------------
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(283.20)] // 59%
     [InlineData(288.00)] // exactly 60%: economical
     public void An_estimate_at_or_below_the_limit_keeps_the_repair_going(double estimate)
@@ -132,14 +130,14 @@ public sealed class RemedyPolicyEvaluatorTests
             Evaluator.Evaluate(Borealis, RemedyScenario.RepairNotEconomical, estimate: (decimal)estimate, claimValue: SlateClaimValue),
             "repairNotEconomical", [], continueRepair: true, limit: 288.00m);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void An_estimate_strictly_above_the_limit_offers_the_row_without_a_recommendation()
         => Expect(
             Evaluator.Evaluate(Borealis, RemedyScenario.RepairNotEconomical, estimate: 288.01m, claimValue: SlateClaimValue),
             "repairNotEconomical", [RemedyType.Refund, RemedyType.Replacement], reason: RemedyPendingReason.RepairNotEconomical,
             limit: 288.00m);
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_single_not_economical_remedy_is_recommended_but_still_confirmed_by_a_reviewer()
     {
         var rules = new RemedyRules(null, new RepairNotEconomicalRule(50, RemedyType.Replacement, null), null, null);
@@ -154,7 +152,7 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Determinism (FR-010) -------------------------------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void Identical_inputs_give_identical_results()
     {
         foreach (var (rules, scenario, attempts, estimate) in new (RemedyRules, RemedyScenario, int, decimal?)[]
