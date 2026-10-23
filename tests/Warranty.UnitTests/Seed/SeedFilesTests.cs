@@ -97,7 +97,7 @@ public sealed class SeedFilesTests
         }
     }
 
-    [Fact(Skip = "Pending T215")]
+    [Fact]
     public void An_active_repair_centre_needs_an_address_and_opening_hours_but_an_inactive_one_does_not()
     {
         var root = CopyOfSeed();
