@@ -134,7 +134,7 @@ public sealed class SeedDataTests
         { "borealis", "BOR-WP-v1.md", nameof(RemedyRulesContract.Borealis) },
     };
 
-    [Theory(Skip = "Pending T215")]
+    [Theory]
     [MemberData(nameof(PolicyRemedyRules))]
     public void Every_policy_version_carries_its_tenants_remedy_rules_valid_against_the_schema(string slug, string file, string expected)
     {
@@ -149,7 +149,7 @@ public sealed class SeedDataTests
             rules, expected == nameof(RemedyRulesContract.Aurora) ? RemedyRulesContract.Aurora : RemedyRulesContract.Borealis);
     }
 
-    [Theory(Skip = "Pending T215")]
+    [Theory]
     [MemberData(nameof(Tenants))]
     public void Every_region_has_two_active_repair_centres_seeded_with_address_opening_hours_contact_and_priority(string slug)
     {

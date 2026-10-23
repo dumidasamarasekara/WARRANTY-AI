@@ -25,6 +25,11 @@ clauses:
   BOR-WP-3.2: { type: Exclusion, exclusionCode: UNAUTHORIZED_REPAIR }
   BOR-WP-4.1: { type: ServiceRule }
   BOR-WP-4.2: { type: ServiceRule }
+remedies:
+  coveredDefect: { remedy: Repair }
+  repairNotEconomical: { limitPercentOfClaimValue: 60, allowed: [Refund, Replacement] }
+  repairFailed: { afterFailedAttempts: 2, remedy: Refund }
+  protectionPlan: { liftsAccidentalDamageExclusion: true, remedy: Repair }
 ---
 # Borealis Care Warranty (version 1)
 

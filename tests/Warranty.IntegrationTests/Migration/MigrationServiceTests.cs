@@ -44,7 +44,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["catalog.products"] = 6,
             ["catalog.product_serials"] = 109,
             ["crm.customers"] = 9,
-            ["integration.service_centers"] = 5,
+            ["integration.service_centers"] = 8,
             ["claims.claims"] = 2,
             ["audit.decision_trail_entries"] = 4,
             ["policy.warranty_policies"] = 2,

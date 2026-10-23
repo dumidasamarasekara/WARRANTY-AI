@@ -27,6 +27,10 @@ clauses:
   AUR-WP-3.4: { type: Exclusion, exclusionCode: UNAUTHORIZED_REPAIR }
   AUR-WP-4.1: { type: ServiceRule }
   AUR-WP-4.2: { type: ServiceRule }
+remedies:
+  coveredDefect: { remedy: Repair }
+  repairFailed: { afterFailedAttempts: 2, remedy: Replacement }
+  protectionPlan: { liftsAccidentalDamageExclusion: false }
 ---
 # Aurora Limited Warranty (version 2)
 
