@@ -56,7 +56,9 @@ TestResults/
 *.coverage
 
 # ---- Build / tool output ----
-artifacts/
+artifacts/*
+# Validation records (T114, T116) are deliverables and are tracked.
+!artifacts/validation/
 src/web/dist/
 
 # ---- Node ----
