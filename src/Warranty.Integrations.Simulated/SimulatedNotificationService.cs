@@ -20,16 +20,18 @@ internal sealed class SimulatedNotificationService(
     }
 
     /// <remarks>
-    /// The key is stored on the outbox row; the unique index <c>(tenant_id, dedupe_key)</c> rejects a second
-    /// row when the unit of work is saved. Translating that violation into "already queued" is done in the
-    /// persistence layer (T212), so this method reports every call as queued.
+    /// The key is stored on the outbox row. A key already queued for the tenant (in this unit of work or saved)
+    /// is reported as <see cref="NotificationEnqueueResult.Duplicate"/>; a concurrent unit of work that queues
+    /// the same key first makes the unique index <c>(tenant_id, dedupe_key)</c> reject this row on save, and
+    /// the unit of work drops it as already queued (research R7).
     /// </remarks>
-    public Task<NotificationEnqueueResult> EnqueueAsync(Guid claimId, string template, string dedupeKey, CancellationToken ct)
+    public async Task<NotificationEnqueueResult> EnqueueAsync(Guid claimId, string template, string dedupeKey, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dedupeKey);
         var notification = Notification.Create(
             Guid.CreateVersion7(), tenantContext.TenantId, claimId, template, time.GetUtcNow(), dedupeKey);
-        integration.AddNotification(notification);
-        return Task.FromResult(NotificationEnqueueResult.Queued(notification.Id));
+        return await integration.TryAddNotificationAsync(notification, ct)
+            ? NotificationEnqueueResult.Queued(notification.Id)
+            : NotificationEnqueueResult.Duplicate;
     }
 }

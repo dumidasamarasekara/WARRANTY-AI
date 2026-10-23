@@ -183,6 +183,14 @@ public interface IIntegrationRepository
     void AddRepairRequest(RepairRequest request);
 
     void AddNotification(Notification notification);
+
+    /// <summary>
+    /// Adds a notification that carries a <see cref="Notification.DedupeKey"/> unless that key is already queued
+    /// for the tenant, in this unit of work or in the database; returns false ("already queued") then. A
+    /// concurrent unit of work that queues the same key first makes the unique index reject this row on save;
+    /// the unit of work then drops the row and saves the rest (research R7).
+    /// </summary>
+    Task<bool> TryAddNotificationAsync(Notification notification, CancellationToken ct);
 }
 
 /// <summary>Remedies of the current tenant's claims (<c>claims.claim_remedies</c>, <c>remedy_decisions</c>, <c>remedy_completions</c>).</summary>

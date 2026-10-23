@@ -151,6 +151,7 @@ public sealed class SimulatedIntegrationTests
     public async Task A_deduplicated_notification_carries_its_key()
     {
         var integration = Substitute.For<IIntegrationRepository>();
+        integration.TryAddNotificationAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(true);
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 9, 0, 0, TimeSpan.Zero));
         var claimId = Guid.NewGuid();
 
@@ -158,8 +159,24 @@ public sealed class SimulatedIntegrationTests
             .EnqueueAsync(claimId, "RepairReadyForCollection", "repair-ready:42", Ct);
 
         result.AlreadyQueued.ShouldBeFalse();
-        integration.Received(1).AddNotification(Arg.Is<Notification>(n =>
-            n.Id == result.NotificationId && n.TenantId == Aurora && n.ClaimId == claimId && n.DedupeKey == "repair-ready:42"));
+        await integration.Received(1).TryAddNotificationAsync(
+            Arg.Is<Notification>(n =>
+                n.Id == result.NotificationId && n.TenantId == Aurora && n.ClaimId == claimId && n.DedupeKey == "repair-ready:42"),
+            Arg.Any<CancellationToken>());
+        integration.DidNotReceive().AddNotification(Arg.Any<Notification>());
+    }
+
+    [Fact]
+    public async Task A_dedupe_key_that_is_already_queued_is_reported_as_duplicate()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        integration.TryAddNotificationAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(false);
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 9, 0, 0, TimeSpan.Zero));
+
+        var result = await new SimulatedNotificationService(integration, new FakeTenantContext(Aurora), time)
+            .EnqueueAsync(Guid.NewGuid(), "RepairReadyForCollection", "repair-ready:42", Ct);
+
+        result.ShouldBe(NotificationEnqueueResult.Duplicate);
     }
 
     [Fact]

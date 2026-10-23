@@ -131,7 +131,7 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
     {
         try
         {
-            await db.SaveChangesAsync(ct);
+            await SaveAsync(ct);
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -152,7 +152,7 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
             if (db.Database.CurrentTransaction is not null)
             {
                 await work(ct);
-                await db.SaveChangesAsync(ct);
+                await SaveAsync(ct);
                 return;
             }
 
@@ -162,7 +162,7 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
                 {
                     await using var transaction = await db.Database.BeginTransactionAsync(token);
                     await work(token);
-                    await db.SaveChangesAsync(token);
+                    await SaveAsync(token);
                     await transaction.CommitAsync(token);
                 },
                 ct);
@@ -170,6 +170,29 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
         catch (DbUpdateConcurrencyException ex)
         {
             throw Conflict(ex);
+        }
+    }
+
+    /// <summary>
+    /// Saves; a notification whose dedupe key a concurrent unit of work queued first is dropped as "already
+    /// queued" and the rest is saved again (in a transaction, EF Core rolled back to its savepoint).
+    /// </summary>
+    private async Task SaveAsync(CancellationToken ct)
+    {
+        while (true)
+        {
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+            catch (DbUpdateException ex) when (ex is not DbUpdateConcurrencyException && NotificationDeduplication.IsDedupeKeyViolation(ex))
+            {
+                if (!await NotificationDeduplication.DropAlreadyQueuedAsync(db, ct))
+                {
+                    throw;
+                }
+            }
         }
     }
 
