@@ -982,6 +982,10 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finalized_at");
 
+                    b.Property<bool>("HasProtectionPlan")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_protection_plan");
+
                     b.Property<string>("ProblemDescription")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -997,6 +1001,10 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("product_model_code");
+
+                    b.Property<bool?>("ProtectionPlanConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("protection_plan_confirmed");
 
                     b.Property<DateOnly>("PurchaseDate")
                         .HasColumnType("date")
@@ -1277,6 +1285,490 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                     b.ToTable("customers", "crm");
                 });
 
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.ClaimRemedy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<string[]>("AllowedRemedies")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_remedies");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<string>("PendingReason")
+                        .HasColumnType("text")
+                        .HasColumnName("pending_reason");
+
+                    b.Property<Guid>("PolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_version_id");
+
+                    b.Property<string>("Remedy")
+                        .HasColumnType("text")
+                        .HasColumnName("remedy");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Scenario")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scenario");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_claim_remedies");
+
+                    b.HasIndex("TenantId", "ClaimId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_claim_remedies_tenant_id_claim_id");
+
+                    b.HasIndex("TenantId", "PolicyVersionId")
+                        .HasDatabaseName("ix_claim_remedies_tenant_id_policy_version_id");
+
+                    b.ToTable("claim_remedies", "claims");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RemedyCompletion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<DateOnly>("CompletedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("completed_on");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid?>("RefundRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("refund_request_id");
+
+                    b.Property<string>("Remedy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("remedy");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_remedy_completions");
+
+                    b.HasIndex("TenantId", "ClaimId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_remedy_completions_tenant_id_claim_id");
+
+                    b.ToTable("remedy_completions", "claims");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RemedyDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("actor");
+
+                    b.PrimitiveCollection<string[]>("AllowedRemedies")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_remedies");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DecidedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("decided_by");
+
+                    b.Property<decimal?>("EstimateAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("estimate_amount");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("PolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_version_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Remedy")
+                        .HasColumnType("text")
+                        .HasColumnName("remedy");
+
+                    b.Property<string>("Scenario")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("scenario");
+
+                    b.Property<int>("Seq")
+                        .HasColumnType("integer")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("TableRow")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("table_row");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_remedy_decisions");
+
+                    b.HasIndex("TenantId", "PolicyVersionId")
+                        .HasDatabaseName("ix_remedy_decisions_tenant_id_policy_version_id");
+
+                    b.HasIndex("TenantId", "ClaimId", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_remedy_decisions_tenant_id_claim_id_seq");
+
+                    b.ToTable("remedy_decisions", "claims");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.Repair", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActiveHandoverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("active_handover_id");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CurrentAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_attempt_id");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<string>("NotPossibleReason")
+                        .HasColumnType("text")
+                        .HasColumnName("not_possible_reason");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_repairs");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_repairs_tenant_id_id");
+
+                    b.HasIndex("TenantId", "ClaimId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_repairs_tenant_id_claim_id");
+
+                    b.ToTable("repairs", "claims");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<decimal?>("EstimateAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("estimate_amount");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_id");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("result");
+
+                    b.Property<int>("Seq")
+                        .HasColumnType("integer")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid>("ServiceCenterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_center_id");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_repair_attempts");
+
+                    b.HasIndex("TenantId", "ServiceCenterId")
+                        .HasDatabaseName("ix_repair_attempts_tenant_id_service_center_id");
+
+                    b.HasIndex("TenantId", "RepairId", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_repair_attempts_tenant_id_repair_id_seq");
+
+                    b.ToTable("repair_attempts", "claims");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("actor");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<long?>("CorrectsEventId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("corrects_event_id");
+
+                    b.Property<string>("FromStatus")
+                        .HasColumnType("text")
+                        .HasColumnName("from_status");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_id");
+
+                    b.Property<DateTimeOffset>("ReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
+
+                    b.Property<int>("Seq")
+                        .HasColumnType("integer")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("ToStatus")
+                        .HasColumnType("text")
+                        .HasColumnName("to_status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_repair_events");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_repair_events_tenant_id_id");
+
+                    b.HasIndex("TenantId", "ClaimId")
+                        .HasDatabaseName("ix_repair_events_tenant_id_claim_id");
+
+                    b.HasIndex("TenantId", "CorrectsEventId")
+                        .HasDatabaseName("ix_repair_events_tenant_id_corrects_event_id");
+
+                    b.HasIndex("TenantId", "RepairId", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_repair_events_tenant_id_repair_id_seq");
+
+                    b.ToTable("repair_events", "audit");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairHandover", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Assignment")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("assignment");
+
+                    b.Property<string>("CentreReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("centre_reference");
+
+                    b.Property<DateOnly?>("HandedOverOn")
+                        .HasColumnType("date")
+                        .HasColumnName("handed_over_on");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_id");
+
+                    b.Property<Guid>("ServiceCenterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_center_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_repair_handovers");
+
+                    b.HasIndex("TenantId", "RepairId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_repair_handovers_one_active")
+                        .HasFilter("is_active");
+
+                    b.HasIndex("TenantId", "ServiceCenterId")
+                        .HasDatabaseName("ix_repair_handovers_tenant_id_service_center_id");
+
+                    b.ToTable("repair_handovers", "claims");
+                });
+
             modelBuilder.Entity("Warranty.Domain.Integration.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1296,6 +1788,11 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("dedupe_key");
+
                     b.Property<string>("Template")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1311,6 +1808,11 @@ namespace Warranty.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "ClaimId")
                         .HasDatabaseName("ix_notifications_tenant_id_claim_id");
+
+                    b.HasIndex("TenantId", "DedupeKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notifications_tenant_dedupe_key")
+                        .HasFilter("dedupe_key IS NOT NULL");
 
                     b.ToTable("notifications", "integration");
                 });
@@ -1360,16 +1862,39 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("address");
+
                     b.PrimitiveCollection<string[]>("Capabilities")
                         .IsRequired()
                         .HasColumnType("text[]")
                         .HasColumnName("capabilities");
+
+                    b.Property<string>("Contact")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("contact");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
+
+                    b.Property<string>("OpeningHours")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("opening_hours");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
 
                     b.Property<string>("Region")
                         .IsRequired()
@@ -1475,6 +2000,10 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text[]")
                         .HasColumnName("regions");
+
+                    b.Property<string>("RemedyRules")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("remedy_rules");
 
                     b.Property<string>("SourceBlobPath")
                         .IsRequired()
@@ -1945,6 +2474,130 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_customers_tenants_tenant_id");
                 });
 
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.ClaimRemedy", b =>
+                {
+                    b.HasOne("Warranty.Domain.Claims.Claim", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ClaimId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_claim_remedies_claims_tenant_id_claim_id");
+
+                    b.HasOne("Warranty.Domain.Policies.PolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "PolicyVersionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_claim_remedies_policy_versions_tenant_id_policy_version_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RemedyCompletion", b =>
+                {
+                    b.HasOne("Warranty.Domain.Claims.Claim", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ClaimId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_remedy_completions_claims_tenant_id_claim_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RemedyDecision", b =>
+                {
+                    b.HasOne("Warranty.Domain.Claims.Claim", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ClaimId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_remedy_decisions_claims_tenant_id_claim_id");
+
+                    b.HasOne("Warranty.Domain.Policies.PolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "PolicyVersionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_remedy_decisions_policy_versions_tenant_id_policy_version_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.Repair", b =>
+                {
+                    b.HasOne("Warranty.Domain.Claims.Claim", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ClaimId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repairs_claims_tenant_id_claim_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairAttempt", b =>
+                {
+                    b.HasOne("Warranty.Domain.Fulfillment.Repair", null)
+                        .WithMany("Attempts")
+                        .HasForeignKey("TenantId", "RepairId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_attempts_repairs_tenant_id_repair_id");
+
+                    b.HasOne("Warranty.Domain.Integration.ServiceCenter", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ServiceCenterId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_attempts_service_centers_tenant_id_service_center_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairEvent", b =>
+                {
+                    b.HasOne("Warranty.Domain.Claims.Claim", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ClaimId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_events_claims_tenant_id_claim_id");
+
+                    b.HasOne("Warranty.Domain.Fulfillment.RepairEvent", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "CorrectsEventId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_repair_events_repair_events_tenant_id_corrects_event_id");
+
+                    b.HasOne("Warranty.Domain.Fulfillment.Repair", null)
+                        .WithMany("Events")
+                        .HasForeignKey("TenantId", "RepairId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_events_repairs_tenant_id_repair_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.RepairHandover", b =>
+                {
+                    b.HasOne("Warranty.Domain.Fulfillment.Repair", null)
+                        .WithMany("Handovers")
+                        .HasForeignKey("TenantId", "RepairId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_handovers_repairs_tenant_id_repair_id");
+
+                    b.HasOne("Warranty.Domain.Integration.ServiceCenter", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ServiceCenterId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_repair_handovers_service_centers_tenant_id_service_center_id");
+                });
+
             modelBuilder.Entity("Warranty.Domain.Integration.Notification", b =>
                 {
                     b.HasOne("Warranty.Domain.Claims.Claim", null)
@@ -2054,6 +2707,15 @@ namespace Warranty.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tenant_settings_tenants_tenant_id");
+                });
+
+            modelBuilder.Entity("Warranty.Domain.Fulfillment.Repair", b =>
+                {
+                    b.Navigation("Attempts");
+
+                    b.Navigation("Events");
+
+                    b.Navigation("Handovers");
                 });
 #pragma warning restore 612, 618
         }
