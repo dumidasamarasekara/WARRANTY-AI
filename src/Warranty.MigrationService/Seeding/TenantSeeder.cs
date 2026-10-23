@@ -95,7 +95,9 @@ internal sealed class TenantSeeder(WarrantyDbContext db, ITenantContext tenantCo
         var centers = (await db.ServiceCenters.Select(c => c.Id).ToListAsync(ct)).ToHashSet();
         foreach (var center in seed.ServiceCenters.Where(c => !centers.Contains(c.Id)))
         {
-            db.ServiceCenters.Add(ServiceCenter.Create(center.Id, tenantId, center.Region, center.Name, center.Capabilities));
+            db.ServiceCenters.Add(ServiceCenter.Create(
+                center.Id, tenantId, center.Region, center.Name, center.Capabilities,
+                center.Address, center.OpeningHours, center.Contact, center.IsActive, center.Priority));
         }
 
         await db.SaveChangesAsync(ct);

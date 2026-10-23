@@ -129,7 +129,8 @@ public sealed class KnowledgeIngestor(
             source.ProductCategories,
             source.Terms!,
             sourcePath,
-            checksum);
+            checksum,
+            source.RemedyRules);
         policies.AddVersion(version);
 
         foreach (var section in sections)

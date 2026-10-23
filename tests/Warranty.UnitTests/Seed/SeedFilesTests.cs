@@ -1,4 +1,7 @@
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Integration;
+using Warranty.Domain.Policies;
 using Warranty.MigrationService.Seeding;
 
 namespace Warranty.UnitTests.Seed;
@@ -71,7 +74,7 @@ public sealed class SeedFilesTests
         }
     }
 
-    [Theory(Skip = "Pending T214")]
+    [Theory]
     [InlineData("  coveredDefect: { remedy: Repair, allowed: [Refund, Replacement] }", "remedy and allowed together")]
     [InlineData("  coveredDefect: { allowed: [Refund] }", "one-item allowed list")]
     [InlineData("  repairNotEconomical: { limitPercentOfClaimValue: 101, allowed: [Refund, Replacement] }", "limit 101")]
@@ -94,7 +97,7 @@ public sealed class SeedFilesTests
         }
     }
 
-    [Fact(Skip = "Pending T214")]
+    [Fact(Skip = "Pending T215")]
     public void An_active_repair_centre_needs_an_address_and_opening_hours_but_an_inactive_one_does_not()
     {
         var root = CopyOfSeed();
@@ -111,6 +114,84 @@ public sealed class SeedFilesTests
 
             File.WriteAllText(file, WithFirstCentre(original, isActive: false, without: "address"));
             Should.NotThrow(() => SeedFiles.Load(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Each_policy_version_carries_its_remedies_block_or_none()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var v2 = Path.Combine(root, "tenants", "aurora", "policies", "AUR-WP-v2.md");
+            File.WriteAllText(v2, WithRemedies(File.ReadAllText(v2), "remedies:\n  coveredDefect: { allowed: [Repair, Refund] }\n  repairFailed: { afterFailedAttempts: 3, remedy: Replacement }"));
+            var v1 = Path.Combine(root, "tenants", "aurora", "policies", "AUR-WP-v1.md");
+            File.WriteAllText(v1, WithRemedies(File.ReadAllText(v1), block: null));
+
+            var remedies = SeedFiles.Load(root).Tenants[0].PolicyRemedies;
+
+            remedies.Select(r => (r.BlobPath, r.PolicyCode, r.Version)).ShouldBe(
+                [("tenant-aurora/policies/AUR-WP-v1.md", "AUR-WP", 1), ("tenant-aurora/policies/AUR-WP-v2.md", "AUR-WP", 2)]);
+            remedies[0].RemedyRules.ShouldBeNull();
+            var rules = remedies[1].RemedyRules.ShouldNotBeNull();
+            rules.CoveredDefect!.Allowed.ShouldBe([RemedyType.Repair, RemedyType.Refund]);
+            rules.RepairFailed.ShouldBe(new RepairFailedRule(3, RemedyType.Replacement, null));
+            (rules.RepairNotEconomical, rules.ProtectionPlan).ShouldBe((null, null));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("remedies:\n  repairNotEconomical: { limitPercentOfClaimValue: 0, remedy: Refund }", "/repairNotEconomical/limitPercentOfClaimValue")]
+    [InlineData("remedies:\n  repairFailed: { afterFailedAttempts: \"2\", remedy: Refund }", "/repairFailed/afterFailedAttempts")]
+    [InlineData("remedies:\n  coveredDefect: { remedy: Swap }", "/coveredDefect/remedy")]
+    [InlineData("remedies:\n  goodwill: { remedy: Refund }", "")]
+    public void An_invalid_remedies_block_names_the_file_and_the_schema_location(string block, string location)
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var v1 = Path.Combine(root, "tenants", "borealis", "policies", "BOR-WP-v1.md");
+            File.WriteAllText(v1, WithRemedies(File.ReadAllText(v1), block));
+
+            var message = Should.Throw<InvalidDataException>(() => SeedFiles.Load(root)).Message;
+
+            message.ShouldContain("tenant-borealis/policies/BOR-WP-v1.md has an invalid remedies block");
+            message.ShouldContain($"remedies{location}");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Service_centers_read_address_hours_contact_activity_and_priority_with_defaults()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "tenants", "borealis", "service-centers.json"), """
+                [
+                  { "id": "22222222-0003-7000-8000-000000000001", "region": "NA", "name": "Open", "capabilities": ["tablet"],
+                    "address": "1 Test Lane", "openingHours": "Mon–Fri 09:00–17:00", "contact": "desk@example.com", "priority": 5 },
+                  { "id": "22222222-0003-7000-8000-000000000002", "region": "EU", "name": "Closed", "capabilities": ["tablet"], "isActive": false }
+                ]
+                """);
+
+            var centers = SeedFiles.Load(root).Tenants[1].ServiceCenters;
+
+            centers[0].ShouldBe(new ServiceCenterSeed(
+                Guid.Parse("22222222-0003-7000-8000-000000000001"), Region.NA, "Open", centers[0].Capabilities,
+                "1 Test Lane", "Mon–Fri 09:00–17:00", "desk@example.com", IsActive: true, Priority: 5));
+            (centers[1].IsActive, centers[1].Priority, centers[1].Address).ShouldBe((false, ServiceCenter.DefaultPriority, null));
         }
         finally
         {

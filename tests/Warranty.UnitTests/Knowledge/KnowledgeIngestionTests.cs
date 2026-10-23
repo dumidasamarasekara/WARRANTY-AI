@@ -4,6 +4,7 @@ using Warranty.Application.Abstractions.AI;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
 using Warranty.Knowledge.Ingestion;
 using Warranty.UnitTests.Infrastructure;
@@ -113,6 +114,40 @@ public sealed class KnowledgeIngestionTests
             .Message.ShouldContain(expected);
 
     [Fact]
+    public void The_remedies_block_is_parsed_into_typed_remedy_rules_and_a_policy_without_it_has_none()
+    {
+        var withRemedies = Policy.Replace(
+            "clauses:",
+            """
+            remedies:
+              coveredDefect: { remedy: Repair }
+              repairNotEconomical: { limitPercentOfClaimValue: 60, allowed: [Refund, Replacement] }
+              repairFailed: { afterFailedAttempts: 2, remedy: Refund }
+              protectionPlan: { liftsAccidentalDamageExclusion: true, remedy: Repair }
+            clauses:
+            """,
+            StringComparison.Ordinal);
+
+        var rules = FrontMatterParser.Parse(new KnowledgeSourceDocument("p.md", withRemedies)).RemedyRules.ShouldNotBeNull();
+
+        rules.CoveredDefect.ShouldBe(new RemedyChoice(RemedyType.Repair, null));
+        rules.RepairNotEconomical!.LimitPercentOfClaimValue.ShouldBe(60);
+        rules.RepairNotEconomical.Allowed.ShouldBe([RemedyType.Refund, RemedyType.Replacement]);
+        rules.RepairFailed.ShouldBe(new RepairFailedRule(2, RemedyType.Refund, null));
+        rules.ProtectionPlan.ShouldBe(new ProtectionPlanRule(true, RemedyType.Repair, null));
+        FrontMatterParser.Parse(new KnowledgeSourceDocument("p.md", Policy)).RemedyRules.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("  coveredDefect: { remedy: Swap }", "remedies.coveredDefect.remedy 'Swap'")]
+    [InlineData("  repairFailed: { remedy: Refund }", "remedies.repairFailed.afterFailedAttempts is required")]
+    [InlineData("  coveredDefect: { remedy: Repair, reason: x }", "not valid YAML")]
+    public void Malformed_remedies_are_rejected_by_the_parser(string row, string expected)
+        => Should.Throw<InvalidKnowledgeSourceException>(() => FrontMatterParser.Parse(new KnowledgeSourceDocument(
+                "p.md", Policy.Replace("clauses:", $"remedies:\n{row}\nclauses:", StringComparison.Ordinal))))
+            .Message.ShouldContain(expected);
+
+    [Fact]
     public void Policy_bodies_split_at_clause_headings_and_long_clauses_repeat_their_key()
     {
         var body = "# Title\n\n## AUR-WP-1 Coverage\nFirst paragraph.\n\nSecond paragraph.\n\n## AUR-WP-2\nShort.\n### Not a clause\nStill AUR-WP-2.";
@@ -150,6 +185,9 @@ public sealed class KnowledgeIngestionTests
     [InlineData("allowedRoles: [adjudication-service, claims-reviewer, auditor]", "allowedRoles: []", "allowedRoles must name")]
     [InlineData("productCategories: []", "productCategories: [tablet, phone]", "at most one category")]
     [InlineData("standardCoverageMonths: { NA: 12, EU: 24 }", "standardCoverageMonths: { NA: 12 }", "region EU")]
+    [InlineData("clauses:", "remedies:\n  coveredDefect: { allowed: [Refund] }\nclauses:", "remedies: Remedy row 'CoveredDefect' must allow between 2 and 3")]
+    [InlineData("clauses:", "remedies:\n  repairFailed: { afterFailedAttempts: 6, remedy: Refund }\nclauses:", "remedies: The repair-failed attempt limit")]
+    [InlineData("clauses:", "remedies:\n  protectionPlan: { liftsAccidentalDamageExclusion: false, remedy: Repair }\nclauses:", "remedies: A protection plan that does not lift")]
     public void Invalid_policy_sources_are_rejected(string find, string replace, string expected)
     {
         var source = FrontMatterParser.Parse(new KnowledgeSourceDocument("p.md", Policy.Replace(find, replace, StringComparison.Ordinal)));
@@ -203,6 +241,7 @@ public sealed class KnowledgeIngestionTests
         version.TenantId.ShouldBe(Aurora);
         version.SourceBlobPath.ShouldBe("tenant-aurora/policies/AUR-WP-v2.md");
         version.Terms.Excludes(ExclusionCode.LiquidDamage).ShouldBeTrue();
+        version.RemedyRules.ShouldBeNull();
         _policies.Clauses.Select(c => (c.ClauseKey, c.ClauseType, c.ExclusionCode)).ShouldBe(
         [
             ("AUR-WP-1", ClauseType.Coverage, (ExclusionCode?)null),
@@ -228,6 +267,16 @@ public sealed class KnowledgeIngestionTests
                                             && r.Route == "embedding" && r.Inputs.Count == 3),
             Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_new_policy_version_keeps_its_remedy_rules()
+    {
+        var content = Policy.Replace("clauses:", "remedies:\n  coveredDefect: { remedy: Replacement }\nclauses:", StringComparison.Ordinal);
+
+        await Ingestor(Aurora).IngestAsync(new KnowledgeSourceDocument("tenant-aurora/policies/AUR-WP-v2.md", content), TestContext.Current.CancellationToken);
+
+        _policies.Versions.ShouldHaveSingleItem().RemedyRules.ShouldBe(new RemedyRules(new RemedyChoice(RemedyType.Replacement, null), null, null, null));
     }
 
     [Fact]

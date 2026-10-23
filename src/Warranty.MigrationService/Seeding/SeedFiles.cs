@@ -2,6 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Common;
+using Warranty.Domain.Integration;
+using Warranty.Domain.Policies;
+using Warranty.Knowledge.Ingestion;
 
 namespace Warranty.MigrationService.Seeding;
 
@@ -26,7 +29,27 @@ public sealed record SerialSeed(string SerialNumber, string ModelCode, DateOnly?
 public sealed record CustomerSeed(
     Guid Id, string FullName, string Email, string? Phone, string? AddressLine, string? City, string? PostalCode, string Country);
 
-public sealed record ServiceCenterSeed(Guid Id, Region Region, string Name, IReadOnlyList<string> Capabilities);
+/// <summary>
+/// One repair centre of <c>service-centers.json</c> (data-model.md <c>integration.service_centers</c>).
+/// <see cref="Address"/> and <see cref="OpeningHours"/> are shown to claimants and required for an
+/// active centre; <see cref="Contact"/> is staff-only. A lower <see cref="Priority"/> is suggested first.
+/// </summary>
+public sealed record ServiceCenterSeed(
+    Guid Id,
+    Region Region,
+    string Name,
+    IReadOnlyList<string> Capabilities,
+    string? Address = null,
+    string? OpeningHours = null,
+    string? Contact = null,
+    bool IsActive = true,
+    int Priority = ServiceCenter.DefaultPriority);
+
+/// <summary>
+/// The validated <c>remedies</c> front-matter block of one seeded policy version; null
+/// <see cref="RemedyRules"/> means the version gives no remedy (FR-012).
+/// </summary>
+public sealed record PolicyRemediesSeed(string BlobPath, string PolicyCode, int Version, RemedyRules? RemedyRules);
 
 /// <summary>
 /// A finalized claim seeded as history (quickstart S18). Every <c>*DaysAgo</c> value is a signed day
@@ -72,7 +95,8 @@ public sealed record TenantSeedSet(
     IReadOnlyList<CustomerSeed> Customers,
     IReadOnlyList<ServiceCenterSeed> ServiceCenters,
     IReadOnlyList<HistoricalClaimSeed> HistoricalClaims,
-    IReadOnlyList<KnowledgeSeed> Knowledge);
+    IReadOnlyList<KnowledgeSeed> Knowledge,
+    IReadOnlyList<PolicyRemediesSeed> PolicyRemedies);
 
 public sealed record SeedSet(IReadOnlyList<TenantSeedSet> Tenants, IReadOnlyList<KnowledgeSeed> GlobalKnowledge);
 
@@ -133,6 +157,8 @@ public static class SeedFiles
             .Concat(history.Where(h => !emails.Contains(h.CustomerEmail)).Select(h => $"history claim {h.Reference} names unknown customer {h.CustomerEmail}"))
             .Concat(history.Where(h => !(h.PurchasedDaysAgo <= h.SubmittedDaysAgo && h.SubmittedDaysAgo <= h.FinalizedDaysAgo && h.FinalizedDaysAgo <= 0))
                 .Select(h => $"history claim {h.Reference} must be purchased, submitted and finalized in that order, in the past"))
+            .Concat(centers.GroupBy(c => c.Id).Where(g => g.Count() > 1).Select(g => $"service center {g.Key} is listed more than once"))
+            .Concat(centers.Where(c => c.Priority < 0).Select(c => $"service center {c.Name} has a negative priority"))
             .ToList();
         if (errors.Count > 0)
         {
@@ -140,7 +166,42 @@ public static class SeedFiles
         }
 
         var knowledge = Markdown(Path.Combine(folder, "policies"), $"{tenant.KnowledgeNamespace}/policies");
-        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge);
+        var remedies = knowledge.Select(k => Remedies(folder, k)).OfType<PolicyRemediesSeed>().ToList();
+        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge, remedies);
+    }
+
+    /// <summary>
+    /// Reads the <c>remedies</c> front-matter block of a warranty policy (research R1): first against the
+    /// embedded <c>remedy-rules.schema.json</c>, then through the ingestion parser and
+    /// <see cref="RemedyRules.Validate"/>, so an invalid block stops the seed before anything is written.
+    /// Null for a source that is not a warranty policy.
+    /// </summary>
+    private static PolicyRemediesSeed? Remedies(string folder, KnowledgeSeed seed)
+    {
+        var problems = RemedyRulesSchema.Validate(seed.Content);
+        KnowledgeSource? source = null;
+        if (problems.Count == 0)
+        {
+            try
+            {
+                source = FrontMatterParser.Parse(seed.ToDocument());
+                source.RemedyRules?.Validate();
+            }
+            catch (Exception ex) when (ex is InvalidKnowledgeSourceException or ArgumentException)
+            {
+                problems = [ex.Message];
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            throw new InvalidDataException(
+                $"Seed folder '{folder}': policy {seed.BlobPath} has an invalid remedies block: {string.Join("; ", problems)}.");
+        }
+
+        return source is { DocumentType: DocumentType.WarrantyPolicy, PolicyCode: { } code }
+            ? new PolicyRemediesSeed(seed.BlobPath, code, source.Version, source.RemedyRules)
+            : null;
     }
 
     private static List<KnowledgeSeed> Markdown(string folder, string blobPrefix)
