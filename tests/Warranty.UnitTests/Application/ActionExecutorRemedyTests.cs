@@ -28,8 +28,6 @@ namespace Warranty.UnitTests.Application;
 /// </summary>
 public sealed class ActionExecutorRemedyTests
 {
-    private const string Pending = "Pending T225";
-
     private static readonly Guid Tenant = GuardrailScenario.Tenant;
     private static readonly Guid CustomerId = Guid.Parse("0199b000-0000-7000-8000-0000000002d7");
     private static readonly Guid ProductId = Guid.Parse("0199b000-0000-7000-8000-0000000002e7");
@@ -106,7 +104,7 @@ public sealed class ActionExecutorRemedyTests
 
     // ── Remedy set by policy ───────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_automatic_approval_sets_Repair_by_policy_in_the_approval_transaction()
     {
         var claim = ArrangeAutomaticApproval(out var action);
@@ -133,7 +131,7 @@ public sealed class ActionExecutorRemedyTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Repair_creates_a_repair_at_the_first_centre_serving_the_claim_and_no_001_repair_request()
     {
         var claim = ArrangeAutomaticApproval(out var action);
@@ -152,7 +150,7 @@ public sealed class ActionExecutorRemedyTests
         await _refunds.DidNotReceiveWithAnyArgs().RequestRefundAsync(default, default, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Without_a_centre_serving_the_claim_the_repair_waits_for_staff_to_choose_one()
     {
         _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_otherCategory]);
@@ -167,7 +165,7 @@ public sealed class ActionExecutorRemedyTests
         _entries.Select(e => e.Step).ShouldNotContain(TrailStep.RepairCentreAssigned);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task The_trail_records_the_policy_basis_of_the_remedy_and_the_suggested_centre_and_keeps_the_approval_notification()
     {
         var claim = ArrangeAutomaticApproval(out var action);
@@ -202,7 +200,7 @@ public sealed class ActionExecutorRemedyTests
         await _notifications.Received(1).EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reviewer_approval_sets_the_policy_remedy_in_the_same_way()
     {
         var claim = ArrangeUnderReview();
@@ -222,7 +220,7 @@ public sealed class ActionExecutorRemedyTests
         await _repairRequests.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Refund_set_by_policy_calls_the_refund_port_exactly_once_with_the_claim_value_and_creates_no_repair()
     {
         UseRules(new RemedyRules(new RemedyChoice(RemedyType.Refund, null), null, null, null));
@@ -240,7 +238,7 @@ public sealed class ActionExecutorRemedyTests
 
     // ── Remedy awaiting a reviewer ─────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_choice_leaves_the_claim_Approved_with_the_remedy_awaiting_a_decision_and_no_side_effects()
     {
         UseRules(new RemedyRules(new RemedyChoice(null, [RemedyType.Refund, RemedyType.Replacement]), null, null, null));
@@ -262,7 +260,7 @@ public sealed class ActionExecutorRemedyTests
         _entries[1].Payload.GetProperty("pendingReason").GetString().ShouldBe("POLICY_CHOICE");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_version_without_remedy_rules_sends_the_remedy_to_a_reviewer_with_NO_REMEDY_RULE()
     {
         UseRules(null);
@@ -278,7 +276,7 @@ public sealed class ActionExecutorRemedyTests
         AddedRepairs.ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_retried_approval_does_not_set_a_second_remedy()
     {
         var claim = ArrangeAutomaticApproval(out var action);
@@ -353,15 +351,9 @@ public sealed class ActionExecutorRemedyTests
     /// The executor with the remedy ports. Pending T225, which adds the policy repository, the remedy and repair
     /// repositories, the refund port and the <see cref="RemedyPolicyEvaluator"/> to its constructor.
     /// </summary>
-    /// <summary>
-    /// The executor with the remedy ports. Pending T225, which adds the policy repository, the remedy and repair
-    /// repositories, the refund port and the <see cref="RemedyPolicyEvaluator"/> to its constructor:
-    /// <c>new(tenant, claims, adjudication, reviews, catalog, policies, network, remedies, repairs, refunds,
-    /// notifications, trail, unitOfWork, new RemedyPolicyEvaluator(), time)</c>.
-    /// </summary>
-    private ActionExecutor Executor()
-        => throw new NotImplementedException(
-            $"{Pending}: {_policies}, {_reviews}, {_remedies}, {_repairs}, {_refunds} and a {nameof(RemedyPolicyEvaluator)} are not constructor arguments yet.");
+    private ActionExecutor Executor() => new(
+        new FakeTenantContext(Tenant), _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairs, _refunds,
+        _notifications, _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
 
     private sealed record TrailRecord(TrailStep Step, string Actor, JsonElement Payload);
 }

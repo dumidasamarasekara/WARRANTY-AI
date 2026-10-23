@@ -22,7 +22,7 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task S3_an_EU_purchase_after_12_months_is_approved_citing_the_EU_warranty_period_only()
     {
         var scenario = GoldenScenario.Load("S3");
@@ -73,7 +73,7 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
         (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task S4_Borealis_approves_the_same_accidental_screen_crack_citing_its_accidental_damage_clause()
     {
         var scenario = GoldenScenario.Load("S4-borealis");

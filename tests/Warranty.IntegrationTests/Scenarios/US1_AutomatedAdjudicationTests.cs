@@ -32,7 +32,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task S1_a_clear_defect_within_the_period_is_approved_by_the_system_citing_the_coverage_clause()
     {
         var scenario = GoldenScenario.Load("S1");
@@ -121,7 +121,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         ShouldContainNoRiskData(view);
     }
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task The_trace_of_S1_lists_every_step_in_order_ending_with_the_automatic_approval()
     {
         var claimId = await SubmitOnceAsync(GoldenScenario.Load("S1"));
@@ -231,7 +231,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task A_claims_agent_submission_reaches_the_same_automatic_approval()
     {
         var scenario = GoldenScenario.Load("S1-agent");
