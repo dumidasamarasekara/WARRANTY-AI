@@ -51,6 +51,7 @@ public sealed class WireNameTests
                 "EVIDENCE_CONFLICT", "AI_DETERMINISTIC_DISAGREEMENT", "INVALID_RECOMMENDATION", "AI_UNAVAILABLE",
                 "AI_RECOMMENDS_REVIEW", "NO_APPLICABLE_POLICY", "AMBIGUOUS_POLICY", "PRODUCT_NOT_IN_CATALOG",
                 "RETURNED_AFTER_REVIEWER_REQUEST", "INFO_INCOMPLETE_AFTER_2_REQUESTS", "UNSAFE_CLAIMANT_TEXT",
+                "PROTECTION_PLAN_TO_CHECK",
             ],
             ignoreOrder: true);
 
@@ -70,8 +71,8 @@ public sealed class WireNameTests
             ignoreOrder: true);
 
     [Fact]
-    public void TrailStep_has_all_22_data_model_steps()
-        => WireName.All<TrailStep>().Count.ShouldBe(22);
+    public void TrailStep_has_the_22_data_model_steps_and_the_7_remedy_steps()
+        => WireName.All<TrailStep>().Count.ShouldBe(29);
 
     [Fact]
     public void Of_and_Parse_round_trip_every_value()
@@ -121,6 +122,7 @@ public sealed class WireNameTests
         EscalationReason.InfoIncompleteAfterTwoRequests.Label().ShouldBe("information still incomplete after 2 requests");
         EscalationReason.ValueAboveLimit.Label().ShouldBe("claim value above auto-approval limit");
         EscalationReason.AiUnavailable.Label().ShouldBe("AI analysis could not be completed");
+        EscalationReason.ProtectionPlanToCheck.Label().ShouldBe("protection plan to be checked");
     }
 
     [Fact]

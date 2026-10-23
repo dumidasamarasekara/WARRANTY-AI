@@ -15,6 +15,7 @@ public sealed class RequestedItemCatalogTests
     [InlineData(RequestedItemCodes.PurchaseDate, "Purchase date", "Please confirm the date you bought the product.")]
     [InlineData(RequestedItemCodes.ProblemDetails, "More detail about the problem", "Please describe the problem in more detail.")]
     [InlineData(RequestedItemCodes.Other, "Other information", "Please send us the additional information needed to assess your claim.")]
+    [InlineData(RequestedItemCodes.ProtectionPlanDocument, "Protection plan document", "Please upload the protection plan document for this product.")]
     public void Each_item_code_maps_to_a_label_and_a_standard_request(string item, string label, string text)
     {
         RequestedItemCatalog.IsKnown(item).ShouldBeTrue();

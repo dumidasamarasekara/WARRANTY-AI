@@ -53,6 +53,9 @@ public enum EscalationReason
 
     [JsonStringEnumMemberName("UNSAFE_CLAIMANT_TEXT")]
     UnsafeClaimantText,
+
+    [JsonStringEnumMemberName("PROTECTION_PLAN_TO_CHECK")]
+    ProtectionPlanToCheck,
 }
 
 public static class EscalationReasonExtensions
@@ -78,6 +81,7 @@ public static class EscalationReasonExtensions
         [EscalationReason.ReturnedAfterReviewerRequest] = "returned after reviewer information request",
         [EscalationReason.InfoIncompleteAfterTwoRequests] = "information still incomplete after 2 requests",
         [EscalationReason.UnsafeClaimantText] = "claimant explanation needs a reviewer",
+        [EscalationReason.ProtectionPlanToCheck] = "protection plan to be checked",
     }.ToFrozenDictionary();
 
     /// <summary>Readable label shown to reviewers and auditors.</summary>
