@@ -78,6 +78,12 @@ public sealed class Claim
 
     public DateTimeOffset? FinalizedAt { get; private set; }
 
+    /// <summary>The submitter declared a protection plan (extended warranty) at submission (002 FR-036).</summary>
+    public bool HasProtectionPlan { get; private set; }
+
+    /// <summary>The approving reviewer's check of the protection plan (002 research R9); null until reviewed.</summary>
+    public bool? ProtectionPlanConfirmed { get; private set; }
+
     public IReadOnlyList<RequestedItem> RequestedItems => _requestedItems;
 
     public int CurrentRound { get; private set; }
@@ -108,7 +114,8 @@ public sealed class Claim
         decimal purchasePrice,
         Region? region,
         string problemDescription,
-        DateTimeOffset submittedAt)
+        DateTimeOffset submittedAt,
+        bool hasProtectionPlan = false)
     {
         if (id == Guid.Empty || tenantId == Guid.Empty || customerId == Guid.Empty)
         {
@@ -167,6 +174,7 @@ public sealed class Claim
             PurchasePrice = decimal.Round(purchasePrice, 2),
             Region = region,
             ProblemDescription = description,
+            HasProtectionPlan = hasProtectionPlan,
             ClaimDate = claimDate,
             Status = ClaimStatus.Submitted,
             CurrentRound = 1,
@@ -239,6 +247,26 @@ public sealed class Claim
         }
 
         Status = ClaimStatus.UnderReview;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Records the reviewer's check of the declared protection plan while the claim is under review
+    /// (002 research R9). Only a claim whose submitter declared a plan can have it confirmed.
+    /// </summary>
+    public void RecordProtectionPlanCheck(bool confirmed, DateTimeOffset now)
+    {
+        if (Status != ClaimStatus.UnderReview)
+        {
+            throw new InvalidClaimTransitionException(Status, "record a protection plan check on");
+        }
+
+        if (!HasProtectionPlan)
+        {
+            throw new InvalidClaimTransitionException("The claim has no declared protection plan to check.");
+        }
+
+        ProtectionPlanConfirmed = confirmed;
         UpdatedAt = now;
     }
 

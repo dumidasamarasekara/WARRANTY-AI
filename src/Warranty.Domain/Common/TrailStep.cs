@@ -25,4 +25,13 @@ public enum TrailStep
     ActionExecuted,
     AiStepFailed,
     Correction,
+
+    // Remedies and the repair hand-over (002).
+    RemedyRecommended,
+    RemedyDecided,
+    RepairCentreAssigned,
+    RepairHandedOver,
+    RepairStatusUpdated,
+    RepairAttemptEnded,
+    RemedyCompleted,
 }

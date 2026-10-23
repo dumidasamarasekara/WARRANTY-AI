@@ -29,6 +29,7 @@ public static class RequestedItemCatalog
         new(RequestedItemCodes.PurchaseDate, "Purchase date", "Please confirm the date you bought the product."),
         new(RequestedItemCodes.ProblemDetails, "More detail about the problem", "Please describe the problem in more detail."),
         OtherItem,
+        new(RequestedItemCodes.ProtectionPlanDocument, "Protection plan document", "Please upload the protection plan document for this product."),
     }.ToFrozenDictionary(item => item.Item, StringComparer.Ordinal);
 
     /// <summary>Every known item, in <see cref="RequestedItemCodes"/> order.</summary>
@@ -37,7 +38,7 @@ public static class RequestedItemCatalog
         .. new[]
         {
             RequestedItemCodes.Invoice, RequestedItemCodes.LegibleInvoice, RequestedItemCodes.PhotoOfDamage, RequestedItemCodes.PhotoOfSerialLabel,
-            RequestedItemCodes.PurchaseDate, RequestedItemCodes.ProblemDetails, RequestedItemCodes.Other,
+            RequestedItemCodes.PurchaseDate, RequestedItemCodes.ProblemDetails, RequestedItemCodes.Other, RequestedItemCodes.ProtectionPlanDocument,
         }.Select(code => Items[code]),
     ];
 

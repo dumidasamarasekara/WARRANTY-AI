@@ -279,9 +279,38 @@ public sealed class ClaimStateMachineTests
         claim.ReviewerInfoRequested.ShouldBeFalse();
     }
 
+    [Fact]
+    public void A_declared_protection_plan_is_unchecked_until_the_reviewer_records_the_check()
+    {
+        var claim = NewClaim(hasProtectionPlan: true);
+        claim.HasProtectionPlan.ShouldBeTrue();
+        claim.ProtectionPlanConfirmed.ShouldBeNull();
+
+        Should.Throw<InvalidClaimTransitionException>(() => claim.RecordProtectionPlanCheck(true, Later));
+
+        claim.StartEvaluation(T0);
+        claim.EscalateToReview(T0);
+        claim.RecordProtectionPlanCheck(false, Later);
+
+        claim.ProtectionPlanConfirmed.ShouldBe(false);
+        claim.Status.ShouldBe(ClaimStatus.UnderReview);
+        claim.UpdatedAt.ShouldBe(Later);
+    }
+
+    [Fact]
+    public void A_claim_without_a_declared_protection_plan_cannot_have_one_confirmed()
+    {
+        var claim = ClaimIn(ClaimStatus.UnderReview);
+        claim.HasProtectionPlan.ShouldBeFalse();
+
+        Should.Throw<InvalidClaimTransitionException>(() => claim.RecordProtectionPlanCheck(true, Later));
+
+        claim.ProtectionPlanConfirmed.ShouldBeNull();
+    }
+
     private static DateTimeOffset Later => T0.AddHours(1);
 
-    private static Claim NewClaim() => Claim.Submit(
+    private static Claim NewClaim(bool hasProtectionPlan = false) => Claim.Submit(
         Guid.CreateVersion7(),
         Guid.Parse("11111111-1111-7111-8111-111111111111"),
         ClaimReference.Generate(),
@@ -298,7 +327,8 @@ public sealed class ClaimStateMachineTests
         450.00m,
         Region.NA,
         "The screen stays black after the latest charge and the device does not start.",
-        T0);
+        T0,
+        hasProtectionPlan);
 
     /// <summary>A claim brought to <paramref name="status"/> through allowed transitions only.</summary>
     private static Claim ClaimIn(ClaimStatus status)
