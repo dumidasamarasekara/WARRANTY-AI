@@ -159,6 +159,11 @@ public static class SeedFiles
                 .Select(h => $"history claim {h.Reference} must be purchased, submitted and finalized in that order, in the past"))
             .Concat(centers.GroupBy(c => c.Id).Where(g => g.Count() > 1).Select(g => $"service center {g.Key} is listed more than once"))
             .Concat(centers.Where(c => c.Priority < 0).Select(c => $"service center {c.Name} has a negative priority"))
+            // Claimants see an active centre's address and opening hours (data-model.md); inactive centres need neither.
+            .Concat(centers.Where(c => c.IsActive && string.IsNullOrWhiteSpace(c.Address))
+                .Select(c => $"active service center {c.Name} has no address"))
+            .Concat(centers.Where(c => c.IsActive && string.IsNullOrWhiteSpace(c.OpeningHours))
+                .Select(c => $"active service center {c.Name} has no opening hours"))
             .ToList();
         if (errors.Count > 0)
         {
