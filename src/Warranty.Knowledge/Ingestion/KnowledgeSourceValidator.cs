@@ -9,8 +9,9 @@ namespace Warranty.Knowledge.Ingestion;
 /// Checks a parsed source before anything is written (contracts/rag.md, research R26): the namespace
 /// is <c>global</c> (platform ingestion, no tenant context) or exactly the namespace of the tenant
 /// being ingested; a policy version does not overlap another version of the same policy; the
-/// <c>clauses</c> map types every <c>##</c> heading and nothing else; and every <c>Exclusion</c>
-/// clause names an exclusion code listed in <c>terms.exclusions</c>. All problems are reported at once.
+/// <c>clauses</c> map types every <c>##</c> heading and nothing else; every <c>Exclusion</c>
+/// clause names an exclusion code listed in <c>terms.exclusions</c>; and the optional <c>remedies</c>
+/// block passes <see cref="RemedyRules.Validate"/>. All problems are reported at once.
 /// </summary>
 public sealed class KnowledgeSourceValidator(ITenantContext tenantContext)
 {
@@ -56,9 +57,9 @@ public sealed class KnowledgeSourceValidator(ITenantContext tenantContext)
         }
         else
         {
-            if (source.PolicyCode is not null || source.Terms is not null || source.Clauses.Count > 0)
+            if (source.PolicyCode is not null || source.Terms is not null || source.RemedyRules is not null || source.Clauses.Count > 0)
             {
-                errors.Add("policyCode, terms and clauses are only allowed on WarrantyPolicy documents.");
+                errors.Add("policyCode, terms, remedies and clauses are only allowed on WarrantyPolicy documents.");
             }
 
             if (sections.Count == 0)
@@ -140,6 +141,15 @@ public sealed class KnowledgeSourceValidator(ITenantContext tenantContext)
             {
                 errors.Add($"terms: {ex.Message}");
             }
+        }
+
+        try
+        {
+            source.RemedyRules?.Validate();
+        }
+        catch (ArgumentException ex)
+        {
+            errors.Add($"remedies: {ex.Message}");
         }
 
         if (sections.Count == 0)

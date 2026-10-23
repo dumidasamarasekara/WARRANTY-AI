@@ -1,6 +1,7 @@
 using System.Globalization;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -24,6 +25,7 @@ public sealed record KnowledgeSource(
     DocumentClassification? Classification,
     IReadOnlyList<string> AllowedRoles,
     CoverageTerms? Terms,
+    RemedyRules? RemedyRules,
     IReadOnlyDictionary<string, ClauseDeclaration> Clauses,
     string Body);
 
@@ -75,6 +77,7 @@ public static class FrontMatterParser
             Optional(matter.Classification) is { } classification ? ParseEnum<DocumentClassification>(classification, "classification", errors) : null,
             (matter.AllowedRoles ?? []).Select(r => r.Trim()).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal).ToList(),
             matter.Terms is { } terms ? ToTerms(terms, errors) : null,
+            matter.Remedies is { } remedies ? ToRemedies(remedies, errors) : null,
             (matter.Clauses ?? []).ToDictionary(c => c.Key.Trim(), c => ToClause(c.Key, c.Value, errors), StringComparer.Ordinal),
             body);
 
@@ -114,6 +117,46 @@ public static class FrontMatterParser
             (terms.ComponentCoverageMonths ?? []).ToDictionary(c => c.Key.Trim().ToLowerInvariant(), c => c.Value, StringComparer.Ordinal),
             accidental,
             (terms.Exclusions ?? []).Select(e => ParseWire<ExclusionCode>(e, "terms.exclusions", errors)).ToList());
+    }
+
+    /// <summary>
+    /// The <c>remedies</c> block (contracts/remedy-rules.schema.json, research R1), typed but not yet
+    /// validated: <see cref="KnowledgeSourceValidator"/> checks it with <see cref="RemedyRules.Validate"/>.
+    /// </summary>
+    private static RemedyRules ToRemedies(RemediesMatter remedies, List<string> errors)
+    {
+        RemedyType? Remedy(string? value, string field)
+            => Optional(value) is { } text ? ParseEnum<RemedyType>(text, $"remedies.{field}.remedy", errors) : null;
+
+        List<RemedyType>? Allowed(List<string>? values, string field)
+            => values?.Select(v => ParseEnum<RemedyType>(v, $"remedies.{field}.allowed", errors)).ToList();
+
+        T RequiredValue<T>(T? value, string field)
+            where T : struct
+            => value ?? Missing(default(T), $"remedies.{field}", errors);
+
+        return new RemedyRules(
+            remedies.CoveredDefect is { } defect
+                ? new RemedyChoice(Remedy(defect.Remedy, "coveredDefect"), Allowed(defect.Allowed, "coveredDefect"))
+                : null,
+            remedies.RepairNotEconomical is { } uneconomical
+                ? new RepairNotEconomicalRule(
+                    RequiredValue(uneconomical.LimitPercentOfClaimValue, "repairNotEconomical.limitPercentOfClaimValue"),
+                    Remedy(uneconomical.Remedy, "repairNotEconomical"),
+                    Allowed(uneconomical.Allowed, "repairNotEconomical"))
+                : null,
+            remedies.RepairFailed is { } failed
+                ? new RepairFailedRule(
+                    RequiredValue(failed.AfterFailedAttempts, "repairFailed.afterFailedAttempts"),
+                    Remedy(failed.Remedy, "repairFailed"),
+                    Allowed(failed.Allowed, "repairFailed"))
+                : null,
+            remedies.ProtectionPlan is { } plan
+                ? new ProtectionPlanRule(
+                    RequiredValue(plan.LiftsAccidentalDamageExclusion, "protectionPlan.liftsAccidentalDamageExclusion"),
+                    Remedy(plan.Remedy, "protectionPlan"),
+                    Allowed(plan.Allowed, "protectionPlan"))
+                : null);
     }
 
     private static ClauseDeclaration ToClause(string key, ClauseMatter? clause, List<string> errors)
@@ -224,6 +267,8 @@ public static class FrontMatterParser
 
         public TermsMatter? Terms { get; set; }
 
+        public RemediesMatter? Remedies { get; set; }
+
         public Dictionary<string, ClauseMatter?>? Clauses { get; set; }
     }
 
@@ -245,6 +290,39 @@ public static class FrontMatterParser
         public int WindowMonths { get; set; }
 
         public int MaxIncidents { get; set; }
+    }
+
+    private sealed class RemediesMatter
+    {
+        public RemedyChoiceMatter? CoveredDefect { get; set; }
+
+        public RepairNotEconomicalMatter? RepairNotEconomical { get; set; }
+
+        public RepairFailedMatter? RepairFailed { get; set; }
+
+        public ProtectionPlanMatter? ProtectionPlan { get; set; }
+    }
+
+    private class RemedyChoiceMatter
+    {
+        public string? Remedy { get; set; }
+
+        public List<string>? Allowed { get; set; }
+    }
+
+    private sealed class RepairNotEconomicalMatter : RemedyChoiceMatter
+    {
+        public int? LimitPercentOfClaimValue { get; set; }
+    }
+
+    private sealed class RepairFailedMatter : RemedyChoiceMatter
+    {
+        public int? AfterFailedAttempts { get; set; }
+    }
+
+    private sealed class ProtectionPlanMatter : RemedyChoiceMatter
+    {
+        public bool? LiftsAccidentalDamageExclusion { get; set; }
     }
 
     private sealed class ClauseMatter
