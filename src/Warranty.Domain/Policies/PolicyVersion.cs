@@ -36,6 +36,9 @@ public sealed class PolicyVersion
 
     public CoverageTerms Terms { get; private set; }
 
+    /// <summary>Structured remedy rules; null means the version gives no remedy (FR-012).</summary>
+    public RemedyRules? RemedyRules { get; private set; }
+
     /// <summary>Original Markdown in the <c>knowledge-sources</c> container.</summary>
     public string SourceBlobPath { get; private set; }
 
@@ -53,7 +56,8 @@ public sealed class PolicyVersion
         IEnumerable<string> productCategories,
         CoverageTerms terms,
         string sourceBlobPath,
-        string checksum)
+        string checksum,
+        RemedyRules? remedyRules = null)
     {
         if (id == Guid.Empty || tenantId == Guid.Empty || policyId == Guid.Empty)
         {
@@ -74,6 +78,7 @@ public sealed class PolicyVersion
 
         ArgumentNullException.ThrowIfNull(terms);
         terms.Validate(regionList);
+        remedyRules?.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceBlobPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(checksum);
 
@@ -92,6 +97,7 @@ public sealed class PolicyVersion
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
             Terms = terms,
+            RemedyRules = remedyRules,
             SourceBlobPath = sourceBlobPath,
             Checksum = checksum,
         };
