@@ -155,6 +155,88 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             .ShouldBeTrue();
     }
 
+    /// <summary>
+    /// Feature 002 tables are empty until remedies are seeded, so the generic checks above would pass
+    /// vacuously. This probe writes a row of every new table for both tenants inside one rolled-back
+    /// transaction: as <c>warranty_app</c> with tenant Aurora it inserts Aurora's rows (positive control:
+    /// the grants and the WITH CHECK policy let them through), sees no Borealis row, and is refused a
+    /// Borealis row in every table; with tenant Borealis it sees the mirror image.
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "002")]
+    public async Task Rows_of_every_remedy_and_repair_table_are_visible_and_writable_only_for_their_own_tenant()
+    {
+        await using var owner = await OpenOwnerAsync();
+        await using var transaction = await owner.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        var aurora = await CreateProbeClaimAsync(owner, Aurora);
+        var borealis = await CreateProbeClaimAsync(owner, Borealis);
+        foreach (var table in RemedyAndRepairProbes)
+        {
+            await ExecuteAsync(owner, table.Insert, borealis.Parameters(table, newRepair: borealis.RepairId));
+        }
+
+        await ExecuteAsync(owner, "set local role warranty_app");
+        await SetLocalTenantAsync(owner, Aurora);
+        foreach (var table in RemedyAndRepairProbes)
+        {
+            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, aurora.Parameters(table, newRepair: aurora.RepairId)))
+                .ShouldBeNull($"{table.Name}: the app may write a row of its own tenant");
+        }
+
+        RemedyAndRepairProbes.Select(t => t.Name).ShouldBe(RemedyAndRepairTables, ignoreOrder: true);
+        foreach (var table in RemedyAndRepairProbes)
+        {
+            (await ScalarAsync<long>(owner, table.Count, aurora.Parameters(table))).ShouldBe(1, $"{table.Name}: own row");
+            (await ScalarAsync<long>(owner, table.Count, borealis.Parameters(table))).ShouldBe(0, $"{table.Name}: Borealis row");
+            (await ScalarAsync<long>(owner, $"select count(*) from {table.Name} where tenant_id is distinct from @aurora"))
+                .ShouldBe(0, $"{table.Name}: rows of other tenants");
+            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, borealis.Parameters(table, newRepair: Guid.CreateVersion7())))
+                .ShouldBe(PostgresErrorCodes.InsufficientPrivilege, $"{table.Name}: writing a Borealis row");
+        }
+
+        await SetLocalTenantAsync(owner, Borealis);
+        foreach (var table in RemedyAndRepairProbes)
+        {
+            (await ScalarAsync<long>(owner, table.Count, borealis.Parameters(table))).ShouldBe(1, $"{table.Name}: own row");
+            (await ScalarAsync<long>(owner, table.Count, aurora.Parameters(table))).ShouldBe(0, $"{table.Name}: Aurora row");
+        }
+
+        await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    [Trait("Feature", "002")]
+    public async Task A_repair_event_cannot_be_updated_or_deleted_by_the_app_or_the_owner()
+    {
+        await using var owner = await OpenOwnerAsync();
+        await using var transaction = await owner.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        var probe = await CreateProbeClaimAsync(owner, Aurora);
+        var events = RemedyAndRepairProbes.Single(t => t.Name == "audit.repair_events");
+        foreach (var table in RemedyAndRepairProbes.Where(t => t.Name is "claims.repairs" or "audit.repair_events"))
+        {
+            await ExecuteAsync(owner, table.Insert, probe.Parameters(table, newRepair: probe.RepairId));
+        }
+
+        var scope = probe.Parameters(events);
+        (await ScalarAsync<long>(owner, events.Count, scope)).ShouldBe(1);
+
+        // The append-only trigger stops even the owner.
+        (await SqlStateInSavepointAsync(owner, transaction, "update audit.repair_events set note = 'changed' where repair_id = @repair", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+        (await SqlStateInSavepointAsync(owner, transaction, "delete from audit.repair_events where repair_id = @repair", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        await ExecuteAsync(owner, "set local role warranty_app");
+        await SetLocalTenantAsync(owner, Aurora);
+        (await ScalarAsync<long>(owner, events.Count, scope)).ShouldBe(1, "the app sees its tenant's event");
+        (await SqlStateInSavepointAsync(owner, transaction, "update audit.repair_events set note = 'changed' where repair_id = @repair", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+        (await SqlStateInSavepointAsync(owner, transaction, "delete from audit.repair_events where repair_id = @repair", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public async Task Knowledge_of_another_tenants_namespace_is_invisible()
     {
@@ -248,6 +330,113 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
         (await SqlStateInRolledBackTransactionAsync(owner, "delete from audit.security_events"))
             .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+    }
+
+    /// <summary>
+    /// One row of each feature-002 table, parameterised by tenant (<c>@tenant</c>), probe claim (<c>@claim</c>),
+    /// policy version (<c>@pv</c>), repair centre (<c>@centre</c>) and repair (<c>@repair</c>; the repair row
+    /// itself uses <c>@newRepair</c>), with <see cref="ProbeTable.Count"/> counting the probe's rows.
+    /// </summary>
+    private static readonly ProbeTable[] RemedyAndRepairProbes =
+    [
+        new("claims.claim_remedies", "claim_id = @claim",
+            "insert into claims.claim_remedies (id, tenant_id, claim_id, policy_version_id, scenario, state, remedy, allowed_remedies, updated_at) " +
+            "values (gen_random_uuid(), @tenant, @claim, @pv, 'CoveredDefect', 'InProgress', 'Repair', array['Repair'], now())"),
+        new("claims.remedy_decisions", "claim_id = @claim",
+            "insert into claims.remedy_decisions (id, tenant_id, claim_id, seq, kind, scenario, policy_version_id, table_row, allowed_remedies, " +
+            "remedy, decided_by, actor, failed_attempts, created_at) values (gen_random_uuid(), @tenant, @claim, 1, 'Evaluated', " +
+            "'CoveredDefect', @pv, 'coveredDefect', array['Repair'], 'Repair', 'Policy', 'rls-test-002', 0, now())"),
+        new("claims.remedy_completions", "claim_id = @claim",
+            "insert into claims.remedy_completions (id, tenant_id, claim_id, remedy, completed_on, recorded_by, recorded_at) " +
+            "values (gen_random_uuid(), @tenant, @claim, 'Repair', current_date, 'rls-test-002', now())"),
+        new("claims.repairs", "claim_id = @claim",
+            "insert into claims.repairs (id, tenant_id, claim_id, status, failed_attempts, created_at, updated_at) " +
+            "values (@newRepair, @tenant, @claim, 'AwaitingHandover', 0, now(), now())"),
+        new("claims.repair_handovers", "repair_id = @repair",
+            "insert into claims.repair_handovers (id, tenant_id, repair_id, service_center_id, assignment, is_active, recorded_by, recorded_at) " +
+            "values (gen_random_uuid(), @tenant, @repair, @centre, 'Suggested', false, 'rls-test-002', now())"),
+        new("claims.repair_attempts", "repair_id = @repair",
+            "insert into claims.repair_attempts (id, tenant_id, repair_id, seq, service_center_id, result, started_at) " +
+            "values (gen_random_uuid(), @tenant, @repair, 1, @centre, 'InProgress', now())"),
+        new("audit.repair_events", "repair_id = @repair",
+            "insert into audit.repair_events (tenant_id, repair_id, claim_id, seq, type, reported_at, recorded_at, source, actor, payload) " +
+            "values (@tenant, @repair, @claim, 1, 'CentreChanged', now(), now(), 'Phone', 'rls-test-002', '{}'::jsonb)"),
+    ];
+
+    private sealed record ProbeTable(string Name, string Scope, string Insert)
+    {
+        public string Count => $"select count(*) from {Name} where {Scope}";
+    }
+
+    /// <summary>The parent rows a probe needs in one tenant: a new claim, and a seeded policy version and centre.</summary>
+    private sealed record ProbeClaim(Guid TenantId, Guid ClaimId, Guid PolicyVersionId, Guid CentreId, Guid RepairId)
+    {
+        /// <summary>Parameters for <paramref name="table"/>; <paramref name="newRepair"/> is the id a repair insert uses.</summary>
+        public (string Name, object Value)[] Parameters(ProbeTable table, Guid? newRepair = null)
+        {
+            var parameters = new List<(string, object)>();
+            void Add(string name, object value)
+            {
+                if (table.Insert.Contains('@' + name, StringComparison.Ordinal) || table.Scope.Contains('@' + name, StringComparison.Ordinal))
+                {
+                    parameters.Add((name, value));
+                }
+            }
+
+            Add("tenant", TenantId);
+            Add("claim", ClaimId);
+            Add("pv", PolicyVersionId);
+            Add("centre", CentreId);
+            Add("repair", RepairId);
+            Add("newRepair", newRepair ?? RepairId);
+            return [.. parameters];
+        }
+    }
+
+    /// <summary>Creates (as the owner, inside the caller's transaction) an approved claim of the tenant to hang the probe rows on.</summary>
+    private static async Task<ProbeClaim> CreateProbeClaimAsync(NpgsqlConnection owner, Guid tenant)
+    {
+        var claimId = Guid.CreateVersion7();
+        var reference = "R" + Guid.NewGuid().ToString("N")[..9].ToUpperInvariant();
+        await ExecuteAsync(
+            owner,
+            """
+            insert into claims.claims (id, tenant_id, reference, channel, submitted_by, customer_id, product_model_code, product_id,
+                serial_number, purchase_date, purchase_place, purchase_price, region, problem_description, claim_date, status,
+                requested_items, current_round, auto_info_request_count, reviewer_info_requested, created_at, updated_at)
+            select @claim, @tenant, @reference, 'Claimant', 'rls-test-002', c.id, p.model_code, p.id,
+                'RLS-002-PROBE', current_date - 30, 'RLS probe', 1, 'NA', 'Row-level security probe for feature 002.', current_date,
+                'Approved', '[]'::jsonb, 1, 0, false, now(), now()
+            from crm.customers c cross join catalog.products p
+            where c.tenant_id = @tenant and p.tenant_id = @tenant
+            limit 1
+            """,
+            ("claim", claimId), ("tenant", tenant), ("reference", reference));
+
+        var policyVersion = await ScalarAsync<Guid>(owner, "select id from policy.policy_versions where tenant_id = @tenant limit 1", ("tenant", tenant));
+        var centre = await ScalarAsync<Guid>(owner, "select id from integration.service_centers where tenant_id = @tenant limit 1", ("tenant", tenant));
+        return new ProbeClaim(tenant, claimId, policyVersion, centre, Guid.CreateVersion7());
+    }
+
+    private static Task SetLocalTenantAsync(NpgsqlConnection connection, Guid tenant)
+        => ExecuteAsync(connection, "select set_config('app.tenant_id', @tenant, true)", ("tenant", tenant.ToString()));
+
+    /// <summary>The SQLSTATE the statement fails with (null on success), keeping the surrounding transaction usable.</summary>
+    private static async Task<string?> SqlStateInSavepointAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, params (string Name, object Value)[] parameters)
+    {
+        await transaction.SaveAsync("probe", TestContext.Current.CancellationToken);
+        try
+        {
+            await ExecuteAsync(connection, sql, parameters);
+            await transaction.ReleaseAsync("probe", TestContext.Current.CancellationToken);
+            return null;
+        }
+        catch (PostgresException exception)
+        {
+            await transaction.RollbackAsync("probe", TestContext.Current.CancellationToken);
+            return exception.SqlState;
+        }
     }
 
     /// <summary>Every table with a <c>tenant_id</c> column that the tenant policy covers.</summary>
