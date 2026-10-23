@@ -23,6 +23,14 @@ export type TrailStep =
   | 'ActionExecuted'
   | 'AiStepFailed'
   | 'Correction'
+  // Remedies and the repair hand-over (002 data-model.md)
+  | 'RemedyRecommended'
+  | 'RemedyDecided'
+  | 'RepairCentreAssigned'
+  | 'RepairHandedOver'
+  | 'RepairStatusUpdated'
+  | 'RepairAttemptEnded'
+  | 'RemedyCompleted'
 
 const stepLabels: Record<TrailStep, string> = {
   ClaimSubmitted: 'Claim submitted',
@@ -47,6 +55,14 @@ const stepLabels: Record<TrailStep, string> = {
   ActionExecuted: 'Action executed',
   AiStepFailed: 'AI step failed',
   Correction: 'Correction',
+  // The remedy comes from the tenant's remedy table, never from the AI (FR-014), hence "from policy".
+  RemedyRecommended: 'Remedy from policy',
+  RemedyDecided: 'Remedy decided',
+  RepairCentreAssigned: 'Repair centre assigned',
+  RepairHandedOver: 'Handed over to repair centre',
+  RepairStatusUpdated: 'Repair status updated',
+  RepairAttemptEnded: 'Repair attempt ended',
+  RemedyCompleted: 'Remedy completed',
 }
 
 const agentActors = new Set(['intake', 'evidence', 'policy', 'decision'])
