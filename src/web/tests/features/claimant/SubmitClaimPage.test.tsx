@@ -162,6 +162,7 @@ describe('SubmitClaimPage', () => {
           product: { modelCode: 'AP7-220', serialNumber: 'SN-0001' },
           purchase: { date: '2025-01-15', place: 'Example Store', price: 499.99, currency: 'USD', country: 'US' },
           problemDescription: 'The control panel stopped responding after two weeks of normal use.',
+          hasProtectionPlan: false,
         },
         claimType: 'application/json',
         invoice: ['invoice.pdf'],

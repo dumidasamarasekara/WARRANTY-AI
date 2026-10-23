@@ -44,7 +44,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 **Purpose**: Contract and schema in place before code depends on them
 
-- [ ] T201 Merge [contracts/rest-api.delta.openapi.yaml](./contracts/rest-api.delta.openapi.yaml) into the canonical `specs/001-ai-claim-adjudication/contracts/rest-api.openapi.yaml`: add the four new paths under a `Fulfillment` tag, fold the `*Additions` schemas into `ClaimDetail`, `ReviewQueueItem`, `ReviewDecisionRequest`, `ClaimSubmissionForm`/`ClaimSubmissionData` and `ClaimantClaimView`, add the new schemas and the new `TrailStep` values; regenerate `src/web/src/shared/api/schema.d.ts` with `npm --prefix src/web run gen:api` and make `npm --prefix src/web run build` pass
+- [X] T201 Merge [contracts/rest-api.delta.openapi.yaml](./contracts/rest-api.delta.openapi.yaml) into the canonical `specs/001-ai-claim-adjudication/contracts/rest-api.openapi.yaml`: add the four new paths under a `Fulfillment` tag, fold the `*Additions` schemas into `ClaimDetail`, `ReviewQueueItem`, `ReviewDecisionRequest`, `ClaimSubmissionForm`/`ClaimSubmissionData` and `ClaimantClaimView`, add the new schemas and the new `TrailStep` values; regenerate `src/web/src/shared/api/schema.d.ts` with `npm --prefix src/web run gen:api` and make `npm --prefix src/web run build` pass
 - [X] T202 [P] Add the remedy rules schema for seed validation: copy `specs/002-remedy-repair-handover/contracts/remedy-rules.schema.json` to `src/Warranty.MigrationService/Seeding/Schemas/remedy-rules.schema.json` as an embedded resource in `src/Warranty.MigrationService/Warranty.MigrationService.csproj`, and add a `JsonSchema.Net` package reference there (already in `Directory.Packages.props`, used by the AI Gateway and Harness)
 
 ---

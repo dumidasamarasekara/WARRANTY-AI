@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: Warranty AI Platform API (PoC)
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    REST API for the multi-tenant warranty claim adjudication PoC.
+    REST API for the multi-tenant warranty claim adjudication PoC, including remedies and the
+    repair hand-over (specs/002-remedy-repair-handover, merged from its delta contract).
 
     Tenant resolution (never from request bodies or query strings):
     - Public claimant endpoints (`/api/public/...`): tenant from the request Host via the server-side
@@ -12,6 +13,10 @@ info:
 
     Resources of another tenant are reported as `404` (never `403`) and recorded as security events.
     Errors use RFC 9457 Problem Details. Every response carries `X-Correlation-Id`.
+    If-Match carries the ETag of the resource being changed.
+
+    Fulfillment roles: claims-agent and claims-reviewer may record repair events and remedy
+    completions; only claims-reviewer may decide remedies; auditor is read-only.
 servers:
   - url: https://localhost:7443
     description: Local API (Aspire)
@@ -20,6 +25,8 @@ tags:
     description: Claimant channel (no account; tenant from Host)
   - name: Claims
   - name: Review
+  - name: Fulfillment
+    description: Remedies (repair, replacement, refund) of approved claims and the repair hand-over
   - name: Trace
   - name: Reference
 security:
@@ -43,6 +50,7 @@ paths:
     post:
       tags: [Public]
       summary: Submit a claim through the tenant's claimant channel (FR-007)
+      description: Accepts the protection plan statement and document (002 FR-036).
       security: []
       requestBody:
         required: true
@@ -85,7 +93,10 @@ paths:
   /api/public/claims/{reference}:
     get:
       tags: [Public]
-      summary: Claimant view of a claim (status, outcome explanation, requested items)
+      summary: Claimant view of a claim (status, outcome explanation, requested items, remedy)
+      description: >
+        Includes the remedy and its progress (002 FR-039 – FR-041). Never contains notes, centre
+        references, failure reasons, staff names or risk data.
       security:
         - claimantToken: []
       parameters:
@@ -164,7 +175,9 @@ paths:
     post:
       tags: [Claims]
       summary: Claims agent submits a claim on a customer's behalf (FR-007)
-      description: Role claims-agent. Tenant comes from the agent's token.
+      description: >
+        Role claims-agent. Tenant comes from the agent's token. Accepts the protection plan
+        statement and document (002 FR-036).
       requestBody:
         required: true
         content:
@@ -192,6 +205,9 @@ paths:
         risk-related guardrails.reasons (RISK_MEDIUM, RISK_HIGH, EVIDENCE_CONFLICT,
         AI_DETERMINISTIC_DISAGREEMENT, UNSAFE_CLAIMANT_TEXT) are replaced by a single
         "Additional checks required" (FR-005).
+        Includes remedy and repair once the claim is approved and, while the claim is
+        UnderReview, remedyPreview (002). The remedy and the repair carry their own ETags for
+        If-Match.
       parameters:
         - $ref: '#/components/parameters/ClaimId'
       responses:
@@ -249,8 +265,10 @@ paths:
   /api/review-queue:
     get:
       tags: [Review]
-      summary: Escalated claims of the reviewer's tenant (FR-032)
-      description: Role claims-reviewer.
+      summary: Escalated claims and pending remedy decisions of the reviewer's tenant (FR-032)
+      description: >
+        Role claims-reviewer. A claim whose remedy is AwaitingDecision appears with kind
+        RemedyDecision (002).
       responses:
         '200':
           description: Review queue
@@ -272,6 +290,10 @@ paths:
         rejected with 400 when it contains risk/fraud terms or reference IDs (FR-036, FR-037).
         A RequestInformation decision marks the claim so that, after the supplement, it is
         re-evaluated and returns to this queue instead of being finalized automatically (FR-034).
+        Approving also decides the remedy (002): for Approve, `remedy` may be omitted only when
+        the remedy preview gives exactly one remedy; otherwise it is required and must be one of
+        the preview's allowed remedies (400 naming the allowed remedies). `remedy` and
+        `protectionPlanConfirmed` must be absent for Reject and RequestInformation.
       parameters:
         - $ref: '#/components/parameters/ClaimId'
         - name: If-Match
@@ -297,6 +319,128 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/ProblemDetails' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/Problem' }
+
+  /api/claims/{claimId}/repair-centres:
+    get:
+      tags: [Fulfillment]
+      summary: Eligible repair centres for the claim (002 FR-018, FR-019)
+      description: >
+        Any staff role. Active centres of the caller's tenant. Centres serving the claim's region
+        and product category come first, ordered by priority then name; the first is
+        `suggested`. When none serves them, every active centre of the tenant is listed with
+        `servesClaim: false`.
+      parameters:
+        - $ref: '#/components/parameters/ClaimId'
+      responses:
+        '200':
+          description: Eligible centres
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RepairCentre' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/claims/{claimId}/remedy-decisions:
+    post:
+      tags: [Fulfillment]
+      summary: Decide or change the remedy of an approved claim (002 FR-011, FR-013, FR-015)
+      description: >
+        Role claims-reviewer. Allowed when the remedy is AwaitingDecision, or InProgress before
+        the product was handed over (Repair) or before completion (Replacement, Refund).
+        `remedy` must be one of the remedy's `allowedRemedies` (400 otherwise). `reason` is
+        required for every decision except the first decision of a policy choice. A reviewer who
+        submitted the claim gets 403 and a SELF_REVIEW_REFUSED security event. Applied through
+        the ActionExecutor. Choosing Refund requests the refund through the refund option;
+        choosing Repair creates the repair with a suggested centre.
+      parameters:
+        - $ref: '#/components/parameters/ClaimId'
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag of the claim's remedy (RemedyView.etag)
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemedyDecisionRequest' }
+      responses:
+        '201':
+          description: Remedy decided
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RemedyView' }
+        '400': { $ref: '#/components/responses/ValidationProblem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/Problem' }
+
+  /api/claims/{claimId}/repair/events:
+    post:
+      tags: [Fulfillment]
+      summary: Record a repair-centre update reported to staff (002 FR-019 – FR-033)
+      description: >
+        Roles claims-agent and claims-reviewer. One request records one event; the event type
+        must be allowed from the repair's current status (002 data-model.md, Repair state
+        machine), otherwise 409 with the current status and the allowed event types.
+        `reportedAt` must not be in the future or before the hand-over (400). A repeated request
+        still carries the ETag from before the first one applied, so it gets 412 and cannot
+        apply twice; MarkedReady also queues at most one notification per attempt.
+      parameters:
+        - $ref: '#/components/parameters/ClaimId'
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag of the claim's repair (RepairView.etag)
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RepairEventRequest' }
+      responses:
+        '201':
+          description: Event recorded; the updated repair is returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RepairView' }
+        '400': { $ref: '#/components/responses/ValidationProblem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/Problem' }
+
+  /api/claims/{claimId}/remedy-completions:
+    post:
+      tags: [Fulfillment]
+      summary: Record completion of a Replacement or Refund remedy (002 FR-034, FR-035)
+      description: >
+        Roles claims-agent and claims-reviewer. `remedy` must equal the current remedy and the
+        remedy must be InProgress. `reference` is required for Refund. A Repair completes through
+        the Collected repair event instead.
+      parameters:
+        - $ref: '#/components/parameters/ClaimId'
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag of the claim's remedy (RemedyView.etag)
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemedyCompletionRequest' }
+      responses:
+        '201':
+          description: Remedy completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RemedyView' }
+        '400': { $ref: '#/components/responses/ValidationProblem' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '412': { $ref: '#/components/responses/Problem' }
@@ -475,6 +619,12 @@ components:
           minItems: 1
           maxItems: 8
           items: { type: string, format: binary }
+        protectionPlanDocument:
+          type: string
+          format: binary
+          description: >
+            PDF or image; requested as PROTECTION_PLAN_DOCUMENT when claim.hasProtectionPlan is
+            true and it is missing (002 FR-036)
       description: >
         Multipart: part `claim` is JSON (application/json). The body contains no tenant field;
         any tenant-like field is ignored.
@@ -517,6 +667,10 @@ components:
             currency: { type: string, pattern: '^[A-Z]{3}$' }
             country: { type: string, pattern: '^[A-Z]{2}$' }
         problemDescription: { type: string, minLength: 20, maxLength: 4000 }
+        hasProtectionPlan:
+          type: boolean
+          default: false
+          description: The claimant states the product is covered by a protection plan (002 FR-036)
 
     SupplementForm:
       type: object
@@ -571,6 +725,9 @@ components:
           type: array
           description: What the claimant is asked to supply; empty unless Pending Information
           items: { $ref: '#/components/schemas/RequestedItem' }
+        remedy:
+          $ref: '#/components/schemas/ClaimantRemedyView'
+          description: Present once the claim is approved (002 FR-039 – FR-041)
 
     RequestedItem:
       type: object
@@ -690,6 +847,19 @@ components:
         reviewerInfoRequested:
           type: boolean
           description: A reviewer has requested more information; later rounds always return to review (FR-034)
+        hasProtectionPlan: { type: boolean, description: The claim states a protection plan (002 FR-036) }
+        remedy:
+          $ref: '#/components/schemas/RemedyView'
+          description: Present once the claim is approved (002)
+        repair:
+          $ref: '#/components/schemas/RepairView'
+          description: Present when the remedy is or was Repair (002)
+        remedyPreview:
+          $ref: '#/components/schemas/RemedyPreview'
+          description: Present while the claim is UnderReview; what approving would set (002)
+        remedyPreviewWithProtectionPlan:
+          $ref: '#/components/schemas/RemedyPreview'
+          description: Present only when the claim states a plan and the policy lets a plan lift the exclusion
 
     EvidenceItem:
       type: object
@@ -870,8 +1040,13 @@ components:
 
     ReviewQueueItem:
       type: object
-      required: [claimId, reference, productName, escalatedAt, submittedByMe, escalationReasons]
+      required: [claimId, reference, productName, escalatedAt, submittedByMe, escalationReasons, kind]
       properties:
+        kind:
+          type: string
+          enum: [ClaimDecision, RemedyDecision]
+          description: RemedyDecision for an approved claim whose remedy is AwaitingDecision (002)
+        remedyPendingReason: { $ref: '#/components/schemas/RemedyPendingReason' }
         claimId: { type: string, format: uuid }
         reference: { type: string }
         productName: { type: string }
@@ -910,6 +1085,14 @@ components:
         requestedItems:
           type: array
           items: { $ref: '#/components/schemas/RequestedItem' }
+        remedy:
+          $ref: '#/components/schemas/RemedyType'
+          description: >
+            Approve only (002). May be omitted only when the remedy preview gives exactly one
+            remedy; otherwise required and one of the preview's allowed remedies.
+        protectionPlanConfirmed:
+          type: boolean
+          description: Approve only (002). The reviewer confirmed the claimant's protection plan.
 
     ReviewDecision:
       type: object
@@ -948,7 +1131,18 @@ components:
       properties:
         seq: { type: integer }
         occurredAt: { type: string, format: date-time }
-        step: { type: string, description: 'e.g. ClaimSubmitted, PolicyRetrieved, AiRecommended, GuardrailsEvaluated, AutoApproved' }
+        step:
+          type: string
+          description: >
+            The trail step's name. Known values: ClaimSubmitted, TenantResolved, EvidenceStored,
+            IntakeValidated, ClaimExtracted, CustomerVerified, ProductIdentified, PolicyRetrieved,
+            EvidenceAnalyzed, CoverageAssessed, RiskEvaluated, AiRecommended, GuardrailsEvaluated,
+            AutoApproved, AutoRejected, InformationRequested, EscalatedToReview, ReviewerDecided,
+            SupplementReceived, ActionExecuted, AiStepFailed, Correction; and for remedies and the
+            repair hand-over (002): RemedyRecommended, RemedyDecided, RepairCentreAssigned,
+            RepairHandedOver, RepairStatusUpdated, RepairAttemptEnded, RemedyCompleted. A value
+            the server build does not know is shown by its number, so clients must accept any
+            string.
         actor: { type: string }
         summary: { type: string }
         correlationId: { type: string }
@@ -1012,6 +1206,220 @@ components:
         regions:
           type: array
           items: { $ref: '#/components/schemas/Region' }
+
+    # --- Remedies and repair hand-over (specs/002-remedy-repair-handover) ---
+
+    RemedyType:
+      type: string
+      enum: [Repair, Replacement, Refund]
+
+    RemedyScenario:
+      type: string
+      enum: [CoveredDefect, ProtectionPlanDamage, RepairNotEconomical, RepairFailed]
+
+    RemedyState:
+      type: string
+      enum: [AwaitingDecision, InProgress, Completed]
+
+    RemedyPendingReason:
+      type: string
+      description: Why a remedy waits for a reviewer's decision
+      enum: [POLICY_CHOICE, NO_REMEDY_RULE, REPAIR_FAILED_LIMIT, REPAIR_NOT_ECONOMICAL]
+
+    RepairStatus:
+      type: string
+      enum: [AwaitingHandover, AtRepairCentre, ReadyForCollection, Collected, RepairNotPossible]
+
+    ReportSource:
+      type: string
+      enum: [Phone, Email, InPerson, Other]
+
+    RemedyView:
+      type: object
+      required: [state, scenario, allowedRemedies, policyVersion, tableRow, history, etag]
+      properties:
+        state: { $ref: '#/components/schemas/RemedyState' }
+        remedy: { $ref: '#/components/schemas/RemedyType' }
+        scenario: { $ref: '#/components/schemas/RemedyScenario' }
+        allowedRemedies:
+          type: array
+          items: { $ref: '#/components/schemas/RemedyType' }
+        recommendedRemedy:
+          $ref: '#/components/schemas/RemedyType'
+          description: Present only when the policy row gives exactly one remedy
+        pendingReason: { $ref: '#/components/schemas/RemedyPendingReason' }
+        policyVersion:
+          type: object
+          required: [policyCode, version]
+          properties:
+            policyCode: { type: string }
+            version: { type: integer }
+        tableRow:
+          type: string
+          enum: [coveredDefect, repairNotEconomical, repairFailed, protectionPlan, none]
+        completion:
+          type: object
+          properties:
+            completedOn: { type: string, format: date }
+            reference: { type: string }
+            recordedBy: { type: string }
+        history:
+          type: array
+          description: Remedy decisions in order (002 data-model.md claims.remedy_decisions)
+          items:
+            type: object
+            required: [seq, kind, scenario, allowedRemedies, actor, createdAt]
+            properties:
+              seq: { type: integer }
+              kind: { type: string, enum: [Evaluated, Decided] }
+              scenario: { $ref: '#/components/schemas/RemedyScenario' }
+              allowedRemedies:
+                type: array
+                items: { $ref: '#/components/schemas/RemedyType' }
+              remedy: { $ref: '#/components/schemas/RemedyType' }
+              decidedBy: { type: string, enum: [Policy, Reviewer] }
+              actor: { type: string, description: Reviewer display name, or "system" }
+              reason: { type: string }
+              createdAt: { type: string, format: date-time }
+        etag: { type: string }
+
+    RemedyPreview:
+      type: object
+      description: What approving would set, computed by the same evaluator as the remedy itself
+      required: [scenario, allowedRemedies, needsChoice, tableRow]
+      properties:
+        scenario: { $ref: '#/components/schemas/RemedyScenario' }
+        allowedRemedies:
+          type: array
+          items: { $ref: '#/components/schemas/RemedyType' }
+        recommendedRemedy: { $ref: '#/components/schemas/RemedyType' }
+        needsChoice: { type: boolean }
+        tableRow: { type: string }
+
+    RepairCentre:
+      type: object
+      required: [id, name, region, address, openingHours, suggested, servesClaim]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        region: { $ref: '#/components/schemas/Region' }
+        address: { type: string }
+        openingHours: { type: string }
+        contact: { type: string, description: Staff-only }
+        suggested: { type: boolean }
+        servesClaim: { type: boolean, description: Serves the claim's region and product category }
+
+    RepairView:
+      type: object
+      required: [status, failedAttempts, attemptLimit, allowedEvents, events, etag]
+      properties:
+        status: { $ref: '#/components/schemas/RepairStatus' }
+        notPossibleReason: { type: string, enum: [Failed, NotEconomical] }
+        activeCentre: { $ref: '#/components/schemas/RepairCentre' }
+        handedOverOn: { type: string, format: date }
+        centreReference: { type: string }
+        failedAttempts: { type: integer }
+        attemptLimit:
+          type: [integer, 'null']
+          description: afterFailedAttempts of the policy's repairFailed row; null when the row is absent
+        economicLimitAmount:
+          type: number
+          description: limitPercentOfClaimValue × claim value; absent when the policy has no limit
+        latestEstimate: { type: number }
+        allowedEvents:
+          type: array
+          description: Event types allowed from the current status (drives the staff buttons)
+          items: { $ref: '#/components/schemas/RepairEventType' }
+        events:
+          type: array
+          items:
+            type: object
+            required: [seq, type, reportedAt, recordedAt, source, actor]
+            properties:
+              seq: { type: integer }
+              type: { type: string }
+              fromStatus: { $ref: '#/components/schemas/RepairStatus' }
+              toStatus: { $ref: '#/components/schemas/RepairStatus' }
+              reportedAt: { type: string, format: date-time }
+              recordedAt: { type: string, format: date-time }
+              source: { type: string }
+              actor: { type: string, description: Staff display name }
+              note: { type: string }
+              correctsSeq: { type: integer }
+        etag: { type: string }
+
+    RepairEventType:
+      type: string
+      enum: [CentreChanged, HandedOver, EstimateReported, MarkedReady, Collected, RepairFailed, NewAttemptStarted, Transferred, Correction]
+
+    RemedyDecisionRequest:
+      type: object
+      required: [remedy]
+      additionalProperties: false
+      properties:
+        remedy: { $ref: '#/components/schemas/RemedyType' }
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+
+    RepairEventRequest:
+      type: object
+      required: [type, reportedAt, source]
+      additionalProperties: false
+      description: >
+        Fields by type — CentreChanged and Transferred: repairCentreId, reason. HandedOver:
+        handedOverOn, centreReference (optional). EstimateReported: estimateAmount. RepairFailed:
+        reason. NewAttemptStarted: productLocation. Correction: correctsSeq, reason and the
+        corrected field (handedOverOn, centreReference, estimateAmount or toStatus). MarkedReady and
+        Collected need no extra field. `note` is optional for every type.
+      properties:
+        type: { $ref: '#/components/schemas/RepairEventType' }
+        reportedAt: { type: string, format: date-time }
+        source: { $ref: '#/components/schemas/ReportSource' }
+        note: { type: string, maxLength: 1000 }
+        repairCentreId: { type: string, format: uuid }
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+        handedOverOn: { type: string, format: date }
+        centreReference: { type: string, maxLength: 100 }
+        estimateAmount: { type: number, minimum: 0 }
+        productLocation: { type: string, enum: [AtCentre, ReturnedToCustomer] }
+        correctsSeq: { type: integer }
+        toStatus: { $ref: '#/components/schemas/RepairStatus' }
+
+    RemedyCompletionRequest:
+      type: object
+      required: [remedy, completedOn]
+      additionalProperties: false
+      properties:
+        remedy: { type: string, enum: [Replacement, Refund] }
+        completedOn: { type: string, format: date }
+        reference: { type: string, maxLength: 100, description: Required for Refund }
+
+    ClaimantRemedyView:
+      type: object
+      required: [label, steps]
+      description: Never contains notes, centre references or contacts, failure reasons, staff names or risk data.
+      properties:
+        remedy: { $ref: '#/components/schemas/RemedyType' }
+        label:
+          type: string
+          description: Claimant label from 002 data-model.md "Claimant projection"
+        completed: { type: boolean }
+        repairCentre:
+          type: object
+          description: Present for Repair once a centre is assigned; no contact or reference
+          required: [name, address, openingHours]
+          properties:
+            name: { type: string }
+            address: { type: string }
+            openingHours: { type: string }
+        steps:
+          type: array
+          description: For Repair, the four timeline steps; empty for Replacement and Refund
+          items:
+            type: object
+            required: [title, state]
+            properties:
+              title: { type: string, enum: [Handed over, With repair centre, Ready for collection, Collected] }
+              state: { type: string, enum: [done, current, upcoming] }
 
     ProblemDetails:
       type: object
