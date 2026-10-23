@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Warranty.Application.Abstractions.Integrations;
@@ -93,6 +94,60 @@ public sealed class SimulatedIntegrationTests
     }
 
     [Fact]
+    public async Task Service_network_suggests_only_active_centres_and_prefers_the_higher_priority()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        var closed = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "A Closed", ["tablet"], isActive: false, priority: 1);
+        var backup = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "B Backup", ["tablet"], priority: 50);
+        var preferred = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "C Preferred", ["tablet"], priority: 10);
+        var general = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "D General", ["phone"], priority: 5);
+        var closedOnly = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.EU, "E Closed", ["tablet"], isActive: false);
+        integration.GetServiceCentersAsync(Region.NA, Ct).Returns([closed, backup, preferred, general]);
+        integration.GetServiceCentersAsync(Region.EU, Ct).Returns([closedOnly]);
+        var network = new SimulatedServiceNetwork(integration);
+
+        (await network.FindServiceCenterAsync(Region.NA, "tablet", Ct))!.Id.ShouldBe(preferred.Id);
+        (await network.FindServiceCenterAsync(Region.NA, "laptop", Ct))!.Id.ShouldBe(general.Id);
+        (await network.FindServiceCenterAsync(Region.EU, "tablet", Ct)).ShouldBeNull();
+        (await network.ListEligibleAsync(Region.EU, "tablet", Ct)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_refund_request_is_recorded_with_a_new_id_and_moves_no_money()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 9, 0, 0, TimeSpan.Zero));
+        var logger = new RecordingLogger<SimulatedRefundService>();
+        var refunds = new SimulatedRefundService(new FakeTenantContext(Aurora), time, logger);
+        var claimId = Guid.NewGuid();
+
+        var first = await refunds.RequestRefundAsync(claimId, 449.99m, Ct);
+        var second = await refunds.RequestRefundAsync(claimId, 449.99m, Ct);
+
+        first.ShouldNotBe(Guid.Empty);
+        second.ShouldNotBe(first);
+        logger.Entries.Count.ShouldBe(2);
+        var entry = logger.Entries[0];
+        entry.Level.ShouldBe(LogLevel.Information);
+        entry.Message.ShouldContain(first.ToString());
+        entry.Message.ShouldContain(claimId.ToString());
+        entry.Message.ShouldContain(Aurora.ToString());
+        entry.Message.ShouldContain("no money moved");
+        integration.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_refund_needs_a_claim_and_a_positive_amount()
+    {
+        var refunds = new SimulatedRefundService(
+            new FakeTenantContext(Aurora), TimeProvider.System, new RecordingLogger<SimulatedRefundService>());
+
+        await Should.ThrowAsync<ArgumentException>(() => refunds.RequestRefundAsync(Guid.Empty, 10m, Ct));
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(() => refunds.RequestRefundAsync(Guid.NewGuid(), 0m, Ct));
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(() => refunds.RequestRefundAsync(Guid.NewGuid(), -1m, Ct));
+    }
+
+    [Fact]
     public async Task A_deduplicated_notification_carries_its_key()
     {
         var integration = Substitute.For<IIntegrationRepository>();
@@ -130,11 +185,23 @@ public sealed class SimulatedIntegrationTests
     {
         var services = new ServiceCollection().AddSimulatedIntegrations();
 
-        foreach (var port in new[] { typeof(ICrmClient), typeof(IErpSerialRegistry), typeof(IServiceNetwork), typeof(IRepairRequestService), typeof(INotificationService) })
+        foreach (var port in new[] { typeof(ICrmClient), typeof(IErpSerialRegistry), typeof(IServiceNetwork), typeof(IRepairRequestService), typeof(INotificationService), typeof(IRefundService) })
         {
             services.ShouldContain(d => d.ServiceType == port && d.Lifetime == ServiceLifetime.Scoped, port.Name);
         }
     }
 
     private static CustomerDetails Details(string email) => new("Jane Example", email, "US", null, null, null, null);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
 }

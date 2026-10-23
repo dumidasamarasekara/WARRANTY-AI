@@ -7,9 +7,9 @@ namespace Warranty.Integrations.Simulated;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Registers the simulated CRM, ERP serial registry, service network, repair requests and
-    /// notifications. They persist through the Application repository ports, so the host must also
-    /// register the Infrastructure persistence.
+    /// Registers the simulated CRM, ERP serial registry, service network, repair requests, notifications
+    /// and refunds. They persist through the Application repository ports, so the host must also register
+    /// the Infrastructure persistence (and logging, which the refund adapter records to).
     /// </summary>
     public static IServiceCollection AddSimulatedIntegrations(this IServiceCollection services)
     {
@@ -19,7 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceNetwork, SimulatedServiceNetwork>();
         services.AddScoped<IRepairRequestService, SimulatedRepairRequestService>();
         services.AddScoped<INotificationService, SimulatedNotificationService>();
-        services.AddSingleton<PaymentStub>();
+        services.AddScoped<IRefundService, SimulatedRefundService>();
         return services;
     }
 }

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Simulated CRM, ERP, service network and notifications behind Application ports. -->
+  <!-- Simulated CRM, ERP, service network, repair requests, notifications and refunds behind Application ports. -->
   <PropertyGroup>
     <RootNamespace>Warranty.Integrations.Simulated</RootNamespace>
   </PropertyGroup>
@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>
