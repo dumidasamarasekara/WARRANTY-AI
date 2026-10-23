@@ -209,6 +209,7 @@ export function toSubmissionData(values: ClaimFormValues): ClaimSubmissionData {
       country: values['purchase.country'].trim().toUpperCase(),
     },
     problemDescription: values.problemDescription.trim(),
+    hasProtectionPlan: false,
   }
 }
 

@@ -77,6 +77,7 @@ export function reviewClaim({ decision = 'APPROVE', isValid = true, textSafe = t
 
 export function queueItem(overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
   return {
+    kind: 'ClaimDecision',
     claimId,
     reference: 'K7M2Q9X4TB',
     productName: 'Aurora Book 15',
