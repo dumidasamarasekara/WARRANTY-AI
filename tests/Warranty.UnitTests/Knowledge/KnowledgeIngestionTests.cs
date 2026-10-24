@@ -188,6 +188,8 @@ public sealed class KnowledgeIngestionTests
     [InlineData("clauses:", "remedies:\n  coveredDefect: { allowed: [Refund] }\nclauses:", "remedies: Remedy row 'CoveredDefect' must allow between 2 and 3")]
     [InlineData("clauses:", "remedies:\n  repairFailed: { afterFailedAttempts: 6, remedy: Refund }\nclauses:", "remedies: The repair-failed attempt limit")]
     [InlineData("clauses:", "remedies:\n  protectionPlan: { liftsAccidentalDamageExclusion: false, remedy: Repair }\nclauses:", "remedies: A protection plan that does not lift")]
+    [InlineData("clauses:", "remedies:\n  replacement: { minimumCoverMonths: 37 }\nclauses:", "remedies: The minimum replacement cover")]
+    [InlineData("clauses:", "remedies:\n  replacementNotAvailable: { allowed: [Refund] }\nclauses:", "remedies: Remedy row 'ReplacementNotAvailable' must allow between 2 and 3")]
     public void Invalid_policy_sources_are_rejected(string find, string replace, string expected)
     {
         var source = FrontMatterParser.Parse(new KnowledgeSourceDocument("p.md", Policy.Replace(find, replace, StringComparison.Ordinal)));
@@ -279,6 +281,28 @@ public sealed class KnowledgeIngestionTests
         _policies.Versions.ShouldHaveSingleItem().RemedyRules.ShouldBe(new RemedyRules(new RemedyChoice(RemedyType.Replacement, null), null, null, null));
     }
 
+    [Theory]
+    [InlineData("replacement: { productRule: AnyModel }", "remedies.replacement.productRule 'AnyModel' is not one of")]
+    [InlineData("replacement: { returnRule: Never }", "remedies.replacement.returnRule 'Never' is not one of")]
+    [InlineData("replacementNotAvailable: { remedy: Swap }", "remedies.replacementNotAvailable.remedy 'Swap' is not one of")]
+    public void Unknown_replacement_values_are_rejected_when_parsing(string row, string expected)
+        => Should.Throw<InvalidKnowledgeSourceException>(() => FrontMatterParser.Parse(new KnowledgeSourceDocument(
+                "p.md", Policy.Replace("clauses:", $"remedies:\n  {row}\nclauses:", StringComparison.Ordinal))))
+            .Errors.ShouldContain(e => e.Contains(expected, StringComparison.Ordinal));
+    [Fact]
+    public async Task A_new_policy_version_keeps_its_replacement_rules_with_defaults_for_missing_values()
+    {
+        var content = Policy.Replace(
+            "clauses:",
+            "remedies:\n  replacement: { returnRule: BeforeReservation, minimumCoverMonths: 6 }\n  replacementNotAvailable: { remedy: Refund }\nclauses:",
+            StringComparison.Ordinal);
+
+        await Ingestor(Aurora).IngestAsync(new KnowledgeSourceDocument("tenant-aurora/policies/AUR-WP-v2.md", content), TestContext.Current.CancellationToken);
+
+        var rules = _policies.Versions.ShouldHaveSingleItem().RemedyRules.ShouldNotBeNull();
+        rules.Replacement.ShouldBe(new ReplacementRules(ReplacementProductRule.SameModel, ReplacementReturnRule.BeforeReservation, 6));
+        rules.ReplacementNotAvailable.ShouldBe(new RemedyChoice(RemedyType.Refund, null));
+    }
     [Fact]
     public async Task An_unchanged_source_is_skipped_and_changed_content_for_a_published_version_is_refused()
     {

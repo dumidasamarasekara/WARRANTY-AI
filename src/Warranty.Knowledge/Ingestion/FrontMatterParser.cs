@@ -156,7 +156,25 @@ public static class FrontMatterParser
                     RequiredValue(plan.LiftsAccidentalDamageExclusion, "protectionPlan.liftsAccidentalDamageExclusion"),
                     Remedy(plan.Remedy, "protectionPlan"),
                     Allowed(plan.Allowed, "protectionPlan"))
+                : null,
+            remedies.Replacement is { } replacement ? ToReplacement(replacement, errors) : null,
+            remedies.ReplacementNotAvailable is { } notAvailable
+                ? new RemedyChoice(Remedy(notAvailable.Remedy, "replacementNotAvailable"), Allowed(notAvailable.Allowed, "replacementNotAvailable"))
                 : null);
+    }
+
+    /// <summary>The <c>remedies.replacement</c> member (003); a missing value takes the <see cref="ReplacementRules"/> default.</summary>
+    private static ReplacementRules ToReplacement(ReplacementMatter replacement, List<string> errors)
+    {
+        var defaults = ReplacementRules.Default;
+        return new ReplacementRules(
+            Optional(replacement.ProductRule) is { } product
+                ? ParseEnum<ReplacementProductRule>(product, "remedies.replacement.productRule", errors)
+                : defaults.ProductRule,
+            Optional(replacement.ReturnRule) is { } returnRule
+                ? ParseEnum<ReplacementReturnRule>(returnRule, "remedies.replacement.returnRule", errors)
+                : defaults.ReturnRule,
+            replacement.MinimumCoverMonths ?? defaults.MinimumCoverMonths);
     }
 
     private static ClauseDeclaration ToClause(string key, ClauseMatter? clause, List<string> errors)
@@ -301,6 +319,19 @@ public static class FrontMatterParser
         public RepairFailedMatter? RepairFailed { get; set; }
 
         public ProtectionPlanMatter? ProtectionPlan { get; set; }
+
+        public ReplacementMatter? Replacement { get; set; }
+
+        public RemedyChoiceMatter? ReplacementNotAvailable { get; set; }
+    }
+
+    private sealed class ReplacementMatter
+    {
+        public string? ProductRule { get; set; }
+
+        public string? ReturnRule { get; set; }
+
+        public int? MinimumCoverMonths { get; set; }
     }
 
     private class RemedyChoiceMatter

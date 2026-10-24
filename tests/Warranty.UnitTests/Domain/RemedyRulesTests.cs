@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Json.Schema;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
+using Warranty.Infrastructure.Persistence;
 using Warranty.MigrationService.Seeding;
 
 namespace Warranty.UnitTests.Domain;
@@ -31,8 +32,8 @@ public sealed class RemedyRulesTests
     {
         var examples = RemedyRulesContract.Schema.Examples;
 
-        RemedyRulesContract.ShouldBeSameRules(RemedyRulesContract.Deserialize(examples[0]), RemedyRulesContract.Aurora);
-        RemedyRulesContract.ShouldBeSameRules(RemedyRulesContract.Deserialize(examples[1]), RemedyRulesContract.Borealis);
+        RemedyRulesContract.ShouldBeSameRules(RemedyRulesContract.Deserialize(examples[0]), RemedyRulesContract.AuroraWithReplacement);
+        RemedyRulesContract.ShouldBeSameRules(RemedyRulesContract.Deserialize(examples[1]), RemedyRulesContract.BorealisWithReplacement);
     }
 
     [Fact]
@@ -98,6 +99,72 @@ public sealed class RemedyRulesTests
         plan.AllowedRemedies.ShouldBeEmpty();
         plan.NeedsReviewer.ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(36)]
+    public void Replacement_cover_boundaries_are_accepted(int months)
+        => Should.NotThrow(new RemedyRules(null, null, null, null, new ReplacementRules(MinimumCoverMonths: months)).Validate);
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(37)]
+    public void Replacement_cover_outside_0_to_36_months_is_rejected(int months)
+        => Should.Throw<ArgumentException>(new RemedyRules(null, null, null, null, new ReplacementRules(MinimumCoverMonths: months)).Validate)
+            .Message.ShouldContain("minimum replacement cover");
+
+    [Fact]
+    public void Unknown_replacement_rules_are_rejected()
+    {
+        Should.Throw<ArgumentException>(new RemedyRules(null, null, null, null, new ReplacementRules((ReplacementProductRule)9)).Validate);
+        Should.Throw<ArgumentException>(new RemedyRules(null, null, null, null, new ReplacementRules(ReturnRule: (ReplacementReturnRule)9)).Validate);
+    }
+
+    [Theory]
+    [InlineData("""{ "replacementNotAvailable": { "remedy": "Refund", "allowed": ["Refund", "Replacement"] } }""")]
+    [InlineData("""{ "replacementNotAvailable": { "allowed": ["Refund"] } }""")]
+    [InlineData("""{ "replacementNotAvailable": { } }""")]
+    public void The_replacement_not_available_row_follows_the_002_row_rules(string json)
+        => Should.Throw<ArgumentException>(() => RemedyRulesContract.Deserialize(JsonDocument.Parse(json).RootElement).Validate())
+            .Message.ShouldContain("ReplacementNotAvailable");
+
+    [Fact]
+    public void The_replacement_defaults_are_same_model_at_collection_and_no_extra_cover()
+    {
+        ReplacementRules.Default.ShouldBe(new ReplacementRules(ReplacementProductRule.SameModel, ReplacementReturnRule.AtCollection, 0));
+        RemedyRulesContract.Deserialize(JsonDocument.Parse("""{ "replacement": { } }""").RootElement).Replacement
+            .ShouldBe(ReplacementRules.Default);
+        RemedyRulesContract.Deserialize(JsonDocument.Parse("""{ "replacement": { "minimumCoverMonths": 6 } }""").RootElement).Replacement
+            .ShouldBe(ReplacementRules.Default with { MinimumCoverMonths = 6 });
+    }
+
+    [Fact]
+    public void The_replacement_members_are_stored_with_the_schema_spellings()
+    {
+        var rules = new RemedyRules(
+            new RemedyChoice(RemedyType.Repair, null), null, null, null,
+            new ReplacementRules(ReplacementProductRule.SameCategoryAtLeastClaimValue, ReplacementReturnRule.BeforeReservation, 6),
+            new RemedyChoice(RemedyType.Refund, null));
+
+        var json = JsonSerializer.Serialize(rules, PersistenceJson.Options);
+
+        json.ShouldBe(
+            """{"coveredDefect":{"remedy":"Repair"},"replacement":{"productRule":"SameCategoryAtLeastClaimValue","returnRule":"BeforeReservation","minimumCoverMonths":6},"replacementNotAvailable":{"remedy":"Refund"}}""");
+        RemedyRulesContract.ShouldBeSameRules(JsonSerializer.Deserialize<RemedyRules>(json, PersistenceJson.Options)!, rules);
+    }
+
+    [Fact]
+    public void Rules_stored_before_feature_003_still_read_without_replacement_members()
+    {
+        const string stored = """{"coveredDefect":{"remedy":"Repair"},"repairFailed":{"afterFailedAttempts":2,"remedy":"Replacement"}}""";
+
+        var rules = JsonSerializer.Deserialize<RemedyRules>(stored, PersistenceJson.Options).ShouldNotBeNull();
+
+        rules.Replacement.ShouldBeNull();
+        rules.ReplacementNotAvailable.ShouldBeNull();
+        Should.NotThrow(rules.Validate);
+        JsonSerializer.Serialize(rules, PersistenceJson.Options).ShouldBe(stored);
+    }
 }
 
 /// <summary>
@@ -128,6 +195,19 @@ internal static class RemedyRulesContract
         RepairFailed: new RepairFailedRule(2, RemedyType.Refund, null),
         ProtectionPlan: new ProtectionPlanRule(true, RemedyType.Repair, null));
 
+    /// <summary>Aurora with the 003 replacement rules of tasks.md "Fixed identifiers" (seeded by T313).</summary>
+    public static readonly RemedyRules AuroraWithReplacement = Aurora with
+    {
+        Replacement = new ReplacementRules(ReplacementProductRule.SameCategoryAtLeastClaimValue, ReplacementReturnRule.AtCollection, 0),
+        ReplacementNotAvailable = new RemedyChoice(RemedyType.Refund, null),
+    };
+
+    /// <summary>Borealis with the 003 replacement rules of tasks.md "Fixed identifiers" (seeded by T313).</summary>
+    public static readonly RemedyRules BorealisWithReplacement = Borealis with
+    {
+        Replacement = new ReplacementRules(ReplacementProductRule.SameModel, ReplacementReturnRule.BeforeReservation, 6),
+        ReplacementNotAvailable = new RemedyChoice(RemedyType.Refund, null),
+    };
     public static (JsonSchema Schema, IReadOnlyList<JsonElement> Examples) Schema { get; } = Load();
 
     /// <summary>Compares two rule sets by their JSON form, so the concrete list types do not matter.</summary>

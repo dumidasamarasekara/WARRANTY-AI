@@ -119,14 +119,16 @@
     {
       "coveredDefect": { "remedy": "Repair" },
       "repairFailed": { "afterFailedAttempts": 2, "remedy": "Replacement" },
-      "protectionPlan": { "liftsAccidentalDamageExclusion": false }
+      "protectionPlan": { "liftsAccidentalDamageExclusion": false },
+      "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "AtCollection", "minimumCoverMonths": 0 },
+      "replacementNotAvailable": { "remedy": "Refund" }
     },
     {
       "coveredDefect": { "remedy": "Repair" },
       "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] },
       "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" },
       "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" },
-      "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "AtCollection", "minimumCoverMonths": 0 },
+      "replacement": { "productRule": "SameModel", "returnRule": "BeforeReservation", "minimumCoverMonths": 6 },
       "replacementNotAvailable": { "remedy": "Refund" }
     }
   ]

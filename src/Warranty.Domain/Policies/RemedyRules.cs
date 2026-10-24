@@ -7,11 +7,18 @@ namespace Warranty.Domain.Policies;
 /// Read only by the deterministic remedy evaluator, never from clause text. Every row is optional; a
 /// missing row gives no remedy for that scenario and sends the remedy to manual review (FR-012).
 /// </summary>
+/// <remarks>
+/// Feature 003 adds <see cref="Replacement"/> (how a Replacement remedy is carried out; absent = the
+/// <see cref="ReplacementRules.Default"/> values) and the <see cref="ReplacementNotAvailable"/> row (absent =
+/// manual review). Both are optional and last, so rules stored before 003 still read.
+/// </remarks>
 public sealed record RemedyRules(
     RemedyChoice? CoveredDefect,
     RepairNotEconomicalRule? RepairNotEconomical,
     RepairFailedRule? RepairFailed,
-    ProtectionPlanRule? ProtectionPlan)
+    ProtectionPlanRule? ProtectionPlan,
+    ReplacementRules? Replacement = null,
+    RemedyChoice? ReplacementNotAvailable = null)
 {
     /// <summary>Throws when a row is inconsistent (same rules as contracts/remedy-rules.schema.json).</summary>
     public void Validate()
@@ -20,6 +27,44 @@ public sealed record RemedyRules(
         RepairNotEconomical?.Validate();
         RepairFailed?.Validate();
         ProtectionPlan?.Validate();
+        Replacement?.Validate();
+        ReplacementNotAvailable?.Validate(nameof(ReplacementNotAvailable));
+    }
+}
+
+/// <summary>
+/// How a Replacement remedy is carried out (003 data-model.md <c>remedy_rules.replacement</c>): which product
+/// may be handed out, when the faulty product is returned, and the minimum cover of the replacement unit.
+/// Every member is optional in the JSON; a missing one takes its default.
+/// </summary>
+public sealed record ReplacementRules(
+    ReplacementProductRule ProductRule = ReplacementProductRule.SameModel,
+    ReplacementReturnRule ReturnRule = ReplacementReturnRule.AtCollection,
+    int MinimumCoverMonths = 0)
+{
+    public const int MinCoverMonths = 0;
+    public const int MaxCoverMonths = 36;
+
+    /// <summary>The rules of a version without a <c>replacement</c> member: same model, returned at collection, no extra cover.</summary>
+    public static ReplacementRules Default { get; } = new();
+
+    internal void Validate()
+    {
+        if (!Enum.IsDefined(ProductRule))
+        {
+            throw new ArgumentException($"The replacement product rule '{ProductRule}' is unknown.");
+        }
+
+        if (!Enum.IsDefined(ReturnRule))
+        {
+            throw new ArgumentException($"The replacement return rule '{ReturnRule}' is unknown.");
+        }
+
+        if (MinimumCoverMonths is < MinCoverMonths or > MaxCoverMonths)
+        {
+            throw new ArgumentException(
+                $"The minimum replacement cover must be {MinCoverMonths}–{MaxCoverMonths} months.");
+        }
     }
 }
 
