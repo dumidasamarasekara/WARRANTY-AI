@@ -44,6 +44,12 @@ public interface ICatalogRepository
     Task<Product?> GetProductAsync(Guid productId, CancellationToken ct);
 
     Task<ProductSerial?> FindSerialAsync(string serialNumber, CancellationToken ct);
+
+    /// <summary>
+    /// Adds a serial to the current tenant's catalog: a handed-out replacement unit not yet in <c>catalog.product_serials</c>,
+    /// so the existing catalog lookups find it (003 research R10). Catalog serials are never updated or removed here.
+    /// </summary>
+    void AddSerial(ProductSerial serial);
 }
 
 public interface IPolicyRepository

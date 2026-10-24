@@ -13,8 +13,16 @@ namespace Warranty.Application.Fulfillment;
 /// </summary>
 public static class RepairCentreEligibility
 {
-    public static async Task<IReadOnlyList<EligibleServiceCenter>> ListAsync(
+    public static Task<IReadOnlyList<EligibleServiceCenter>> ListAsync(
         IServiceNetwork network, Claim claim, Product? product, CancellationToken ct)
+        => ListAsync(network, claim, product, ServiceCenterPurpose.Repair, ct);
+
+    /// <summary>
+    /// As <see cref="ListAsync(IServiceNetwork, Claim, Product?, CancellationToken)"/> for <paramref name="purpose"/>: with
+    /// <see cref="ServiceCenterPurpose.Replacement"/> only the centres that issue replacement units (003 FR-007, research R8).
+    /// </summary>
+    public static async Task<IReadOnlyList<EligibleServiceCenter>> ListAsync(
+        IServiceNetwork network, Claim claim, Product? product, ServiceCenterPurpose purpose, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(claim);
@@ -22,7 +30,7 @@ public static class RepairCentreEligibility
 
         if (claim.Region is { } region)
         {
-            var serving = (await network.ListEligibleAsync(region, category, ServiceCenterPurpose.Repair, ct)).Where(c => c.ServesClaim).ToList();
+            var serving = (await network.ListEligibleAsync(region, category, purpose, ct)).Where(c => c.ServesClaim).ToList();
             if (serving.Count > 0)
             {
                 return serving;
@@ -32,7 +40,7 @@ public static class RepairCentreEligibility
         var all = new List<EligibleServiceCenter>();
         foreach (var anyRegion in Enum.GetValues<Region>())
         {
-            all.AddRange((await network.ListEligibleAsync(anyRegion, category, ServiceCenterPurpose.Repair, ct)).Select(c => c with { ServesClaim = false }));
+            all.AddRange((await network.ListEligibleAsync(anyRegion, category, purpose, ct)).Select(c => c with { ServesClaim = false }));
         }
 
         return all

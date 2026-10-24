@@ -21,6 +21,12 @@ internal sealed class CatalogRepository(WarrantyDbContext db) : ICatalogReposito
         var serial = ProductSerial.NormalizeSerial(serialNumber);
         return db.ProductSerials.SingleOrDefaultAsync(s => s.SerialNumber == serial, ct);
     }
+
+    public void AddSerial(ProductSerial serial)
+    {
+        ArgumentNullException.ThrowIfNull(serial);
+        db.ProductSerials.Add(serial);
+    }
 }
 
 internal sealed class PolicyRepository(WarrantyDbContext db) : IPolicyRepository
