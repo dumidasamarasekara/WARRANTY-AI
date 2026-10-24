@@ -23,6 +23,7 @@ import {
   useToast,
 } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
+import { decideRemedyParam } from '../remedy/remedyView'
 import { ReviewDecisionForm } from './ReviewDecisionForm'
 import {
   aiDecisionAsReview,
@@ -153,10 +154,10 @@ function QueueCard({
   )
 }
 
-/** A remedy waiting for a reviewer (002 ui-screens.md §3): the "Remedy" badge and the pending reason, opening the Remedy tab. */
+/** A remedy waiting for a reviewer (002 ui-screens.md §3): the "Remedy" badge and the pending reason, opening the Remedy tab with the remedy dialog. */
 function RemedyQueueCard({ item, now }: { item: ReviewQueueItem; now: Date | undefined }) {
   return (
-    <Link to={`/staff/claims/${item.claimId}/remedy`} className={styles.card}>
+    <Link to={`/staff/claims/${item.claimId}/remedy?${decideRemedyParam}`} className={styles.card}>
       <span className={styles.reference}>{item.reference}</span>
       <span className={styles.product}>{item.productName}</span>
       <span className={styles.cardMeta}>
