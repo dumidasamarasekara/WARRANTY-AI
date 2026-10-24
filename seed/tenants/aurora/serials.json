@@ -33,6 +33,8 @@
   { "serialNumber": "AT10-24-0032", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-16", "reservedFor": "S8-photo" },
   { "serialNumber": "AT10-24-0033", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-23", "reservedFor": "S16 (AI failure like S10, then a reviewer information request)" },
   { "serialNumber": "AT10-24-0034", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-23", "reservedFor": "US5-unclear-photos" },
+  { "serialNumber": "AT10-24-0035", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-30", "reservedFor": "R1 (remedy-scenarios.json)" },
+  { "serialNumber": "AT10-24-0036", "modelCode": "AUR-TAB10", "manufacturedOn": "2024-12-30", "reservedFor": "R4-aurora (remedy-scenarios.json, same facts as R4-borealis)" },
 
   { "serialNumber": "AP6-24-0001", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-01" },
   { "serialNumber": "AP6-24-0002", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-02" },

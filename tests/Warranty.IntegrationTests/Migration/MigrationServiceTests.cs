@@ -42,11 +42,16 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 6,
-            ["catalog.product_serials"] = 109,
-            ["crm.customers"] = 9,
+            ["catalog.product_serials"] = 113,
+            ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 2,
-            ["audit.decision_trail_entries"] = 4,
+            ["claims.claims"] = 6,
+            ["audit.decision_trail_entries"] = 24,
+            ["claims.claim_remedies"] = 4,
+            ["claims.remedy_decisions"] = 8,
+            ["claims.repairs"] = 4,
+            ["claims.repair_handovers"] = 4,
+            ["audit.repair_events"] = 4,
             ["policy.warranty_policies"] = 2,
             ["policy.policy_versions"] = 3,
         });
@@ -72,6 +77,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             """
             select c.serial_number, c.finalized_at, count(t.*) as entries, bool_and((t.payload::jsonb ->> 'seededHistory') = 'true') as marked
             from claims.claims c join audit.decision_trail_entries t on t.claim_id = c.id
+            where c.reference like 'HSTRY%'
             group by c.serial_number, c.finalized_at order by c.serial_number
             """,
             warranty);
@@ -143,6 +149,56 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             .ShouldBe(0, "active repair centres without address or opening hours");
     }
 
+    /// <summary>
+    /// Feature 002 (T222): the remedy scenario claims are Approved by the system at their historical time, and their
+    /// remedy is the one the evaluator derives from the claim's own policy version — Repair set by policy from row
+    /// <c>coveredDefect</c>, with an evaluation and a policy decision row — and a repair awaiting hand-over at the
+    /// first eligible centre of the claim's region (priority, then name). Every trail entry is marked seeded history.
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "002")]
+    public async Task Remedy_scenario_claims_are_approved_with_the_remedy_of_their_own_policy_version()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+        await using var command = new NpgsqlCommand(
+            """
+            select c.reference, c.status, c.final_decided_by, p.code || ' v' || v.version, r.state, r.remedy, r.decided_rows,
+                   rp.status, sc.name, c.finalized_at,
+                   (select count(*) from audit.decision_trail_entries t where t.claim_id = c.id),
+                   (select bool_and((t.payload::jsonb ->> 'seededHistory') = 'true') from audit.decision_trail_entries t where t.claim_id = c.id)
+            from claims.claims c
+            join (select cr.claim_id, cr.state, cr.remedy, cr.policy_version_id,
+                         (select string_agg(d.kind || ':' || d.table_row, ',' order by d.seq) from claims.remedy_decisions d where d.claim_id = cr.claim_id) as decided_rows
+                  from claims.claim_remedies cr) r on r.claim_id = c.id
+            join policy.policy_versions v on v.id = r.policy_version_id
+            join policy.warranty_policies p on p.id = v.policy_id
+            join claims.repairs rp on rp.claim_id = c.id
+            join claims.repair_handovers h on h.id = rp.active_handover_id
+            join integration.service_centers sc on sc.id = h.service_center_id
+            where c.reference like 'RMDY%'
+            order by c.reference
+            """,
+            warranty);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var rows = new List<string>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            (DateTimeOffset.UtcNow - reader.GetFieldValue<DateTimeOffset>(9)).TotalDays.ShouldBeGreaterThan(2.9);
+            reader.GetInt64(10).ShouldBe(5);
+            reader.GetBoolean(11).ShouldBeTrue();
+            rows.Add(string.Join(" | ", Enumerable.Range(0, 9).Select(i => Convert.ToString(reader.GetValue(i), System.Globalization.CultureInfo.InvariantCulture))));
+        }
+
+        rows.ShouldBe(
+        [
+            "RMDYR1A001 | Approved | System | AUR-WP v2 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Aurora Service Center Springfield",
+            "RMDYR2B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
+            "RMDYR4A001 | Approved | System | AUR-WP v2 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Aurora Service Center Amsterdam",
+            "RMDYR4B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
+        ]);
+    }
+
     [Fact]
     public async Task The_app_role_logs_in_with_the_configured_password_and_sees_no_tenant_rows_without_a_tenant()
     {
@@ -175,6 +231,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
         [
             "tenancy.tenants", "tenancy.tenant_channels", "tenancy.tenant_settings", "catalog.products", "catalog.product_serials",
             "crm.customers", "integration.service_centers", "claims.claims", "audit.decision_trail_entries",
+            "claims.claim_remedies", "claims.remedy_decisions", "claims.repairs", "claims.repair_handovers", "audit.repair_events",
             "policy.warranty_policies", "policy.policy_versions",
         ];
         await using var connection = await OpenAsync("warranty");

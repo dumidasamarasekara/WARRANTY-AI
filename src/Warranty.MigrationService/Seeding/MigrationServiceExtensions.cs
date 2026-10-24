@@ -1,6 +1,8 @@
 using Warranty.AI.Gateway;
 using Warranty.Application.Abstractions;
+using Warranty.Guardrails.Remedies;
 using Warranty.Infrastructure;
+using Warranty.Integrations.Simulated;
 using Warranty.Knowledge;
 
 namespace Warranty.MigrationService.Seeding;
@@ -22,11 +24,16 @@ public static class MigrationServiceExtensions
         builder.Services
             .AddWarrantyInfrastructure(builder.Configuration, DatabaseLogin.Owner)
             .AddWarrantyAiGateway(builder.Configuration)
-            .AddWarrantyKnowledge();
+            .AddWarrantyKnowledge()
+            .AddSimulatedIntegrations();
+
+        // The remedy scenario seed derives each remedy with the executor's evaluator and centre lookup.
+        builder.Services.AddSingleton<RemedyPolicyEvaluator>();
 
         builder.Services.AddScoped<DatabaseMigrator>();
         builder.Services.AddScoped<TenantSeeder>();
         builder.Services.AddScoped<KnowledgeSeeder>();
+        builder.Services.AddScoped<RemedyScenarioSeeder>();
         builder.Services.AddSingleton<SeedingPipeline>();
         builder.Services.AddHostedService<MigrationWorker>();
         return builder;

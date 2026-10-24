@@ -1,0 +1,211 @@
+using Microsoft.EntityFrameworkCore;
+using Warranty.Application.Abstractions;
+using Warranty.Application.Abstractions.Integrations;
+using Warranty.Domain.Catalog;
+using Warranty.Domain.Claims;
+using Warranty.Domain.Common;
+using Warranty.Domain.Crm;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
+using Warranty.Infrastructure.Audit;
+using Warranty.Infrastructure.Persistence;
+
+namespace Warranty.MigrationService.Seeding;
+
+/// <summary>
+/// Seeds the approved claims of <c>remedy-scenarios.json</c> (002 quickstart §2) inside the tenant's scope,
+/// after the tenant's policies are indexed (the remedy needs their policy versions). Each claim is approved
+/// through the same domain methods as the <c>ActionExecutor</c>, and its remedy is not read from the seed but
+/// evaluated by the one <see cref="RemedyPolicyEvaluator"/> from the remedy rules of the claim's applicable
+/// policy version for the initial scenario (research R3, R13): an evaluation row, then — for a single remedy —
+/// <see cref="ClaimRemedy.SetByPolicy"/> with a policy decision row and, for Repair, a <see cref="Repair"/>
+/// suggested to the first eligible centre (<see cref="IServiceNetwork.ListEligibleAsync"/>); otherwise
+/// <see cref="ClaimRemedy.AwaitDecision"/>. Trail entries carry their historical times and are marked
+/// <c>seededHistory</c> like the history claims. Claims whose reference exists are skipped, so every start is
+/// idempotent; each claim is written in one transaction.
+/// </summary>
+internal sealed class RemedyScenarioSeeder(
+    WarrantyDbContext db,
+    ITenantContext tenantContext,
+    IServiceNetwork serviceNetwork,
+    RemedyPolicyEvaluator evaluator,
+    TimeProvider time,
+    ILogger<RemedyScenarioSeeder> logger)
+{
+    /// <summary>The initial scenario of an approved claim without a confirmed protection plan (research R13).</summary>
+    private const RemedyScenario InitialScenario = RemedyScenario.CoveredDefect;
+
+    public async Task SeedAsync(TenantSeedSet seed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        if (seed.RemedyScenarios.Count == 0)
+        {
+            return;
+        }
+
+        var now = time.GetUtcNow();
+        using var scope = TenantContextScope.Begin(seed.Tenant.Id, seed.Tenant.Slug, SeedingPipeline.Principal);
+        var versions = await db.PolicyVersions.AsNoTracking().ToListAsync(ct);
+        var added = 0;
+        foreach (var scenario in seed.RemedyScenarios)
+        {
+            var reference = ClaimReference.Normalize(scenario.Reference);
+            if (await db.Claims.AnyAsync(c => c.Reference == reference, ct))
+            {
+                continue;
+            }
+
+            await SeedClaimAsync(scenario, reference, versions, now, ct);
+            added++;
+        }
+
+        logger.LogInformation(
+            "Seeded tenant {Tenant}: {Added} new remedy scenario claims of {Total}", seed.Tenant.Slug, added, seed.RemedyScenarios.Count);
+    }
+
+    private async Task SeedClaimAsync(
+        RemedyScenarioClaimSeed scenario, string reference, IReadOnlyList<PolicyVersion> versions, DateTimeOffset now, CancellationToken ct)
+    {
+        var email = ContactNormalizer.NormalizeEmail(scenario.CustomerEmail);
+        var customer = await db.Customers.SingleAsync(c => c.Email == email, ct);
+        var product = await db.Products.SingleAsync(p => p.ModelCode == Product.NormalizeModelCode(scenario.ModelCode), ct);
+        var submittedAt = scenario.SubmittedAt(now);
+        var approvedAt = scenario.ApprovedAt(now);
+        var tenantId = tenantContext.TenantId;
+
+        var claim = Claim.Submit(
+            scenario.Id, tenantId, reference, ClaimChannel.ClaimantPortal, Claim.ClaimantSubmitter, customer.Id,
+            customer.Email, customer.Phone, product.ModelCode, product.Id, scenario.SerialNumber, scenario.PurchaseDate(now),
+            scenario.PurchasePlace, scenario.PurchasePrice, scenario.Region, scenario.ProblemDescription, submittedAt);
+        claim.StartEvaluation(submittedAt);
+        if (scenario.ApprovedBy == DecidedBy.Reviewer)
+        {
+            claim.EscalateToReview(submittedAt);
+        }
+
+        claim.FinalizeApproved(scenario.Explanation, scenario.ApprovedBy, approvedAt);
+
+        // The remedy comes from the claim's own policy version, never from the seed file.
+        var applicable = versions.Where(v => v.AppliesTo(claim.PurchaseDate, scenario.Region, product.Category)).ToList();
+        if (applicable.Count != 1)
+        {
+            throw new InvalidDataException(
+                $"Remedy scenario {scenario.Scenario}: {applicable.Count} policy versions apply to the claim; a seeded scenario needs exactly one.");
+        }
+
+        var version = applicable[0];
+        var evaluation = evaluator.Evaluate(version.RemedyRules, InitialScenario, claimValue: product.ClaimValue);
+        if (evaluation.AutomaticRemedy == RemedyType.Refund)
+        {
+            // A refund is a consequential action only the ActionExecutor may request (constitution II).
+            throw new InvalidDataException(
+                $"Remedy scenario {scenario.Scenario}: policy {version.Id} sets Refund automatically; the seed cannot request a refund.");
+        }
+
+        var centre = evaluation.AutomaticRemedy == RemedyType.Repair
+            ? (await serviceNetwork.ListEligibleAsync(scenario.Region, product.Category, ct)).FirstOrDefault(c => c.ServesClaim)
+            : null;
+
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(
+            async token =>
+            {
+                await using var transaction = await db.Database.BeginTransactionAsync(token);
+                db.Claims.Add(claim);
+                await AppendAsync(claim.Id, submittedAt, TrailStep.ClaimSubmitted, "Seeded history: claim submitted.", new { seededHistory = true, scenario.Scenario }, token);
+                await AppendApprovalAsync(claim, scenario, approvedAt, token);
+                await AppendAsync(
+                    claim.Id, approvedAt, TrailStep.RemedyRecommended, $"Seeded history: {RecommendationSummary(evaluation, version)}",
+                    new
+                    {
+                        seededHistory = true,
+                        policyVersionId = version.Id,
+                        policyVersion = version.Version,
+                        scenario = InitialScenario.ToString(),
+                        tableRow = evaluation.TableRow,
+                        allowedRemedies = evaluation.AllowedRemedies.Select(r => r.ToString()).ToArray(),
+                        recommendation = evaluation.SingleRemedy?.ToString(),
+                        pendingReason = evaluation.PendingReason is { } reason ? WireName.Of(reason) : null,
+                    },
+                    token);
+
+                var seq = 0;
+                db.RemedyDecisions.Add(RemedyDecision.Evaluated(
+                    Guid.CreateVersion7(), tenantId, claim.Id, ++seq, InitialScenario, version.Id, evaluation.TableRow,
+                    evaluation.AllowedRemedies, failedAttempts: 0, estimateAmount: null, approvedAt));
+
+                if (evaluation.AutomaticRemedy is not { } remedy)
+                {
+                    db.ClaimRemedies.Add(ClaimRemedy.AwaitDecision(
+                        Guid.CreateVersion7(), tenantId, claim.Id, version.Id, InitialScenario, evaluation.AllowedRemedies,
+                        evaluation.PendingReason ?? RemedyPendingReason.NoRemedyRule, approvedAt));
+                    await db.SaveChangesAsync(token);
+                    await transaction.CommitAsync(token);
+                    return;
+                }
+
+                db.ClaimRemedies.Add(ClaimRemedy.SetByPolicy(
+                    Guid.CreateVersion7(), tenantId, claim.Id, version.Id, InitialScenario, remedy, evaluation.AllowedRemedies, approvedAt));
+                db.RemedyDecisions.Add(RemedyDecision.Decided(
+                    Guid.CreateVersion7(), tenantId, claim.Id, ++seq, InitialScenario, version.Id, evaluation.TableRow,
+                    evaluation.AllowedRemedies, remedy, RemedyDecidedBy.Policy, RemedyDecision.SystemActor, reason: null,
+                    failedAttempts: 0, estimateAmount: null, approvedAt));
+                await AppendAsync(
+                    claim.Id, approvedAt, TrailStep.RemedyDecided,
+                    $"Seeded history: remedy {remedy} set by policy (version {version.Version}, row {evaluation.TableRow}).",
+                    new { seededHistory = true, remedy = remedy.ToString(), decidedBy = nameof(RemedyDecidedBy.Policy), policyVersionId = version.Id, tableRow = evaluation.TableRow },
+                    token);
+
+                var repair = Repair.Create(Guid.CreateVersion7(), tenantId, claim.Id, centre?.Id, approvedAt);
+                db.Repairs.Add(repair);
+                if (centre is not null)
+                {
+                    await AppendAsync(
+                        claim.Id, approvedAt, TrailStep.RepairCentreAssigned, $"Seeded history: repair centre suggested: {centre.Name}.",
+                        new
+                        {
+                            seededHistory = true,
+                            repairId = repair.Id,
+                            serviceCenterId = centre.Id,
+                            serviceCenterName = centre.Name,
+                            assignment = nameof(HandoverAssignment.Suggested),
+                        },
+                        token);
+                }
+
+                await db.SaveChangesAsync(token);
+                await transaction.CommitAsync(token);
+            },
+            ct);
+    }
+
+    private Task AppendApprovalAsync(Claim claim, RemedyScenarioClaimSeed scenario, DateTimeOffset approvedAt, CancellationToken ct)
+    {
+        var marker = new { seededHistory = true, scenario.Scenario, outcome = nameof(FinalOutcome.Approved), decidedBy = scenario.ApprovedBy.ToString() };
+        return scenario.ApprovedBy == DecidedBy.System
+            ? AppendAsync(claim.Id, approvedAt, TrailStep.AutoApproved, "Seeded history: claim approved automatically.", marker, ct)
+            : AppendAsync(claim.Id, approvedAt, TrailStep.ReviewerDecided, "Seeded history: approved by a reviewer.", marker, ct);
+    }
+
+    private Task AppendAsync(Guid claimId, DateTimeOffset at, TrailStep step, string summary, object payload, CancellationToken ct)
+        => new DecisionTrailWriter(db, tenantContext, new FixedTime(at)).AppendAsync(claimId, step, TenantSeeder.HistoryActor, summary, payload, ct);
+
+    /// <summary>The executor's recommendation summary (policy version and table row).</summary>
+    private static string RecommendationSummary(RemedyEvaluation evaluation, PolicyVersion version)
+    {
+        var basis = $"policy version {version.Version}, row {evaluation.TableRow}";
+        return evaluation switch
+        {
+            { AutomaticRemedy: { } remedy } => $"Remedy {remedy} from the policy ({basis}).",
+            { AllowedRemedies.Count: > 0 } => $"The policy allows {string.Join(" or ", evaluation.AllowedRemedies)} ({basis}): a reviewer decides.",
+            _ => $"The policy gives no remedy for this claim ({basis}): a reviewer decides.",
+        };
+    }
+
+    /// <summary>A clock stopped at one instant, so a seeded trail entry carries its historical time.</summary>
+    private sealed class FixedTime(DateTimeOffset instant) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => instant;
+    }
+}

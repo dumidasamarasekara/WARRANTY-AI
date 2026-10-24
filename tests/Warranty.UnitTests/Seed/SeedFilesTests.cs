@@ -1,3 +1,4 @@
+using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
@@ -192,6 +193,89 @@ public sealed class SeedFilesTests
                 Guid.Parse("22222222-0003-7000-8000-000000000001"), Region.NA, "Open", centers[0].Capabilities,
                 "1 Test Lane", "Mon–Fri 09:00–17:00", "desk@example.com", IsActive: true, Priority: 5));
             (centers[1].IsActive, centers[1].Priority, centers[1].Address).ShouldBe((false, ServiceCenter.DefaultPriority, null));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Feature 002 (T222): each tenant's <c>remedy-scenarios.json</c> holds the approved claims of R1/R2 and its half
+    /// of the R4 "same facts, different company" pair; the remedy itself is not in the file.
+    /// </summary>
+    [Fact]
+    public void Remedy_scenarios_load_per_tenant_with_the_R4_pair_sharing_the_same_facts()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+        var aurora = seed.Tenants[0].RemedyScenarios;
+        var borealis = seed.Tenants[1].RemedyScenarios;
+
+        aurora.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.Region)).ShouldBe(
+            [("R1", "RMDYR1A001", "AUR-TAB10", Region.NA), ("R4-aurora", "RMDYR4A001", "AUR-TAB10", Region.EU)]);
+        borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.Region)).ShouldBe(
+            [("R2", "RMDYR2B001", "BOR-SLATE11", Region.EU), ("R4-borealis", "RMDYR4B001", "BOR-SLATE11", Region.EU)]);
+        aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System);
+        aurora[0].Id.ShouldBe(Guid.Parse("11111111-0005-7000-8000-000000000001"));
+        borealis[0].Id.ShouldBe(Guid.Parse("22222222-0005-7000-8000-000000000001"));
+
+        var (a, b) = (aurora[1], borealis[1]);
+        (a.Region, a.PurchasePlace, a.PurchasePrice, a.ProblemDescription, a.PurchasedDaysAgo, a.SubmittedDaysAgo, a.ApprovedDaysAgo)
+            .ShouldBe((b.Region, b.PurchasePlace, b.PurchasePrice, b.ProblemDescription, b.PurchasedDaysAgo, b.SubmittedDaysAgo, b.ApprovedDaysAgo));
+    }
+
+    [Fact]
+    public void Remedy_scenario_dates_are_offsets_from_the_seeding_time()
+    {
+        var r1 = SeedFiles.Load(SeedRoot()).Tenants[0].RemedyScenarios[0];
+        var seedingTime = new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+
+        r1.PurchaseDate(seedingTime).ShouldBe(new DateOnly(2026, 8, 25));
+        r1.SubmittedAt(seedingTime).ShouldBe(seedingTime.AddDays(-3));
+        r1.ApprovedAt(seedingTime).ShouldBe(seedingTime.AddDays(-3));
+    }
+
+    [Fact]
+    public void Remedy_scenarios_are_optional()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            File.Delete(Path.Combine(root, "tenants", "borealis", "remedy-scenarios.json"));
+
+            var seed = SeedFiles.Load(root);
+
+            seed.Tenants[1].RemedyScenarios.ShouldBeEmpty();
+            seed.Tenants[0].RemedyScenarios.Count.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("serialNumber", "\"AT10-99-0001\"", "names unknown serial AT10-99-0001")]
+    [InlineData("modelCode", "\"AUR-TV55\"", "names unknown model AUR-TV55")]
+    [InlineData("customerEmail", "\"nobody@aurora.example.com\"", "names unknown customer")]
+    [InlineData("reference", "\"TOO-SHORT\"", "invalid claim reference")]
+    [InlineData("reference", "\"HSTRY00030\"", "HSTRY00030 is used by more than one seeded claim")]
+    [InlineData("id", "\"11111111-0004-7000-8000-000000000001\"", "is used by more than one seeded claim")]
+    [InlineData("scenario", "\"R4-aurora\"", "R4-aurora is listed more than once")]
+    [InlineData("approvedDaysAgo", "-10", "submitted and approved in that order")]
+    [InlineData("approvedDaysAgo", "1", "submitted and approved in that order")]
+    [InlineData("explanation", "\" \"", "needs a problem description and an explanation")]
+    public void An_invalid_remedy_scenario_is_rejected_before_anything_is_written(string field, string json, string message)
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var file = Path.Combine(root, "tenants", "aurora", "remedy-scenarios.json");
+            var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+            document["claims"]![0]![field] = System.Text.Json.Nodes.JsonNode.Parse(json);
+            File.WriteAllText(file, document.ToJsonString());
+
+            Should.Throw<InvalidDataException>(() => SeedFiles.Load(root)).Message.ShouldContain(message);
         }
         finally
         {

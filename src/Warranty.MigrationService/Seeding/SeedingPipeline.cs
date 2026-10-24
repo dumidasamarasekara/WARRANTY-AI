@@ -6,7 +6,8 @@ namespace Warranty.MigrationService.Seeding;
 /// <summary>
 /// The migration service's work, in order: migrate both databases and apply the owner SQL scripts,
 /// create the knowledge partitions, seed every tenant, then index global knowledge (no tenant in
-/// scope) and each tenant's policies (inside that tenant's scope). Each step runs in its own DI
+/// scope) and each tenant's policies (inside that tenant's scope), and finally seed each tenant's remedy
+/// scenario claims, whose remedies come from those policy versions. Each step runs in its own DI
 /// scope, so no DbContext outlives the tenant it was used for.
 /// </summary>
 internal sealed class SeedingPipeline(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<SeedingPipeline> logger)
@@ -33,6 +34,12 @@ internal sealed class SeedingPipeline(IServiceScopeFactory scopes, IConfiguratio
         {
             using var scope = TenantContextScope.Begin(tenant.Tenant.Id, tenant.Tenant.Slug, Principal);
             await InScopeAsync<KnowledgeSeeder>(k => k.IngestAsync(tenant.Knowledge, ct));
+        }
+
+        // Remedy scenario claims need the policy versions the tenant's policies were just indexed into.
+        foreach (var tenant in seed.Tenants)
+        {
+            await InScopeAsync<RemedyScenarioSeeder>(s => s.SeedAsync(tenant, ct));
         }
 
         logger.LogInformation("Migration and seeding completed");

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Warranty.Application.Abstractions.Knowledge;
+using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
@@ -79,6 +80,36 @@ public sealed record HistoricalClaimSeed(
 }
 
 /// <summary>
+/// An approved claim of <c>remedy-scenarios.json</c> (002 quickstart §2): <see cref="Scenario"/> names the
+/// validation scenario it serves (e.g. <c>R1</c>). The remedy is not part of the seed: it is derived from the
+/// claim's applicable policy version at seeding time. <see cref="ApprovedBy"/> is <c>System</c> (automatic
+/// approval) or <c>Reviewer</c>; every <c>*DaysAgo</c> value is a signed day offset from the seeding day.
+/// </summary>
+public sealed record RemedyScenarioClaimSeed(
+    string Scenario,
+    Guid Id,
+    string Reference,
+    string CustomerEmail,
+    string ModelCode,
+    string SerialNumber,
+    Region Region,
+    string PurchasePlace,
+    decimal PurchasePrice,
+    string ProblemDescription,
+    int PurchasedDaysAgo,
+    int SubmittedDaysAgo,
+    int ApprovedDaysAgo,
+    DecidedBy ApprovedBy,
+    string Explanation)
+{
+    public DateOnly PurchaseDate(DateTimeOffset seedingTime) => DateOnly.FromDateTime(seedingTime.UtcDateTime).AddDays(PurchasedDaysAgo);
+
+    public DateTimeOffset SubmittedAt(DateTimeOffset seedingTime) => seedingTime.AddDays(SubmittedDaysAgo);
+
+    public DateTimeOffset ApprovedAt(DateTimeOffset seedingTime) => seedingTime.AddDays(ApprovedDaysAgo);
+}
+
+/// <summary>
 /// One knowledge source file. <see cref="BlobPath"/> is its path in the <c>knowledge-sources</c>
 /// container (<c>global/…</c> or <c>tenant-{slug}/…</c>) and the source path recorded at ingestion.
 /// Line endings are normalized so the checksum does not depend on how the repository was checked out.
@@ -96,14 +127,15 @@ public sealed record TenantSeedSet(
     IReadOnlyList<ServiceCenterSeed> ServiceCenters,
     IReadOnlyList<HistoricalClaimSeed> HistoricalClaims,
     IReadOnlyList<KnowledgeSeed> Knowledge,
-    IReadOnlyList<PolicyRemediesSeed> PolicyRemedies);
+    IReadOnlyList<PolicyRemediesSeed> PolicyRemedies,
+    IReadOnlyList<RemedyScenarioClaimSeed> RemedyScenarios);
 
 public sealed record SeedSet(IReadOnlyList<TenantSeedSet> Tenants, IReadOnlyList<KnowledgeSeed> GlobalKnowledge);
 
 /// <summary>
 /// Reads the synthetic seed folder (data-model.md §Seed data): <c>tenants/{slug}/tenant.json</c>,
 /// <c>products.json</c>, <c>serials.json</c>, <c>customers.json</c>, <c>service-centers.json</c>,
-/// optional <c>historical-claims.json</c> and <c>policies/*.md</c>, plus <c>global/*.md</c>. Every
+/// optional <c>historical-claims.json</c>, <c>remedy-scenarios.json</c> and <c>policies/*.md</c>, plus <c>global/*.md</c>. Every
 /// file is checked for references the database would only reject later (unknown model codes,
 /// customers or a folder name that differs from the slug).
 /// </summary>
@@ -146,6 +178,9 @@ public static class SeedFiles
         var history = File.Exists(Path.Combine(folder, "historical-claims.json"))
             ? Read<HistoricalClaimsFile>(folder, "historical-claims.json").Claims
             : [];
+        var scenarios = File.Exists(Path.Combine(folder, "remedy-scenarios.json"))
+            ? Read<RemedyScenariosFile>(folder, "remedy-scenarios.json").Claims
+            : [];
 
         var models = products.Select(p => p.ModelCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var emails = customers.Select(c => c.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -157,6 +192,7 @@ public static class SeedFiles
             .Concat(history.Where(h => !emails.Contains(h.CustomerEmail)).Select(h => $"history claim {h.Reference} names unknown customer {h.CustomerEmail}"))
             .Concat(history.Where(h => !(h.PurchasedDaysAgo <= h.SubmittedDaysAgo && h.SubmittedDaysAgo <= h.FinalizedDaysAgo && h.FinalizedDaysAgo <= 0))
                 .Select(h => $"history claim {h.Reference} must be purchased, submitted and finalized in that order, in the past"))
+            .Concat(ScenarioErrors(scenarios, history, models, serialNumbers, emails))
             .Concat(centers.GroupBy(c => c.Id).Where(g => g.Count() > 1).Select(g => $"service center {g.Key} is listed more than once"))
             .Concat(centers.Where(c => c.Priority < 0).Select(c => $"service center {c.Name} has a negative priority"))
             // Claimants see an active centre's address and opening hours (data-model.md); inactive centres need neither.
@@ -172,7 +208,7 @@ public static class SeedFiles
 
         var knowledge = Markdown(Path.Combine(folder, "policies"), $"{tenant.KnowledgeNamespace}/policies");
         var remedies = knowledge.Select(k => Remedies(folder, k)).OfType<PolicyRemediesSeed>().ToList();
-        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge, remedies);
+        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge, remedies, scenarios);
     }
 
     /// <summary>
@@ -224,5 +260,81 @@ public static class SeedFiles
         return JsonSerializer.Deserialize<T>(stream, Json) ?? throw new InvalidDataException($"Seed file '{path}' is empty.");
     }
 
+    /// <summary>
+    /// Checks the remedy scenario claims for what the database or the domain would only reject later: unknown
+    /// model, serial or customer, an invalid claim reference, a scenario, ID or reference used twice (also
+    /// against the history claims), dates out of order or in the future, and a blank text.
+    /// </summary>
+    private static IEnumerable<string> ScenarioErrors(
+        IReadOnlyList<RemedyScenarioClaimSeed> scenarios,
+        IReadOnlyList<HistoricalClaimSeed> history,
+        HashSet<string> models,
+        HashSet<string> serialNumbers,
+        HashSet<string> emails)
+    {
+        foreach (var s in scenarios)
+        {
+            var name = $"remedy scenario {s.Scenario}";
+            if (string.IsNullOrWhiteSpace(s.Scenario))
+            {
+                yield return $"remedy scenario claim {s.Reference} has no scenario name";
+            }
+
+            if (!models.Contains(s.ModelCode))
+            {
+                yield return $"{name} names unknown model {s.ModelCode}";
+            }
+
+            if (!serialNumbers.Contains(s.SerialNumber))
+            {
+                yield return $"{name} names unknown serial {s.SerialNumber}";
+            }
+
+            if (!emails.Contains(s.CustomerEmail))
+            {
+                yield return $"{name} names unknown customer {s.CustomerEmail}";
+            }
+
+            if (!ClaimReference.IsValid(ClaimReference.Normalize(s.Reference ?? string.Empty)))
+            {
+                yield return $"{name} has an invalid claim reference '{s.Reference}'";
+            }
+
+            if (s.Id == Guid.Empty)
+            {
+                yield return $"{name} has no ID";
+            }
+
+            if (!(s.PurchasedDaysAgo <= s.SubmittedDaysAgo && s.SubmittedDaysAgo <= s.ApprovedDaysAgo && s.ApprovedDaysAgo <= 0))
+            {
+                yield return $"{name} must be purchased, submitted and approved in that order, in the past";
+            }
+
+            if (string.IsNullOrWhiteSpace(s.ProblemDescription) || string.IsNullOrWhiteSpace(s.Explanation))
+            {
+                yield return $"{name} needs a problem description and an explanation";
+            }
+        }
+
+        foreach (var duplicate in scenarios.GroupBy(s => s.Scenario, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+        {
+            yield return $"remedy scenario {duplicate.Key} is listed more than once";
+        }
+
+        var references = history.Select(h => ClaimReference.Normalize(h.Reference))
+            .Concat(scenarios.Select(s => ClaimReference.Normalize(s.Reference ?? string.Empty)));
+        foreach (var duplicate in references.GroupBy(r => r, StringComparer.Ordinal).Where(g => g.Count() > 1))
+        {
+            yield return $"claim reference {duplicate.Key} is used by more than one seeded claim";
+        }
+
+        foreach (var duplicate in history.Select(h => h.Id).Concat(scenarios.Select(s => s.Id)).GroupBy(id => id).Where(g => g.Count() > 1))
+        {
+            yield return $"claim ID {duplicate.Key} is used by more than one seeded claim";
+        }
+    }
+
     private sealed record HistoricalClaimsFile(IReadOnlyList<HistoricalClaimSeed> Claims);
+
+    private sealed record RemedyScenariosFile(IReadOnlyList<RemedyScenarioClaimSeed> Claims);
 }
