@@ -100,6 +100,76 @@ public sealed class Repair
         return repair;
     }
 
+    // Transitions (data-model.md, Repair state machine). A refused transition throws an
+    // InvalidClaimTransitionException naming the current status and leaves the repair unchanged.
+
+    /// <summary>
+    /// The event types allowed from the current status (drives <c>RepairView.allowedEvents</c> and the 409 detail).
+    /// Pending T238 (US2 events); T247 and T256 add the US3 and US5 events.
+    /// </summary>
+    public IReadOnlyList<RepairEventType> AllowedEvents()
+        => throw new NotImplementedException($"Pending T238 ({Status}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.CentreChanged"/>: <see cref="RepairStatus.AwaitingHandover"/> stays; the staff-chosen
+    /// centre becomes the active hand-over (<see cref="HandoverAssignment.ChosenByStaff"/>, reason required). Pending T238.
+    /// </summary>
+    public RepairEvent ChangeCentre(Guid serviceCenterId, string reason, RepairReport report)
+        => throw new NotImplementedException($"Pending T238 ({serviceCenterId}, {reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.HandedOver"/>: <see cref="RepairStatus.AwaitingHandover"/> → <see cref="RepairStatus.AtRepairCentre"/>;
+    /// needs an active centre; records the date and centre reference on the active hand-over and opens attempt 1
+    /// when no attempt is open. Pending T238.
+    /// </summary>
+    public RepairEvent RecordHandover(DateOnly handedOverOn, string? centreReference, RepairReport report)
+        => throw new NotImplementedException($"Pending T238 ({handedOverOn}, {centreReference}, {report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.MarkedReady"/>: <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.ReadyForCollection"/>;
+    /// the current attempt ends as <see cref="AttemptResult.Ready"/>. Pending T238.
+    /// </summary>
+    public RepairEvent MarkReady(RepairReport report)
+        => throw new NotImplementedException($"Pending T238 ({report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.Collected"/>: <see cref="RepairStatus.ReadyForCollection"/> → <see cref="RepairStatus.Collected"/>
+    /// (final); the current attempt's result becomes <see cref="AttemptResult.Collected"/>. Pending T238.
+    /// </summary>
+    public RepairEvent RecordCollection(RepairReport report)
+        => throw new NotImplementedException($"Pending T238 ({report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.EstimateReported"/> at the repair centre: stays <see cref="RepairStatus.AtRepairCentre"/>, or
+    /// becomes <see cref="RepairStatus.RepairNotPossible"/> (<see cref="RepairNotPossibleReason.NotEconomical"/>) only when
+    /// <paramref name="economicLimitAmount"/> is set and the estimate is strictly above it. Pending T247.
+    /// </summary>
+    public RepairEvent RecordEstimate(decimal estimateAmount, decimal? economicLimitAmount, RepairReport report)
+        => throw new NotImplementedException($"Pending T247 ({estimateAmount}, {economicLimitAmount}, {report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.RepairFailed"/>: <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.RepairNotPossible"/>
+    /// (<see cref="RepairNotPossibleReason.Failed"/>); reason required; <see cref="FailedAttempts"/> + 1. Pending T247.
+    /// </summary>
+    public RepairEvent RecordFailure(string reason, RepairReport report)
+        => throw new NotImplementedException($"Pending T247 ({reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.NewAttemptStarted"/> after a failure below the limit (the limit is checked by the use
+    /// case): → <see cref="RepairStatus.AtRepairCentre"/> with a new open attempt when the product stayed at the centre,
+    /// or → <see cref="RepairStatus.AwaitingHandover"/> when it was returned to the customer. Pending T247.
+    /// </summary>
+    public RepairEvent StartNewAttempt(ProductLocation productLocation, RepairReport report)
+        => throw new NotImplementedException($"Pending T247 ({productLocation}, {report}).");
+
+    /// <summary>
+    /// <see cref="RepairEventType.Transferred"/>: from <see cref="RepairStatus.AwaitingHandover"/> or
+    /// <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.AwaitingHandover"/> with a new active hand-over
+    /// (<see cref="HandoverAssignment.Transfer"/>, reason required); the attempt count is unchanged. Pending T256.
+    /// </summary>
+    public RepairEvent Transfer(Guid serviceCenterId, string reason, RepairReport report)
+        => throw new NotImplementedException($"Pending T256 ({serviceCenterId}, {reason}, {report}).");
+
     /// <summary>The next gap-free event sequence number.</summary>
     internal int NextEventSeq => _events.Count == 0 ? 1 : _events.Max(e => e.Seq) + 1;
 
