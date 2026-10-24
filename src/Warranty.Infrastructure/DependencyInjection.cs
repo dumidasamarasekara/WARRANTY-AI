@@ -79,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
         services.AddScoped<IRemedyRepository, RemedyRepository>();
         services.AddScoped<IRepairRepository, RepairRepository>();
+        services.AddScoped<IReplacementRepository, ReplacementRepository>();
+        services.AddScoped<IReplacementSerialRegistry, ReplacementSerialRegistry>();
         services.AddScoped<IKnowledgeStore, KnowledgeStore>();
 
         // A host may register its own BlobServiceClient (e.g. the Aspire client integration); otherwise
