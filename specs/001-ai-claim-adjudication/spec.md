@@ -704,6 +704,10 @@ happened.
 - An "Approved" outcome is a recorded decision; real fulfillment (repair, replacement, refund,
   payment, shipping) is out of scope. To demonstrate the action path, the PoC records a simulated
   repair request and a simulated customer notification; nothing is dispatched or sent.
+  *Superseded by feature 002 (`specs/002-remedy-repair-handover`)*: approved claims now get a
+  remedy (Repair, Replacement or Refund), and a Repair is handed over to a repair centre and tracked
+  instead of a simulated repair request; the claimant sees repair progress instead of "the service
+  centre will contact you". Claims approved before 002 keep their repair request rows.
 - Outbound notifications (email/SMS) are not delivered; outcomes and requests for information are
   visible through the claim status view.
 - Any reviewer of the tenant may pick up any escalated claim; assignment rules and review SLAs are

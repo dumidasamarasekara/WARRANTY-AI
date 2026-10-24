@@ -139,7 +139,7 @@ all eight principles. No principle is violated; complexity items are justified b
 | 4 | Risk capability (inside Decision step) | Deterministic signals (open-or-90-day duplicate claims, image hash reuse, date anomalies, catalog mismatch, injection detector) merged with AI-reported signals | Risk signals, score and level — `Low` only with no signal (R23) |
 | 5 | Decision Agent | `adjudication` model | Structured recommendation ([contracts/schemas/decision-recommendation.schema.json](./contracts/schemas/decision-recommendation.schema.json)) |
 | 6 | Guardrail engine | Deterministic | Check results (incl. loop-state and claimant-text checks) + disposition (`AutoApprove`, `AutoReject`, `RequestInformation`, `HumanReview`) + `ApprovedAction` when allowed |
-| 7 | ActionExecutor or review queue | Deterministic | Claim status change and loop counters (R24); final claimant explanation; simulated repair request + notification on approval; or escalation |
+| 7 | ActionExecutor or review queue | Deterministic | Claim status change and loop counters (R24); final claimant explanation; simulated repair request + notification on approval (*superseded by feature 002*: the approval records the policy remedy and, for a Repair, creates a `Repair` with the suggested repair centre instead of a repair request — see `specs/002-remedy-repair-handover/research.md` R8); or escalation |
 | 8 | Audit | Deterministic | Decision trail entries for every step; AI execution records |
 
 Any AI step that fails, times out, is refused, or returns an invalid structure after one corrective

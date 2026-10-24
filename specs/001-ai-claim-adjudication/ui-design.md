@@ -52,6 +52,11 @@ The design's visual language puts the constitution's *Explainable Decisions* (II
 | Customer PII masked with "reveal" flow | Customer data shown as returned by `GET /api/claims/{id}`; no reveal flow | not in the spec |
 | Customer portal shows the claimant's name and a "repair time" booking | Claimants have no account; the repair request is simulated and shown only as "the service centre will contact you" | spec Assumptions, FR-037a |
 
+> **Superseded by feature 002** (`specs/002-remedy-repair-handover`): the simulated repair request
+> and the "the service centre will contact you" message are replaced by the remedy and repair
+> hand-over — staff use the claim's Remedy tab, and the claimant status page shows the remedy and
+> repair progress. Claims approved before 002 are shown as before.
+
 **Excluded prototype screens** (no requirement or API in this feature; kept in the source for later
 features): operations dashboard, AI operations, knowledge base, administration, service partner
 workspace, mobile views, two-tenant demo page, notifications menu, ⌘K command palette. The design
