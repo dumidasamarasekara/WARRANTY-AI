@@ -22,7 +22,9 @@ public sealed class ReplacementPolicy
     /// <param name="rules">The applicable policy version's replacement rules; null when the version has none.</param>
     /// <param name="productHeldByRepairCentre">True when the claim's 002 repair holds the faulty product (research R9).</param>
     public ReplacementStatus InitialStatus(ReplacementRules? rules, bool productHeldByRepairCentre)
-        => throw new NotImplementedException("Pending T323.");
+        => (rules ?? ReplacementRules.Default).ReturnRule == ReplacementReturnRule.BeforeReservation && !productHeldByRepairCentre
+            ? ReplacementStatus.AwaitingReturn
+            : ReplacementStatus.AwaitingUnit;
 
     /// <summary>
     /// Whether <paramref name="proposed"/> may be handed out instead of the claimed <paramref name="original"/>

@@ -11,6 +11,7 @@ public static class DependencyInjection
         // Stateless and pure, so one instance serves every run.
         services.AddSingleton<IGuardrailEngine, GuardrailEngine>();
         services.AddSingleton<RemedyPolicyEvaluator>();
+        services.AddSingleton<ReplacementPolicy>();
         return services;
     }
 }

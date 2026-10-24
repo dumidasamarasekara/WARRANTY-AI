@@ -12,7 +12,6 @@ namespace Warranty.UnitTests.Guardrails.Remedies;
 /// </summary>
 public sealed class ReplacementPolicyTests
 {
-    private const string InitialStatusPending = "Pending T323";
     private const string CheckModelPending = "Pending T342";
 
     private static readonly ReplacementPolicy Policy = new();
@@ -30,7 +29,7 @@ public sealed class ReplacementPolicyTests
 
     // ---- Initial status (FR-013, research R9) ------------------------------------------------------------
 
-    [Theory(Skip = InitialStatusPending)]
+    [Theory]
     [InlineData(ReplacementReturnRule.AtCollection, false, ReplacementStatus.AwaitingUnit)]
     [InlineData(ReplacementReturnRule.AtCollection, true, ReplacementStatus.AwaitingUnit)]
     [InlineData(ReplacementReturnRule.BeforeReservation, false, ReplacementStatus.AwaitingReturn)]
@@ -39,28 +38,28 @@ public sealed class ReplacementPolicyTests
         ReplacementReturnRule returnRule, bool heldByRepairCentre, ReplacementStatus expected)
         => Policy.InitialStatus(new ReplacementRules(ReturnRule: returnRule), heldByRepairCentre).ShouldBe(expected);
 
-    [Fact(Skip = InitialStatusPending)]
+    [Fact]
     public void Aurora_returns_at_collection_so_a_replacement_starts_awaiting_a_unit()
     {
         Policy.InitialStatus(Aurora, productHeldByRepairCentre: false).ShouldBe(ReplacementStatus.AwaitingUnit);
         Policy.InitialStatus(Aurora, productHeldByRepairCentre: true).ShouldBe(ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = InitialStatusPending)]
+    [Fact]
     public void Borealis_returns_before_reservation_unless_a_repair_centre_already_holds_the_product()
     {
         Policy.InitialStatus(Borealis, productHeldByRepairCentre: false).ShouldBe(ReplacementStatus.AwaitingReturn);
         Policy.InitialStatus(Borealis, productHeldByRepairCentre: true).ShouldBe(ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = InitialStatusPending)]
+    [Fact]
     public void A_version_without_replacement_rules_returns_at_collection()
     {
         Policy.InitialStatus(null, productHeldByRepairCentre: false).ShouldBe(ReplacementStatus.AwaitingUnit);
         Policy.InitialStatus(null, productHeldByRepairCentre: true).ShouldBe(ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = InitialStatusPending)]
+    [Fact]
     public void The_initial_status_is_deterministic()
         => Policy.InitialStatus(Borealis, false).ShouldBe(Policy.InitialStatus(Borealis, false));
 
