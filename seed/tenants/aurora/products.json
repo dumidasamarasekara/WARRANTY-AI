@@ -19,5 +19,12 @@
     "name": "Aurora Book 15",
     "category": "laptop",
     "claimValue": 1400
+  },
+  {
+    "id": "11111111-0001-7000-8000-000000000004",
+    "modelCode": "AUR-TAB11",
+    "name": "Aurora Tab 11",
+    "category": "tablet",
+    "claimValue": 520
   }
 ]

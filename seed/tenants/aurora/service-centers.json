@@ -7,7 +7,8 @@
     "address": "200 Example Boulevard, Springfield 00001, US",
     "openingHours": "Mon–Fri 09:00–18:00, Sat 10:00–14:00",
     "contact": "springfield.service@aurora.example.com · +1 555 020 0001",
-    "priority": 10
+    "priority": 10,
+    "issuesReplacements": true
   },
   {
     "id": "11111111-0003-7000-8000-000000000003",
@@ -17,7 +18,8 @@
     "address": "45 Sample Street, Riverside 00003, US",
     "openingHours": "Mon–Fri 08:30–17:00",
     "contact": "riverside.service@aurora.example.com · +1 555 020 0003",
-    "priority": 20
+    "priority": 20,
+    "issuesReplacements": true
   },
   {
     "id": "11111111-0003-7000-8000-000000000002",
@@ -27,7 +29,8 @@
     "address": "Voorbeeldstraat 12, 1000 AA Amsterdam, NL",
     "openingHours": "Mon–Fri 09:00–17:30",
     "contact": "amsterdam.service@aurora.example.com · +31 20 555 0002",
-    "priority": 10
+    "priority": 10,
+    "issuesReplacements": true
   },
   {
     "id": "11111111-0003-7000-8000-000000000004",
@@ -37,6 +40,7 @@
     "address": "Beispielweg 7, 20095 Hamburg, DE",
     "openingHours": "Mon–Fri 09:00–17:00, Sat 10:00–13:00",
     "contact": "hamburg.service@aurora.example.com · +49 40 555 0004",
-    "priority": 20
+    "priority": 20,
+    "issuesReplacements": true
   }
 ]

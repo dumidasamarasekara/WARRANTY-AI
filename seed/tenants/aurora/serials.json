@@ -69,5 +69,21 @@
   { "serialNumber": "AB15-24-0012", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-05", "reservedFor": "US6-override (decision trail tests)" },
   { "serialNumber": "AB15-24-0013", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-12" },
   { "serialNumber": "AB15-24-0014", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-12" },
-  { "serialNumber": "AB15-24-0015", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-19" }
+  { "serialNumber": "AB15-24-0015", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-19" },
+
+  { "serialNumber": "AT11-25-0001", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-03" },
+  { "serialNumber": "AT11-25-0002", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-03" },
+  { "serialNumber": "AT11-25-0003", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-10" },
+  { "serialNumber": "AT11-25-0004", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-10" },
+  { "serialNumber": "AT11-25-0005", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-17" },
+  { "serialNumber": "AT11-25-0006", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-17" },
+  { "serialNumber": "AT11-25-0007", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-24" },
+  { "serialNumber": "AT11-25-0008", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-24" },
+  { "serialNumber": "AT11-25-0009", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-31" },
+  { "serialNumber": "AT11-25-0010", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-31" },
+  { "serialNumber": "AT11-25-0011", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-04-07" },
+  { "serialNumber": "AT11-25-0012", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-04-07" },
+  { "serialNumber": "AT11-25-0013", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-04-14" },
+  { "serialNumber": "AT11-25-0014", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-04-14" },
+  { "serialNumber": "AT11-25-0015", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-04-21" }
 ]

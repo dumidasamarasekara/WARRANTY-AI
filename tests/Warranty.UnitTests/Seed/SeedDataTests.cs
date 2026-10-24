@@ -105,7 +105,8 @@ public sealed class SeedDataTests
         var serials = Json(slug, "serials.json").EnumerateArray().ToList();
         var categories = products.Select(p => p.GetProperty("category").GetString()!).ToHashSet(StringComparer.Ordinal);
 
-        products.Count.ShouldBe(3);
+        // Aurora also sells AUR-TAB11, the equivalent replacement model of 003 (research R14).
+        products.Count.ShouldBe(slug == "aurora" ? 4 : 3);
         serials.ShouldAllBe(s => modelCodes.Contains(s.GetProperty("modelCode").GetString()!));
         serials.Select(s => s.GetProperty("serialNumber").GetString()).Distinct().Count().ShouldBe(serials.Count);
         foreach (var model in modelCodes)

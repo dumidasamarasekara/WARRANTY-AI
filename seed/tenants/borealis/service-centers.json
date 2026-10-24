@@ -7,7 +7,8 @@
     "address": "310 Example Parkway, Riverton 00021, US",
     "openingHours": "Mon–Fri 09:00–17:00",
     "contact": "riverton.hub@borealis.example.com · +1 555 030 0001",
-    "priority": 10
+    "priority": 10,
+    "issuesReplacements": true
   },
   {
     "id": "22222222-0003-7000-8000-000000000002",
@@ -17,7 +18,8 @@
     "address": "312 Example Parkway, Riverton 00021, US",
     "openingHours": "Mon–Sat 08:00–18:00",
     "contact": "riverton.appliances@borealis.example.com · +1 555 030 0002",
-    "priority": 20
+    "priority": 20,
+    "issuesReplacements": true
   },
   {
     "id": "22222222-0003-7000-8000-000000000003",
@@ -27,7 +29,8 @@
     "address": "8 Rue d'Exemple, 69002 Lyon, FR",
     "openingHours": "Mon–Fri 09:00–18:00",
     "contact": "lyon.hub@borealis.example.com · +33 4 55 50 0003",
-    "priority": 10
+    "priority": 10,
+    "issuesReplacements": true
   },
   {
     "id": "22222222-0003-7000-8000-000000000004",
@@ -37,6 +40,7 @@
     "address": "Via Esempio 21, 10121 Torino, IT",
     "openingHours": "Mon–Fri 08:30–17:30",
     "contact": "turin.hub@borealis.example.com · +39 011 555 0004",
-    "priority": 20
+    "priority": 20,
+    "issuesReplacements": true
   }
 ]
