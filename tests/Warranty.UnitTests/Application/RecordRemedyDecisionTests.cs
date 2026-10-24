@@ -27,8 +27,6 @@ namespace Warranty.UnitTests.Application;
 /// </summary>
 public sealed class RecordRemedyDecisionTests
 {
-    private const string Pending = "Pending T227";
-
     private const string ReviewerSub = "reviewer-sub-t221";
     private const string ReviewerName = "Aurora Reviewer";
     private const string SubmittingAgentSub = "agent-sub-t221";
@@ -106,7 +104,7 @@ public sealed class RecordRemedyDecisionTests
 
     // ── Allowed remedies (FR-002) ──────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_remedy_outside_the_allowed_list_is_refused_naming_the_allowed_remedies()
     {
         var (claim, remedy) = ArrangeChoice();
@@ -119,7 +117,7 @@ public sealed class RecordRemedyDecisionTests
         ShouldBeUnchanged(remedy);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_change_after_the_repair_limit_must_name_a_remedy_of_the_new_evaluation()
     {
         var (claim, remedy) = ArrangeRepairFailedLimit();
@@ -132,7 +130,7 @@ public sealed class RecordRemedyDecisionTests
 
     // ── Reason rule (FR-015) ───────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task The_first_decision_of_a_policy_choice_needs_no_reason_and_goes_through_the_executor()
     {
         var (claim, _) = ArrangeChoice();
@@ -153,7 +151,7 @@ public sealed class RecordRemedyDecisionTests
         { "afterRepairLimit", new string('r', RemedyDecision.MinReasonLength - 1) },
     };
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [MemberData(nameof(ChangesWithoutAValidReason))]
     public async Task Every_change_after_the_first_remedy_needs_a_reason_of_10_to_1000_characters(string arrangement, string? reason)
     {
@@ -165,7 +163,7 @@ public sealed class RecordRemedyDecisionTests
         ShouldBeUnchanged(remedy);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("changeInProgress", RemedyDecision.MinReasonLength)]
     [InlineData("changeInProgress", RemedyDecision.MaxReasonLength)]
     [InlineData("afterRepairLimit", RemedyDecision.MinReasonLength)]
@@ -181,7 +179,7 @@ public sealed class RecordRemedyDecisionTests
 
     // ── Separation of duties (001 research R29) ────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reviewer_who_submitted_the_claim_is_refused_with_a_SELF_REVIEW_REFUSED_event()
     {
         var (claim, remedy) = ArrangeChoice(submittedBy: ReviewerSub);
@@ -194,7 +192,7 @@ public sealed class RecordRemedyDecisionTests
         ShouldBeUnchanged(remedy);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Self_review_is_refused_before_the_ETag_or_the_request_fields_are_looked_at()
     {
         var (claim, remedy) = ArrangeChoice(submittedBy: ReviewerSub);
@@ -208,7 +206,7 @@ public sealed class RecordRemedyDecisionTests
 
     // ── Preconditions ──────────────────────────────────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("*")]
@@ -225,7 +223,7 @@ public sealed class RecordRemedyDecisionTests
         ShouldBeUnchanged(remedy);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task The_claim_ETag_is_not_the_remedy_ETag()
     {
         var (claim, remedy) = ArrangeChoice();
@@ -236,7 +234,7 @@ public sealed class RecordRemedyDecisionTests
         ShouldBeUnchanged(remedy);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_completed_remedy_is_not_awaiting_a_decision_and_conflicts()
     {
         var (claim, remedy, _) = ArrangeChange("changeInProgress");
@@ -249,7 +247,7 @@ public sealed class RecordRemedyDecisionTests
         _actions.ReceivedCalls().ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_claim_without_a_remedy_conflicts()
     {
         var claim = NewClaim(SubmittingAgentSub);
@@ -264,7 +262,7 @@ public sealed class RecordRemedyDecisionTests
         _actions.ReceivedCalls().ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_unknown_claim_or_a_claim_of_another_tenant_is_not_found()
     {
         (await UseCase().ExecuteAsync(new RecordRemedyDecisionCommand(Guid.NewGuid(), ValidIfMatch, RemedyType.Refund, null), Ct))
@@ -280,7 +278,7 @@ public sealed class RecordRemedyDecisionTests
 
     // ── Applied through the real ActionExecutor (T227) ─────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Deciding_Refund_from_a_policy_choice_sets_it_by_the_reviewer_and_requests_the_refund_once()
     {
         var (claim, remedy) = ArrangeChoice();
@@ -305,7 +303,7 @@ public sealed class RecordRemedyDecisionTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_change_keeps_the_reviewers_reason_in_the_decision_and_the_trail()
     {
         var (claim, remedy, target) = ArrangeChange("changeInProgress");
@@ -323,7 +321,7 @@ public sealed class RecordRemedyDecisionTests
         _entries.Single(e => e.Step == TrailStep.RemedyDecided).Payload.GetProperty("reason").GetString().ShouldBe(Reason);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
         var services = new ServiceCollection();
@@ -346,15 +344,10 @@ public sealed class RecordRemedyDecisionTests
     private RecordRemedyDecision UseCase(IActionExecutor? executor = null)
         => new(_tenant, _claims, _remedies, _repairs, _securityEvents, executor ?? _actions);
 
-    /// <summary>
-    /// The real executor with the remedy ports. Pending T225 (constructor) and T227 (<c>ExecuteRemedyDecisionAsync</c>):
-    /// <c>new(tenant, claims, adjudication, reviews, catalog, policies, network, remedies, repairs, refunds,
-    /// notifications, trail, unitOfWork, new RemedyPolicyEvaluator(), time)</c>.
-    /// </summary>
-    private ActionExecutor RealExecutor()
-        => throw new NotImplementedException(
-            $"{Pending}: {_adjudication}, {_reviews}, {_catalog}, {_policies}, {_network}, {_refunds}, {_notifications}, "
-            + $"{_unitOfWork}, {_time} and a {nameof(RemedyPolicyEvaluator)} are not constructor arguments yet.");
+    /// <summary>The real executor with the remedy ports (T225, T227).</summary>
+    private ActionExecutor RealExecutor() => new(
+        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairs, _refunds, _notifications,
+        _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
 
     private static Claim NewClaim(string submittedBy, Guid? tenantId = null) => Claim.Submit(
         Guid.CreateVersion7(), tenantId ?? Tenant, ClaimReference.Generate(), ClaimChannel.AgentPortal, submittedBy, CustomerId,

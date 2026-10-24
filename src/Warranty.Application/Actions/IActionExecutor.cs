@@ -52,7 +52,38 @@ public interface IActionExecutor
     /// The claim changed since it was read. Nothing is changed.
     /// </exception>
     Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct);
+
+    /// <summary>
+    /// Applies a reviewer's validated remedy <paramref name="decision"/> to an approved claim of the current tenant, in one
+    /// transaction (002 FR-002, FR-013, FR-015, research R4): the remedy's policy version is evaluated again for its
+    /// scenario and repair facts, the chosen remedy must be allowed by both that evaluation and the remedy, and every
+    /// decision after the first remedy needs a reason. The remedy becomes the chosen one (a change of a remedy in progress
+    /// passes <see cref="Warranty.Domain.Fulfillment.RemedyState.AwaitingDecision"/>), a <c>Decided</c> remedy decision
+    /// by the reviewer and a <c>RemedyDecided</c> trail entry are written, and the side effect runs: Refund asks the
+    /// refund port once for the claim value; Repair creates the repair at the suggested centre when the claim has none.
+    /// The claim's final outcome never changes (FR-016).
+    /// </summary>
+    /// <exception cref="ActionRefusedException">
+    /// The decision belongs to another tenant, the reviewer submitted the claim, the remedy is not allowed by the
+    /// re-evaluation, or a required reason is missing. Nothing is changed.
+    /// </exception>
+    /// <exception cref="Warranty.Domain.Claims.InvalidClaimTransitionException">
+    /// The claim has no remedy, or its remedy cannot be decided now (completed, or a repair already handed over). Nothing is changed.
+    /// </exception>
+    /// <exception cref="Warranty.Application.Abstractions.Persistence.ConcurrencyConflictException">
+    /// The remedy changed since it was read. Nothing is changed.
+    /// </exception>
+    Task ExecuteRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct);
 }
+
+/// <summary>A reviewer's remedy decision as validated by <see cref="Warranty.Application.Fulfillment.RecordRemedyDecision"/>.</summary>
+public sealed record ReviewerRemedyDecision(
+    Guid TenantId,
+    Guid ClaimId,
+    string ReviewerSub,
+    string ReviewerName,
+    Warranty.Domain.Fulfillment.RemedyType Remedy,
+    string? Reason);
 
 /// <summary>What <see cref="IActionExecutor.ExecuteAsync"/> did.</summary>
 public enum ActionExecution
