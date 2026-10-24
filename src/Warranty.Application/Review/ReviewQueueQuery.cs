@@ -144,6 +144,7 @@ public sealed class ReviewQueueQuery(
         RemedyPendingReason.NoRemedyRule => "No remedy rule applies",
         RemedyPendingReason.RepairFailedLimit => "Repair attempts limit reached",
         RemedyPendingReason.RepairNotEconomical => "Repair is not economical",
+        RemedyPendingReason.ReplacementNotAvailable => "Replacement not available",
         _ => reason.ToString(),
     };
 }
