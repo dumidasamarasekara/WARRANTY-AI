@@ -153,7 +153,9 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
   const canDecide = isReviewer && remedy?.state === 'AwaitingDecision'
   const dialogOpen = canDecide && search.has(decideRemedyParam)
 
-  const repair = remedy?.remedy === 'Repair' ? detail.repair : undefined
+  // After a failed or uneconomical repair the remedy waits for a reviewer with no remedy set; the repair
+  // (its attempts and estimate) stays visible until another remedy is decided.
+  const repair = remedy?.remedy === 'Repair' || remedy?.state === 'AwaitingDecision' ? detail.repair : undefined
   const completable = remedy && remedy.state !== 'AwaitingDecision' && isCompletableRemedy(remedy.remedy) ? { ...remedy, remedy: remedy.remedy } : undefined
   const reload = () => queryClient.refetchQueries({ queryKey: claimQueryKey(detail.claimId) })
 

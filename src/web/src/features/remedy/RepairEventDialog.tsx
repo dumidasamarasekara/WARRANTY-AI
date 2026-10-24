@@ -1,5 +1,7 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
+import { useMe } from '../../app/staffQueries'
 import { ApiProblem } from '../../shared/api/client'
+import { formatMoney } from '../../shared/presentation'
 import { Button, Dialog, Select, TextArea, TextInput } from '../../shared/ui'
 import {
   useRecordRepairEvent,
@@ -8,7 +10,16 @@ import {
   type RepairView,
   type ReportSource,
 } from './remedyQueries'
-import { repairActionLabels, repairReasonLimits, reportSourceLabel, reportSources, type RepairDialogEvent } from './remedyView'
+import {
+  failedAttemptsText,
+  isAboveEconomicLimit,
+  productLocationLabels,
+  repairActionLabels,
+  repairReasonLimits,
+  reportSourceLabel,
+  reportSources,
+  type RepairDialogEvent,
+} from './remedyView'
 import styles from './RemedyTab.module.css'
 
 export interface RepairEventDialogProps {
@@ -29,7 +40,19 @@ function fieldError(problem: EventProblem | null, field: string): string | undef
   return key ? problem.errors[key]?.join(' ') : undefined
 }
 
-const fields = ['reportedAt', 'source', 'note', 'repairCentreId', 'reason', 'handedOverOn', 'centreReference'] as const
+type ProductLocation = NonNullable<RepairEventRequest['productLocation']>
+
+const fields = [
+  'reportedAt',
+  'source',
+  'note',
+  'repairCentreId',
+  'reason',
+  'handedOverOn',
+  'centreReference',
+  'estimateAmount',
+  'productLocation',
+] as const
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -53,7 +76,10 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
   const [centreReference, setCentreReference] = useState('')
   const [repairCentreId, setRepairCentreId] = useState('')
   const [reason, setReason] = useState('')
+  const [estimateAmount, setEstimateAmount] = useState('')
+  const [productLocation, setProductLocation] = useState<ProductLocation | ''>('')
   const [problem, setProblem] = useState<EventProblem | null>(null)
+  const currency = useMe().data?.tenantCurrency
   const [reloading, setReloading] = useState(false)
   const record = useRecordRepairEvent()
   const centres = useRepairCentres(claimId, type === 'CentreChanged')
@@ -64,11 +90,17 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
   const trimmedReason = reason.trim()
   const trimmedNote = note.trim()
 
+  const reasonValid = trimmedReason.length >= repairReasonLimits.min && trimmedReason.length <= repairReasonLimits.max
+  const estimate = estimateAmount.trim() === '' ? undefined : Number(estimateAmount)
+  const estimateValid = estimate !== undefined && Number.isFinite(estimate) && estimate > 0
+  const aboveLimit = estimateValid && isAboveEconomicLimit(estimate, repair.economicLimitAmount)
+
   let eventValid = true
   if (type === 'HandedOver') eventValid = handedOverOn !== '' && handedOverOn <= localDate(now)
-  if (type === 'CentreChanged')
-    eventValid =
-      repairCentreId !== '' && trimmedReason.length >= repairReasonLimits.min && trimmedReason.length <= repairReasonLimits.max
+  if (type === 'CentreChanged') eventValid = repairCentreId !== '' && reasonValid
+  if (type === 'RepairFailed') eventValid = reasonValid
+  if (type === 'EstimateReported') eventValid = estimateValid
+  if (type === 'NewAttemptStarted') eventValid = productLocation !== ''
   const valid = reportedValid && source !== '' && trimmedNote.length <= repairReasonLimits.max && eventValid
 
   const errors = Object.fromEntries(fields.map((field) => [field, fieldError(problem, field)])) as Record<
@@ -92,6 +124,9 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
       request.repairCentreId = repairCentreId
       request.reason = trimmedReason
     }
+    if (type === 'RepairFailed') request.reason = trimmedReason
+    if (type === 'EstimateReported') request.estimateAmount = estimate
+    if (type === 'NewAttemptStarted' && productLocation) request.productLocation = productLocation
     setProblem(null)
     record.mutate(
       { claimId, etag: repair.etag, request },
@@ -139,6 +174,23 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
   }
 
   const otherCentres = (centres.data ?? []).filter((centre) => centre.id !== repair.activeCentre?.id)
+  const money = (value: number) => (currency ? formatMoney(value, currency) : value.toFixed(2))
+
+  const reasonField = (
+    <TextArea
+      label="Reason"
+      hint="Internal — never shown to the claimant."
+      required
+      rows={3}
+      characterLimits={repairReasonLimits}
+      value={reason}
+      error={errors.reason}
+      onChange={(event) => {
+        setReason(event.target.value)
+        clearFieldError('reason')
+      }}
+    />
+  )
 
   return (
     <Dialog
@@ -242,20 +294,75 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
                 </option>
               ))}
             </Select>
-            <TextArea
-              label="Reason"
-              hint="Internal — never shown to the claimant."
-              required
-              rows={3}
-              characterLimits={repairReasonLimits}
-              value={reason}
-              error={errors.reason}
-              onChange={(event) => {
-                setReason(event.target.value)
-                clearFieldError('reason')
-              }}
-            />
+            {reasonField}
           </>
+        )}
+
+        {type === 'EstimateReported' && (
+          <TextInput
+            type="number"
+            label={currency ? `Estimate (${currency})` : 'Estimate'}
+            hint={
+              repair.economicLimitAmount === undefined
+                ? 'The repair centre’s cost estimate. The policy has no economic limit.'
+                : `The repair centre’s cost estimate. Economic limit: ${money(repair.economicLimitAmount)}.`
+            }
+            required
+            min={0.01}
+            step={0.01}
+            inputMode="decimal"
+            value={estimateAmount}
+            error={
+              errors.estimateAmount ??
+              (estimateAmount.trim() !== '' && !estimateValid ? 'Enter an amount above zero.' : undefined)
+            }
+            onChange={(event) => {
+              setEstimateAmount(event.target.value)
+              clearFieldError('estimateAmount')
+            }}
+          />
+        )}
+        {type === 'EstimateReported' && aboveLimit && (
+          <p className={styles.note} role="status">
+            Above the economic limit: the repair becomes Repair not possible and a reviewer decides the remedy.
+          </p>
+        )}
+
+        {type === 'RepairFailed' && (
+          <>
+            {reasonField}
+            <p className={styles.note}>
+              Failed attempts so far: {failedAttemptsText(repair)}. The policy is evaluated again after this failure.
+            </p>
+          </>
+        )}
+
+        {type === 'NewAttemptStarted' && (
+          <fieldset className={styles.choices} aria-describedby={errors.productLocation ? 'product-location-error' : undefined}>
+            <legend className={styles.legend}>
+              Where is the product?<span aria-hidden="true"> *</span>
+            </legend>
+            {(Object.keys(productLocationLabels) as ProductLocation[]).map((option) => (
+              <label key={option} className={styles.choice}>
+                <input
+                  type="radio"
+                  name="productLocation"
+                  value={option}
+                  checked={productLocation === option}
+                  onChange={() => {
+                    setProductLocation(option)
+                    clearFieldError('productLocation')
+                  }}
+                />
+                <span>{productLocationLabels[option]}</span>
+              </label>
+            ))}
+            {errors.productLocation && (
+              <p id="product-location-error" className={styles.fieldError}>
+                {errors.productLocation}
+              </p>
+            )}
+          </fieldset>
         )}
 
         <TextArea

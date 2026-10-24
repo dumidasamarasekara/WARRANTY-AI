@@ -1,10 +1,16 @@
 import { useState } from 'react'
+import { useMe } from '../../app/staffQueries'
 import { formatDate, repairStatusPresentation } from '../../shared/presentation'
 import { Alert, Badge, Button, Card } from '../../shared/ui'
 import type { RepairView } from './remedyQueries'
 import { RepairEventDialog } from './RepairEventDialog'
-import { repairActionLabels, repairActions, type RepairDialogEvent } from './remedyView'
+import { estimateText, failedAttemptsText, repairActionLabels, repairActions, type RepairDialogEvent } from './remedyView'
 import styles from './RemedyTab.module.css'
+
+const notPossibleReasonLabels: Record<NonNullable<RepairView['notPossibleReason']>, string> = {
+  Failed: 'Repair failed',
+  NotEconomical: 'Not economical',
+}
 
 export interface RepairCardProps {
   claimId: string
@@ -25,6 +31,8 @@ export function RepairCard({ claimId, repair, canAct, onReload }: RepairCardProp
   const status = repairStatusPresentation(repair.status)
   const centre = repair.activeCentre
   const actions = canAct ? repairActions(repair) : []
+  const me = useMe()
+  const estimate = estimateText(repair, me.data?.tenantCurrency)
 
   return (
     <>
@@ -35,6 +43,9 @@ export function RepairCard({ claimId, repair, canAct, onReload }: RepairCardProp
             <Badge tone={status.tone} dot>
               {status.label}
             </Badge>
+            {repair.status === 'RepairNotPossible' && repair.notPossibleReason && (
+              <span className={styles.muted}>{notPossibleReasonLabels[repair.notPossibleReason]}</span>
+            )}
           </div>
 
           <section className={styles.section} aria-label="Repair centre">
@@ -76,6 +87,22 @@ export function RepairCard({ claimId, repair, canAct, onReload }: RepairCardProp
                 <dt>Centre reference</dt>
                 <dd className={styles.mono}>{repair.centreReference ?? '—'}</dd>
               </div>
+            </dl>
+          </section>
+
+          <section className={styles.section} aria-label="Attempts">
+            <h3 className={styles.sectionLabel}>Attempts</h3>
+            <dl className={styles.facts}>
+              <div>
+                <dt>Failed attempts</dt>
+                <dd>{failedAttemptsText(repair)}</dd>
+              </div>
+              {estimate && (
+                <div>
+                  <dt>Estimate</dt>
+                  <dd>{estimate}</dd>
+                </div>
+              )}
             </dl>
           </section>
 

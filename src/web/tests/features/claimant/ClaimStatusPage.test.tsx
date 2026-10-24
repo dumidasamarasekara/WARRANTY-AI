@@ -256,6 +256,27 @@ describe('ClaimStatusPage', () => {
     expect(document.body).not.toHaveTextContent('[AGENT]')
   })
 
+  it('says "Repair not possible" after a failed repair in a pending banner, without the failure reason or the centre', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        label: 'Repair not possible. Your claim is being reviewed.',
+        completed: false,
+        steps: [],
+        repairCentre: { name: 'North Service Hub', address: '12 Harbour Road, Springfield', openingHours: 'Mon–Fri 08:00–17:00' },
+        failureReason: 'Main board fault reappeared after the second repair',
+      },
+    })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy.textContent).toBe('Repair not possible. Your claim is being reviewed.')
+    expect(remedy.className).toMatch(/pending/)
+    const page = document.body.textContent ?? ''
+    expect(page).not.toMatch(/Main board fault|North Service Hub|Remedy: Repair/)
+    expect(screen.getByText('Your claim is approved')).toBeInTheDocument()
+  })
+
   it('never shows staff-only remedy fields even if the response carries them', async () => {
     const remedy = repairRemedy('AtRepairCentre') as Record<string, unknown>
     respondWith({
