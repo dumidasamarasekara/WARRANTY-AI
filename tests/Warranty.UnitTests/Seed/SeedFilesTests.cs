@@ -205,8 +205,9 @@ public sealed class SeedFilesTests
     }
 
     /// <summary>
-    /// Feature 002 (T222): each tenant's <c>remedy-scenarios.json</c> holds the approved claims of R1/R2 and its half
-    /// of the R4 "same facts, different company" pair; the remedy itself is not in the file.
+    /// Feature 002 (T222): each tenant's <c>remedy-scenarios.json</c> holds the approved claims of R1/R2, its half
+    /// of the R4 "same facts, different company" pair and the claims the remedy stories drive (Borealis R9, R10 for T246;
+    /// R11 for T251); the remedy itself is not in the file.
     /// </summary>
     [Fact]
     public void Remedy_scenarios_load_per_tenant_with_the_R4_pair_sharing_the_same_facts()
@@ -220,6 +221,7 @@ public sealed class SeedFilesTests
              ("R11-aurora", "RMDYR11A01", "AUR-TAB10", Region.NA)]);
         borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.Region)).ShouldBe(
             [("R2", "RMDYR2B001", "BOR-SLATE11", Region.EU), ("R4-borealis", "RMDYR4B001", "BOR-SLATE11", Region.EU),
+             ("R9-borealis", "RMDYR9B001", "BOR-SLATE11", Region.EU), ("R10-borealis", "RMDYR10B01", "BOR-SLATE11", Region.EU),
              ("R11-borealis", "RMDYR11B01", "BOR-SLATE11", Region.EU)]);
         aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System);
         aurora[0].Id.ShouldBe(Guid.Parse("11111111-0005-7000-8000-000000000001"));

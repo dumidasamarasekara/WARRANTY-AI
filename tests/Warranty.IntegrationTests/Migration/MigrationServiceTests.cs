@@ -42,16 +42,16 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 6,
-            ["catalog.product_serials"] = 117,
+            ["catalog.product_serials"] = 119,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 9,
-            ["audit.decision_trail_entries"] = 34,
-            ["claims.claim_remedies"] = 6,
-            ["claims.remedy_decisions"] = 12,
-            ["claims.repairs"] = 4,
-            ["claims.repair_handovers"] = 4,
-            ["audit.repair_events"] = 4,
+            ["claims.claims"] = 11,
+            ["audit.decision_trail_entries"] = 44,
+            ["claims.claim_remedies"] = 8,
+            ["claims.remedy_decisions"] = 16,
+            ["claims.repairs"] = 6,
+            ["claims.repair_handovers"] = 6,
+            ["audit.repair_events"] = 6,
             ["policy.warranty_policies"] = 2,
             ["policy.policy_versions"] = 3,
         });
@@ -192,10 +192,12 @@ public sealed class MigrationServiceTests : IAsyncLifetime
 
         rows.ShouldBe(
         [
+            "RMDYR10B01 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
             "RMDYR1A001 | Approved | System | AUR-WP v2 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Aurora Service Center Springfield",
             "RMDYR2B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
             "RMDYR4A001 | Approved | System | AUR-WP v2 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Aurora Service Center Amsterdam",
             "RMDYR4B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
+            "RMDYR9B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
         ]);
     }
 
