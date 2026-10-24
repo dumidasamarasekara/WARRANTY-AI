@@ -54,6 +54,42 @@
       "if": { "properties": { "liftsAccidentalDamageExclusion": { "const": true } } },
       "then": { "oneOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ] },
       "else": { "not": { "anyOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ] } }
+    },
+    "replacement": {
+      "description": "How a Replacement remedy is carried out (feature 003 FR-001 to FR-003). Optional; without it the defaults SameModel, AtCollection and 0 apply.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "productRule": {
+          "type": "string",
+          "enum": ["SameModel", "SameCategoryAtLeastClaimValue"],
+          "default": "SameModel",
+          "description": "SameCategoryAtLeastClaimValue: another model of the same product category whose claim value is at least the original's, approved by a reviewer (003 FR-002, FR-024)."
+        },
+        "returnRule": {
+          "type": "string",
+          "enum": ["AtCollection", "BeforeReservation"],
+          "default": "AtCollection",
+          "description": "When the faulty product must be returned (003 FR-003)."
+        },
+        "minimumCoverMonths": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 36,
+          "default": 0,
+          "description": "A replacement unit is covered until the later of the original coverage end and the hand-over date plus these months (003 FR-029)."
+        }
+      }
+    },
+    "replacementNotAvailable": {
+      "description": "Remedy when no allowed replacement is available (feature 003 FR-004, FR-026). Exactly one of `remedy` or `allowed`; without it the remedy goes to manual review (FR-012).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "remedy": { "$ref": "#/$defs/remedyType" },
+        "allowed": { "$ref": "#/$defs/remedyList" }
+      },
+      "oneOf": [ { "required": ["remedy"] }, { "required": ["allowed"] } ]
     }
   },
   "$defs": {
@@ -89,7 +125,9 @@
       "coveredDefect": { "remedy": "Repair" },
       "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] },
       "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" },
-      "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" }
+      "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" },
+      "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "AtCollection", "minimumCoverMonths": 0 },
+      "replacementNotAvailable": { "remedy": "Refund" }
     }
   ]
 }

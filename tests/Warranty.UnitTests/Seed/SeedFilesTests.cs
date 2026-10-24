@@ -158,6 +158,8 @@ public sealed class SeedFilesTests
     [InlineData("remedies:\n  repairFailed: { afterFailedAttempts: \"2\", remedy: Refund }", "/repairFailed/afterFailedAttempts")]
     [InlineData("remedies:\n  coveredDefect: { remedy: Swap }", "/coveredDefect/remedy")]
     [InlineData("remedies:\n  goodwill: { remedy: Refund }", "")]
+    [InlineData("remedies:\n  replacement: { productRule: AnyModel }", "/replacement/productRule")]
+    [InlineData("remedies:\n  replacement: { minimumCoverMonths: 37 }", "/replacement/minimumCoverMonths")]
     public void An_invalid_remedies_block_names_the_file_and_the_schema_location(string block, string location)
     {
         var root = CopyOfSeed();
@@ -176,6 +178,42 @@ public sealed class SeedFilesTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Feature 003 (T302): the embedded schema accepts the optional <c>replacement</c> and
+    /// <c>replacementNotAvailable</c> members (research R1). The ingestion parser reads them only from T311/T312 on,
+    /// so these cases check the schema step alone.
+    /// </summary>
+    [Theory]
+    [InlineData("  replacement: { productRule: SameCategoryAtLeastClaimValue, returnRule: AtCollection, minimumCoverMonths: 0 }\n  replacementNotAvailable: { remedy: Refund }")]
+    [InlineData("  replacement: { productRule: SameModel, returnRule: BeforeReservation, minimumCoverMonths: 36 }\n  replacementNotAvailable: { allowed: [Repair, Refund] }")]
+    [InlineData("  replacement: {}")]
+    [InlineData("  coveredDefect: { remedy: Repair }")]
+    public void A_valid_replacement_block_passes_the_remedy_rules_schema(string rows)
+        => RemedyRulesSchema.Validate(PolicyWith("remedies:\n" + rows)).ShouldBeEmpty();
+
+    [Theory]
+    [InlineData("  replacement: { productRule: AnyModel }", "remedies/replacement/productRule")]
+    [InlineData("  replacement: { minimumCoverMonths: 37 }", "remedies/replacement/minimumCoverMonths")]
+    [InlineData("  replacement: { minimumCoverMonths: -1 }", "remedies/replacement/minimumCoverMonths")]
+    [InlineData("  replacement: { returnRule: Never }", "remedies/replacement/returnRule")]
+    [InlineData("  replacement: { productRule: SameModel, upgrade: true }", "remedies/replacement")]
+    [InlineData("  replacementNotAvailable: { remedy: Refund, allowed: [Repair, Refund] }", "remedies/replacementNotAvailable")]
+    [InlineData("  replacementNotAvailable: {}", "remedies/replacementNotAvailable")]
+    [InlineData("  replacementNotAvailable: { remedy: Swap }", "remedies/replacementNotAvailable/remedy")]
+    public void An_invalid_replacement_block_fails_the_remedy_rules_schema(string rows, string location)
+        => RemedyRulesSchema.Validate(PolicyWith("remedies:\n" + rows)).ShouldContain(p => p.StartsWith(location, StringComparison.Ordinal));
+
+    [Fact]
+    public void The_embedded_remedy_rules_schema_is_a_copy_of_the_002_contract()
+    {
+        var repo = Path.GetFullPath(Path.Combine(SeedRoot(), ".."));
+        File.ReadAllText(Path.Combine(repo, "src", "Warranty.MigrationService", "Seeding", "Schemas", "remedy-rules.schema.json"))
+            .ShouldBe(File.ReadAllText(Path.Combine(repo, "specs", "002-remedy-repair-handover", "contracts", "remedy-rules.schema.json")));
+    }
+
+    private static string PolicyWith(string block)
+        => $"---\ndocumentType: WarrantyPolicy\n{block}\n---\n# Policy\n";
 
     [Fact]
     public void Service_centers_read_address_hours_contact_activity_and_priority_with_defaults()
