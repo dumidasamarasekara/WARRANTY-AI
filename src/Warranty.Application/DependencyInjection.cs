@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<ClaimantAccess>();
         services.AddScoped<ClaimQueries>();
         services.AddScoped<RemedyQueries>();
+        services.AddScoped<RecordRepairEvent>();
         services.AddScoped<IActionExecutor, ActionExecutor>();
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
