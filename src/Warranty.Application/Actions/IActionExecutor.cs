@@ -54,6 +54,16 @@ public interface IActionExecutor
     Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct);
 
     /// <summary>
+    /// As <see cref="ExecuteReviewerDecisionAsync(ReviewDecision, CancellationToken)"/>, with the 002 approval fields
+    /// (FR-013, research R4, R9): an approval records the reviewer's protection plan check and sets the chosen remedy,
+    /// which must be one the policy allows; without a choice the policy's single remedy is set as for an automatic approval.
+    /// </summary>
+    /// <exception cref="ActionRefusedException">
+    /// As above, or the chosen remedy is not allowed by the claim's policy version. Nothing is changed.
+    /// </exception>
+    Task ExecuteReviewerDecisionAsync(ReviewDecision decision, ReviewerApproval approval, CancellationToken ct);
+
+    /// <summary>
     /// Applies a reviewer's validated remedy <paramref name="decision"/> to an approved claim of the current tenant, in one
     /// transaction (002 FR-002, FR-013, FR-015, research R4): the remedy's policy version is evaluated again for its
     /// scenario and repair facts, the chosen remedy must be allowed by both that evaluation and the remedy, and every
@@ -74,6 +84,13 @@ public interface IActionExecutor
     /// The remedy changed since it was read. Nothing is changed.
     /// </exception>
     Task ExecuteRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct);
+}
+
+/// <summary>The 002 fields of a reviewer approval: the chosen remedy and the protection plan check (null when not given).</summary>
+public sealed record ReviewerApproval(Warranty.Domain.Fulfillment.RemedyType? Remedy, bool? ProtectionPlanConfirmed)
+{
+    /// <summary>No remedy chosen and no protection plan check.</summary>
+    public static ReviewerApproval None { get; } = new(null, null);
 }
 
 /// <summary>A reviewer's remedy decision as validated by <see cref="Warranty.Application.Fulfillment.RecordRemedyDecision"/>.</summary>

@@ -141,16 +141,22 @@ public sealed class RemedyQueries(
 
     /// <summary>The 001 version-selection rule: the one version in effect for the claim's region, purchase date and category.</summary>
     private async Task<PolicyVersion?> ApplicableVersionAsync(Claim claim, Product? product, CancellationToken ct)
+        => ApplicableVersion(await policies.GetVersionsAsync(ct), claim, product);
+
+    /// <summary>
+    /// The 001 version-selection rule over <paramref name="versions"/>: the one version in effect for the claim's region,
+    /// purchase date and product category; null when the claim has no region or not exactly one version applies.
+    /// </summary>
+    public static PolicyVersion? ApplicableVersion(IEnumerable<PolicyVersion> versions, Claim claim, Product? product)
     {
+        ArgumentNullException.ThrowIfNull(versions);
+        ArgumentNullException.ThrowIfNull(claim);
         if (claim.Region is not { } region)
         {
             return null;
         }
 
-        var applicable = (await policies.GetVersionsAsync(ct))
-            .Where(v => v.AppliesTo(claim.PurchaseDate, region, product?.Category))
-            .Take(2)
-            .ToList();
+        var applicable = versions.Where(v => v.AppliesTo(claim.PurchaseDate, region, product?.Category)).Take(2).ToList();
         return applicable.Count == 1 ? applicable[0] : null;
     }
 }

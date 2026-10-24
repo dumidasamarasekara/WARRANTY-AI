@@ -209,6 +209,9 @@ public interface IRemedyRepository
 
     Task<IReadOnlyList<RemedyDecision>> GetDecisionsAsync(Guid claimId, CancellationToken ct);
 
+    /// <summary>The tenant's remedies awaiting a reviewer's decision (the review queue's remedy items, 002), untracked.</summary>
+    Task<IReadOnlyList<ClaimRemedy>> ListAwaitingDecisionAsync(CancellationToken ct);
+
     /// <summary>The claim's completion record (Replacement or Refund), or null when not completed.</summary>
     Task<RemedyCompletion?> GetCompletionAsync(Guid claimId, CancellationToken ct);
 

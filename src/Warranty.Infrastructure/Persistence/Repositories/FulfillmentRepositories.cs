@@ -27,6 +27,9 @@ internal sealed class RemedyRepository(WarrantyDbContext db) : IRemedyRepository
     public async Task<IReadOnlyList<RemedyDecision>> GetDecisionsAsync(Guid claimId, CancellationToken ct)
         => await db.RemedyDecisions.AsNoTracking().Where(d => d.ClaimId == claimId).OrderBy(d => d.Seq).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<ClaimRemedy>> ListAwaitingDecisionAsync(CancellationToken ct)
+        => await db.ClaimRemedies.AsNoTracking().Where(r => r.State == RemedyState.AwaitingDecision).OrderBy(r => r.UpdatedAt).ToListAsync(ct);
+
     public Task<RemedyCompletion?> GetCompletionAsync(Guid claimId, CancellationToken ct)
         => db.RemedyCompletions.AsNoTracking().SingleOrDefaultAsync(c => c.ClaimId == claimId, ct);
 

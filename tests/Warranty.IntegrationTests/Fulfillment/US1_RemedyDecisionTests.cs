@@ -30,7 +30,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
 {
     private const string PendingClaimDetailRemedy = "Pending T229/T230";
-    private const string PendingReviewDecisionRemedy = "Pending T228/T230";
     private const string PendingRemedyDecisions = "Pending T227/T230";
 
     /// <summary>Seeded R1: Aurora AUR-TAB10, North America, approved by the system.</summary>
@@ -135,7 +134,7 @@ public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
 
     // ---- R3: a reviewer cannot pick a remedy the policy does not allow ------------------------------
 
-    [Fact(Skip = PendingReviewDecisionRemedy)]
+    [Fact]
     public async Task R3_approving_an_escalated_Aurora_claim_with_Refund_is_refused_naming_Repair_and_with_Repair_is_recorded()
     {
         var claimId = await EscalatedAuroraClaimAsync();
@@ -161,7 +160,7 @@ public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
         await ShouldBeApprovedByTheReviewerWithRemedyRepairAsync(claimId);
     }
 
-    [Fact(Skip = PendingReviewDecisionRemedy)]
+    [Fact]
     public async Task R3_approving_an_escalated_Aurora_claim_without_a_remedy_sets_the_only_allowed_remedy_Repair()
     {
         var claimId = await EscalatedAuroraClaimAsync();

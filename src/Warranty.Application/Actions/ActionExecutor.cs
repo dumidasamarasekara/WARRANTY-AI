@@ -78,9 +78,13 @@ public sealed class ActionExecutor(
         return execution;
     }
 
-    public async Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct)
+    public Task ExecuteReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct)
+        => ExecuteReviewerDecisionAsync(decision, ReviewerApproval.None, ct);
+
+    public async Task ExecuteReviewerDecisionAsync(ReviewDecision decision, ReviewerApproval approval, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(decision);
+        ArgumentNullException.ThrowIfNull(approval);
 
         if (!tenantContext.IsResolved || decision.TenantId != tenantContext.TenantId)
         {
@@ -88,7 +92,12 @@ public sealed class ActionExecutor(
                 $"Reviewer decision on claim {decision.ClaimId} does not belong to the current tenant scope.");
         }
 
-        await unitOfWork.ExecuteInTransactionAsync(token => ApplyReviewerDecisionAsync(decision, token), ct);
+        if (decision.Decision != ReviewDecisionKind.Approve && (approval.Remedy is not null || approval.ProtectionPlanConfirmed is not null))
+        {
+            throw new ActionRefusedException($"A remedy or a protection plan check comes only with an approval of claim {decision.ClaimId}.");
+        }
+
+        await unitOfWork.ExecuteInTransactionAsync(token => ApplyReviewerDecisionAsync(decision, approval, token), ct);
     }
 
     public async Task ExecuteRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct)
@@ -279,7 +288,7 @@ public sealed class ActionExecutor(
     /// Applies a reviewer decision. The trail actor is the reviewer's <c>sub</c>; the decision row, the
     /// claim's state change, the trail entries and the simulated integration rows commit together.
     /// </summary>
-    private async Task ApplyReviewerDecisionAsync(ReviewDecision decision, CancellationToken ct)
+    private async Task ApplyReviewerDecisionAsync(ReviewDecision decision, ReviewerApproval approval, CancellationToken ct)
     {
         var claim = await claims.GetAsync(decision.ClaimId, ct);
         if (claim is null || claim.TenantId != decision.TenantId)
@@ -309,6 +318,12 @@ public sealed class ActionExecutor(
         switch (decision.Decision)
         {
             case ReviewDecisionKind.Approve:
+                if (approval.ProtectionPlanConfirmed is { } confirmed)
+                {
+                    // 002 research R9: the reviewer's check of the declared plan, stored before the claim leaves review.
+                    claim.RecordProtectionPlanCheck(confirmed, now);
+                }
+
                 claim.FinalizeApproved(decision.ClaimantExplanation!, DecidedBy.Reviewer, now);
                 break;
             case ReviewDecisionKind.Reject:
@@ -343,7 +358,7 @@ public sealed class ActionExecutor(
         switch (decision.Decision)
         {
             case ReviewDecisionKind.Approve:
-                await SetRemedyAsync(claim, actor, now, ct);
+                await SetRemedyAsync(claim, actor, now, ct, approval.Remedy, decision.ReviewerSub, decision.ReviewerName);
                 await NotifyAsync(claim.Id, ApprovedTemplate, actor, ct);
                 break;
             case ReviewDecisionKind.Reject:
@@ -365,16 +380,23 @@ public sealed class ActionExecutor(
     /// remedy is set by policy — Repair creates a <see cref="Repair"/> at the first eligible centre serving the
     /// claim (it replaces the 001 simulated repair request, research R8), Refund asks the refund port once for the
     /// claim value. A choice, a missing rule or missing facts leave the remedy awaiting a reviewer; the claim's
-    /// Approved outcome is never held back.
+    /// Approved outcome is never held back. A reviewer approving the claim may choose the remedy in the same request
+    /// (FR-013, research R4): it must be one the evaluation allows, and a choice between remedies is then decided by the
+    /// reviewer as the remedy's first decision.
     /// </summary>
-    private async Task SetRemedyAsync(Claim claim, string actor, DateTimeOffset now, CancellationToken ct)
+    private async Task SetRemedyAsync(
+        Claim claim, string actor, DateTimeOffset now, CancellationToken ct,
+        RemedyType? chosen = null, string? reviewerSub = null, string? reviewerName = null)
     {
         var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
-        var applicable = claim.Region is { } region
-            ? (await policies.GetVersionsAsync(ct)).Where(v => v.AppliesTo(claim.PurchaseDate, region, product?.Category)).ToList()
-            : [];
-        if (applicable.Count != 1)
+        var version = RemedyQueries.ApplicableVersion(await policies.GetVersionsAsync(ct), claim, product);
+        if (version is null)
         {
+            if (chosen is not null)
+            {
+                throw new ActionRefusedException($"Claim {claim.Id} has no single applicable policy version to allow {chosen}.");
+            }
+
             // A remedy row needs its policy version; without exactly one the reviewers resolve it from the claim.
             await trail.AppendAsync(
                 claim.Id, TrailStep.RemedyRecommended, actor,
@@ -383,9 +405,14 @@ public sealed class ActionExecutor(
             return;
         }
 
-        var version = applicable[0];
         const RemedyScenario scenario = RemedyScenario.CoveredDefect;
         var evaluation = remedyEvaluator.Evaluate(version.RemedyRules, scenario, claimValue: product?.ClaimValue);
+        if (chosen is { } choice && !evaluation.AllowedRemedies.Contains(choice))
+        {
+            throw new ActionRefusedException(
+                $"{choice} is not allowed for claim {claim.Id} by its policy ({string.Join(", ", evaluation.AllowedRemedies)}).");
+        }
+
         var seq = (await remedies.GetDecisionsAsync(claim.Id, ct)).Count;
         remedies.AddDecision(RemedyDecision.Evaluated(
             Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
@@ -404,25 +431,53 @@ public sealed class ActionExecutor(
             },
             ct);
 
-        if (evaluation.AutomaticRemedy is not { } remedy)
+        RemedyType remedy;
+        if (evaluation.AutomaticRemedy is { } automatic && (chosen is null || chosen == automatic))
         {
-            remedies.Add(ClaimRemedy.AwaitDecision(
-                Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, evaluation.AllowedRemedies,
-                evaluation.PendingReason ?? RemedyPendingReason.NoRemedyRule, now));
-            return;
+            remedy = automatic;
+            remedies.Add(ClaimRemedy.SetByPolicy(
+                Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, remedy, evaluation.AllowedRemedies, now));
+            remedies.AddDecision(RemedyDecision.Decided(
+                Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
+                evaluation.AllowedRemedies, remedy, RemedyDecidedBy.Policy, RemedyDecision.SystemActor, reason: null,
+                failedAttempts: 0, estimateAmount: null, now));
+            await trail.AppendAsync(
+                claim.Id, TrailStep.RemedyDecided, actor,
+                $"Remedy {remedy} set by policy (version {version.Version}, row {evaluation.TableRow}).",
+                new { remedy = remedy.ToString(), decidedBy = nameof(RemedyDecidedBy.Policy), policyVersionId = version.Id, tableRow = evaluation.TableRow },
+                ct);
         }
+        else
+        {
+            var awaiting = ClaimRemedy.AwaitDecision(
+                Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, evaluation.AllowedRemedies,
+                evaluation.PendingReason ?? RemedyPendingReason.NoRemedyRule, now);
+            remedies.Add(awaiting);
+            if (chosen is not { } reviewerChoice || reviewerSub is null)
+            {
+                return;
+            }
 
-        remedies.Add(ClaimRemedy.SetByPolicy(
-            Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, remedy, evaluation.AllowedRemedies, now));
-        remedies.AddDecision(RemedyDecision.Decided(
-            Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
-            evaluation.AllowedRemedies, remedy, RemedyDecidedBy.Policy, RemedyDecision.SystemActor, reason: null,
-            failedAttempts: 0, estimateAmount: null, now));
-        await trail.AppendAsync(
-            claim.Id, TrailStep.RemedyDecided, actor,
-            $"Remedy {remedy} set by policy (version {version.Version}, row {evaluation.TableRow}).",
-            new { remedy = remedy.ToString(), decidedBy = nameof(RemedyDecidedBy.Policy), policyVersionId = version.Id, tableRow = evaluation.TableRow },
-            ct);
+            // The approving reviewer decides the choice in the same request: the remedy's first decision, no reason needed.
+            remedy = reviewerChoice;
+            awaiting.Decide(remedy, now);
+            remedies.AddDecision(RemedyDecision.Decided(
+                Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
+                evaluation.AllowedRemedies, remedy, RemedyDecidedBy.Reviewer, reviewerSub, reason: null,
+                failedAttempts: 0, estimateAmount: null, now));
+            await trail.AppendAsync(
+                claim.Id, TrailStep.RemedyDecided, actor,
+                $"Remedy {remedy} chosen by reviewer {reviewerName ?? reviewerSub} with the approval (version {version.Version}, row {evaluation.TableRow}).",
+                new
+                {
+                    remedy = remedy.ToString(),
+                    decidedBy = nameof(RemedyDecidedBy.Reviewer),
+                    reviewer = reviewerName,
+                    policyVersionId = version.Id,
+                    tableRow = evaluation.TableRow,
+                },
+                ct);
+        }
 
         switch (remedy)
         {

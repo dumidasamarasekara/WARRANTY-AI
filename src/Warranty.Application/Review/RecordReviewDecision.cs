@@ -3,10 +3,12 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Actions;
 using Warranty.Application.Claims;
+using Warranty.Application.Fulfillment;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Review;
+using Warranty.Guardrails.Remedies;
 using Warranty.Guardrails.Rules;
 
 namespace Warranty.Application.Review;
@@ -60,13 +62,20 @@ public abstract record RecordReviewDecisionResult
 /// claim's row version (412); the claim must be <c>UnderReview</c> (409); the decision must satisfy
 /// the field rules of <see cref="ReviewDecision.Create"/> — <c>overridesAi</c> is computed against the
 /// latest run's recommendation — and its claimant explanation must pass <see cref="ClaimantTextScreen"/>
-/// (400 naming the term). The decision is then applied through
-/// <see cref="IActionExecutor.ExecuteReviewerDecisionAsync"/>; a concurrent change detected on save is a 409.
+/// (400 naming the term). From 002 (FR-013, research R4, R9): <c>remedy</c> and <c>protectionPlanConfirmed</c> are
+/// allowed for Approve only; an approval may omit the remedy only when the remedy preview (the same evaluator and
+/// version selection as the approval) sets one remedy by itself or allows none, and a remedy given must be one of the
+/// preview's allowed remedies (400 naming them); a protection plan can be confirmed only when the claim declares one.
+/// The decision is then applied through <see cref="IActionExecutor.ExecuteReviewerDecisionAsync(ReviewDecision, ReviewerApproval, CancellationToken)"/>;
+/// a concurrent change detected on save is a 409.
 /// </summary>
 public sealed class RecordReviewDecision(
     ITenantContext tenant,
     IClaimRepository claims,
     IAdjudicationRepository adjudication,
+    ICatalogRepository catalog,
+    IPolicyRepository policies,
+    RemedyPolicyEvaluator remedyEvaluator,
     ISecurityEventWriter securityEvents,
     IActionExecutor actions,
     TimeProvider time)
@@ -128,6 +137,11 @@ public sealed class RecordReviewDecision(
         var record = await adjudication.GetRunRecordAsync(run.Id, ct);
         var recommendation = record?.Recommendation is { } r && r.RunId == run.Id ? r : null;
 
+        if (await ValidateRemedyFieldsAsync(claim, command, ct) is { } remedyFieldsInvalid)
+        {
+            return remedyFieldsInvalid;
+        }
+
         if (!TryNormalizeItems(command.RequestedItems, out var items))
         {
             return Invalid("requestedItems", "Each requested item needs an item code and a reason.");
@@ -154,7 +168,8 @@ public sealed class RecordReviewDecision(
 
         try
         {
-            await actions.ExecuteReviewerDecisionAsync(decision, ct);
+            await actions.ExecuteReviewerDecisionAsync(
+                decision, new ReviewerApproval(command.Remedy, command.ProtectionPlanConfirmed), ct);
         }
         catch (ConcurrencyConflictException)
         {
@@ -166,6 +181,43 @@ public sealed class RecordReviewDecision(
         }
 
         return new RecordReviewDecisionResult.Recorded(decision, claim.Status);
+    }
+
+    /// <summary>The 002 request fields (FR-013, research R9): Approve only, the remedy within the preview's allowed remedies.</summary>
+    private async Task<RecordReviewDecisionResult.Invalid?> ValidateRemedyFieldsAsync(
+        Claim claim, RecordReviewDecisionCommand command, CancellationToken ct)
+    {
+        if (command.Decision != ReviewDecisionKind.Approve)
+        {
+            return command.Remedy is not null
+                ? Invalid("remedy", "A remedy is chosen only with an approval.")
+                : command.ProtectionPlanConfirmed is not null
+                    ? Invalid("protectionPlanConfirmed", "A protection plan is confirmed only with an approval.")
+                    : null;
+        }
+
+        if (command.ProtectionPlanConfirmed is not null && !claim.HasProtectionPlan)
+        {
+            return Invalid("protectionPlanConfirmed", "The claim declares no protection plan to confirm.");
+        }
+
+        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        var version = RemedyQueries.ApplicableVersion(await policies.GetVersionsAsync(ct), claim, product);
+        var preview = remedyEvaluator.Evaluate(version?.RemedyRules, RemedyScenario.CoveredDefect, claimValue: product?.ClaimValue);
+        var allowed = string.Join(", ", preview.AllowedRemedies);
+        if (command.Remedy is not { } remedy)
+        {
+            // Without a remedy the approval sets the policy's single remedy, or sends a remedy without a rule to a reviewer (FR-012).
+            return preview.AutomaticRemedy is null && preview.AllowedRemedies.Count > 0
+                ? Invalid("remedy", $"Choose the remedy: the policy allows {allowed}.")
+                : null;
+        }
+
+        return preview.AllowedRemedies.Contains(remedy)
+            ? null
+            : Invalid("remedy", preview.AllowedRemedies.Count == 0
+                ? $"The policy allows no remedy for this claim; approve without a remedy and a reviewer decides it later."
+                : $"{remedy} is not allowed by the policy; allowed remedies: {allowed}.");
     }
 
     private static bool TryNormalizeItems(IReadOnlyList<RequestedItem>? requested, out RequestedItem[] items)

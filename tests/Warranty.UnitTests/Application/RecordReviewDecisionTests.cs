@@ -549,8 +549,6 @@ public sealed class RecordReviewDecisionTests
 
     // ── Remedy with the approval (002 FR-011, FR-013, T228) ────────────────────────────────────
 
-    private const string PendingRemedy = "Pending T228";
-
     private static readonly Guid PolicyId = Guid.Parse("0199b000-0000-7000-8000-0000000004b1");
     private static readonly Guid VersionId = Guid.Parse("0199b000-0000-7000-8000-0000000004b2");
 
@@ -561,7 +559,7 @@ public sealed class RecordReviewDecisionTests
 
     private readonly IPolicyRepository _policies = Substitute.For<IPolicyRepository>();
 
-    [Fact(Skip = PendingRemedy)]
+    [Fact]
     public async Task Approving_without_a_remedy_is_accepted_when_the_preview_gives_one_remedy()
     {
         UseRemedyRules(SingleRepairRules);
@@ -572,7 +570,7 @@ public sealed class RecordReviewDecisionTests
         result.ShouldBeOfType<RecordReviewDecisionResult.Recorded>().ClaimStatus.ShouldBe(ClaimStatus.Approved);
     }
 
-    [Fact(Skip = PendingRemedy)]
+    [Fact]
     public async Task Approving_without_a_remedy_is_refused_naming_the_allowed_remedies_when_the_preview_gives_a_choice()
     {
         UseRemedyRules(ChoiceRules);
@@ -586,7 +584,7 @@ public sealed class RecordReviewDecisionTests
         ShouldBeUnchanged(claim);
     }
 
-    [Theory(Skip = PendingRemedy)]
+    [Theory]
     [InlineData("single", RemedyType.Refund, "Repair")]
     [InlineData("choice", RemedyType.Repair, "Refund")]
     public async Task Approving_with_a_remedy_outside_the_preview_is_refused_naming_the_allowed_remedies(
@@ -601,7 +599,7 @@ public sealed class RecordReviewDecisionTests
         ShouldBeUnchanged(claim);
     }
 
-    [Theory(Skip = PendingRemedy)]
+    [Theory]
     [InlineData("single", RemedyType.Repair)]
     [InlineData("choice", RemedyType.Refund)]
     [InlineData("choice", RemedyType.Replacement)]
@@ -617,7 +615,7 @@ public sealed class RecordReviewDecisionTests
         claim.FinalDecidedBy.ShouldBe(DecidedBy.Reviewer);
     }
 
-    [Theory(Skip = PendingRemedy)]
+    [Theory]
     [InlineData(ReviewDecisionKind.Reject, "remedy")]
     [InlineData(ReviewDecisionKind.Reject, "protectionPlanConfirmed")]
     [InlineData(ReviewDecisionKind.RequestInformation, "remedy")]
@@ -640,7 +638,7 @@ public sealed class RecordReviewDecisionTests
         ShouldBeUnchanged(claim);
     }
 
-    [Fact(Skip = PendingRemedy)]
+    [Fact]
     public async Task Self_review_is_refused_before_the_remedy_is_looked_at()
     {
         UseRemedyRules(ChoiceRules);
@@ -667,13 +665,7 @@ public sealed class RecordReviewDecisionTests
         _policies.GetVersionAsync(VersionId, Arg.Any<CancellationToken>()).Returns(version);
     }
 
-    /// <summary>
-    /// Runs the use case with the 002 request fields. Pending T228, which gives <see cref="RecordReviewDecision"/> the
-    /// policy repository and the <see cref="RemedyPolicyEvaluator"/> to compute the remedy preview, and T225, which
-    /// gives the executor its remedy ports (see <c>ActionExecutorRemedyTests.Executor</c>). The command is
-    /// <c>new RecordReviewDecisionCommand(claim.Id, ValidIfMatch, decision, justification, claimantExplanation,
-    /// requestedItems, remedy, protectionPlanConfirmed)</c>.
-    /// </summary>
+    /// <summary>Runs the use case with the 002 request fields (T228).</summary>
     private Task<RecordReviewDecisionResult> ExecuteWithRemedy(
         Claim claim,
         ReviewDecisionKind decision,
@@ -682,9 +674,9 @@ public sealed class RecordReviewDecisionTests
         string? justification = null,
         string? claimantExplanation = null,
         IReadOnlyList<RequestedItem>? requestedItems = null)
-        => throw new NotImplementedException(
-            $"{PendingRemedy}: {_policies} and a {nameof(RemedyPolicyEvaluator)} are not constructor arguments yet "
-            + $"({new RecordReviewDecisionCommand(claim.Id, ValidIfMatch, decision, justification, claimantExplanation, requestedItems, remedy, protectionPlanConfirmed)}).");
+        => UseCase().ExecuteAsync(
+            new RecordReviewDecisionCommand(
+                claim.Id, ValidIfMatch, decision, justification, claimantExplanation, requestedItems, remedy, protectionPlanConfirmed), Ct);
 
     // ── ETag and registration ──────────────────────────────────────────────────────────────────
 
@@ -727,8 +719,10 @@ public sealed class RecordReviewDecisionTests
         string? claimantExplanation,
         IReadOnlyList<RequestedItem>? requestedItems,
         string? ifMatch)
-        => new RecordReviewDecision(_tenant, _claims, _adjudication, _securityEvents, Executor(), _time)
-            .ExecuteAsync(new RecordReviewDecisionCommand(claimId, ifMatch, decision, justification, claimantExplanation, requestedItems), Ct);
+        => UseCase().ExecuteAsync(new RecordReviewDecisionCommand(claimId, ifMatch, decision, justification, claimantExplanation, requestedItems), Ct);
+
+    private RecordReviewDecision UseCase() => new(
+        _tenant, _claims, _adjudication, _catalog, _policies, new RemedyPolicyEvaluator(), _securityEvents, Executor(), _time);
 
     private ActionExecutor Executor() => new(
         _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairRecords, _refunds, _notifications,

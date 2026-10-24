@@ -1,3 +1,4 @@
+using Npgsql;
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Warranty.Application.Abstractions.Persistence;
@@ -137,6 +138,10 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
         {
             throw Conflict(ex);
         }
+        catch (DbUpdateException ex) when (IsLostAppendRace(ex))
+        {
+            throw Conflict(ex);
+        }
     }
 
     /// <summary>
@@ -171,6 +176,10 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
         {
             throw Conflict(ex);
         }
+        catch (DbUpdateException ex) when (IsLostAppendRace(ex))
+        {
+            throw Conflict(ex);
+        }
     }
 
     /// <summary>
@@ -196,6 +205,24 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
         }
     }
 
-    private static ConcurrencyConflictException Conflict(DbUpdateConcurrencyException ex)
+    /// <summary>
+    /// Per-parent sequence keys of append-only histories (002 repair events and attempts, remedy decisions): two requests
+    /// that read the same history append the same next <c>seq</c>, and the loser's insert fails before its row-version
+    /// check would. That is the same lost race, so it is a concurrency conflict (409), not a server error.
+    /// </summary>
+    private static readonly HashSet<string> AppendSequenceIndexes = new(StringComparer.Ordinal)
+    {
+        "ix_repair_events_tenant_id_repair_id_seq",
+        "ix_repair_attempts_tenant_id_repair_id_seq",
+        "ix_remedy_decisions_tenant_id_claim_id_seq",
+    };
+
+    private static bool IsLostAppendRace(DbUpdateException exception)
+        => exception is not DbUpdateConcurrencyException
+           && exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } unique
+           && unique.ConstraintName is { } constraint
+           && AppendSequenceIndexes.Contains(constraint);
+
+    private static ConcurrencyConflictException Conflict(DbUpdateException ex)
         => new("A row was changed by another request since it was read; nothing was saved.", ex);
 }
