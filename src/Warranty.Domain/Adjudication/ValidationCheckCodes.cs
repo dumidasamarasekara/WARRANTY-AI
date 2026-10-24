@@ -26,4 +26,10 @@ public static class ValidationCheckCodes
 
     /// <summary>The claim's region (NA or EU) is known from the purchase information or the customer's address.</summary>
     public const string RegionDetermined = "REGION_DETERMINED";
+
+    /// <summary>
+    /// A protection plan document is attached; recorded last, and only when the claim states an additional
+    /// protection plan (002 FR-037, research R9).
+    /// </summary>
+    public const string ProtectionPlanDocumentPresent = "PROTECTION_PLAN_DOCUMENT_PRESENT";
 }

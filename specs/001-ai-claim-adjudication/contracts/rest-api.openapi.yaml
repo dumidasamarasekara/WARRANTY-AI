@@ -681,6 +681,10 @@ components:
           type: array
           maxItems: 8
           items: { type: string, format: binary }
+        protectionPlanDocument:
+          type: string
+          format: binary
+          description: PDF or image; answers a PROTECTION_PLAN_DOCUMENT request (002 FR-036, FR-037)
 
     SubmissionAccepted:
       type: object

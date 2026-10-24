@@ -69,7 +69,8 @@ public sealed class CaseKnowledgeProvider(
             evidence.Select(e => Describe(e, scrubber)).ToList(),
             history,
             claim.ReviewerInfoRequested,
-            claim.AutoInfoRequestCount);
+            claim.AutoInfoRequestCount,
+            claim.HasProtectionPlan);
     }
 
     /// <summary>The catalog product, only when the claimed serial is registered to it (FR-003).</summary>

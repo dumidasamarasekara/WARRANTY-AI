@@ -29,7 +29,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 {
-    private const string PendingSubmission = "Pending T260";
     private const string PendingEscalation = "Pending T261";
     private const string PendingReviewerConfirmation = "Pending T262";
 
@@ -72,7 +71,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 
     // ---- R14 without the plan document ----------------------------------------------------------
 
-    [Fact(Skip = PendingSubmission)]
+    [Fact]
     public async Task R14_a_stated_plan_without_its_document_is_pending_information_asking_for_the_plan_document()
     {
         var scenario = GoldenScenario.Load("R14-borealis-no-document");

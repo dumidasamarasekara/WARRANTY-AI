@@ -15,13 +15,15 @@ namespace Warranty.Application.Claims;
 /// The <c>claim</c> part of a submission (contracts/rest-api.openapi.yaml, <c>ClaimSubmissionData</c>).
 /// Every member is nullable so that missing values become field errors instead of parse failures. It
 /// has no tenant field: the tenant comes from <see cref="ITenantContext"/> only, and any tenant-like
-/// property in the JSON is ignored.
+/// property in the JSON is ignored. <see cref="HasProtectionPlan"/> states an additional protection plan
+/// (002 FR-036; absent means false); its document is the form's <c>protectionPlanDocument</c> part.
 /// </summary>
 public sealed record ClaimSubmissionData(
     ClaimSubmissionCustomer? Customer,
     ClaimSubmissionProduct? Product,
     ClaimSubmissionPurchase? Purchase,
-    string? ProblemDescription);
+    string? ProblemDescription,
+    bool? HasProtectionPlan = null);
 
 public sealed record ClaimSubmissionCustomer(
     string? FullName,
@@ -42,13 +44,15 @@ public sealed record EvidenceUpload(string? FileName, long Length, Func<Stream> 
 
 /// <summary>
 /// A submission through the claimant channel or by a claims agent. <paramref name="Claim"/> is null
-/// when the <c>claim</c> part was missing or not valid JSON.
+/// when the <c>claim</c> part was missing or not valid JSON. <paramref name="ProtectionPlanDocuments"/> holds
+/// the <c>protectionPlanDocument</c> parts (at most one is accepted; 002 FR-036).
 /// </summary>
 public sealed record SubmitClaimCommand(
     ClaimChannel Channel,
     ClaimSubmissionData? Claim,
     IReadOnlyList<EvidenceUpload> Invoices,
-    IReadOnlyList<EvidenceUpload> Photos);
+    IReadOnlyList<EvidenceUpload> Photos,
+    IReadOnlyList<EvidenceUpload>? ProtectionPlanDocuments = null);
 
 /// <summary>Outcome of <see cref="SubmitClaim.ExecuteAsync"/>.</summary>
 public abstract record SubmitClaimResult
@@ -108,7 +112,7 @@ public sealed partial class SubmitClaim(
         var now = time.GetUtcNow();
         var claimDate = DateOnly.FromDateTime(now.UtcDateTime);
 
-        var files = await EvidenceUploads.InspectAsync(command.Invoices, command.Photos, ct);
+        var files = await EvidenceUploads.InspectAsync(command.Invoices, command.Photos, command.ProtectionPlanDocuments ?? [], ct);
         if (EvidenceUploads.HasHeic(files))
         {
             return new SubmitClaimResult.UnsupportedMediaType(HeicMessage);
@@ -135,7 +139,8 @@ public sealed partial class SubmitClaim(
         var claimId = Guid.CreateVersion7();
         var claim = Claim.Submit(
             claimId, tenant.TenantId, reference, command.Channel, submittedBy, customer.Id, data.Email, data.Phone,
-            data.ModelCode, product?.Id, data.SerialNumber, data.PurchaseDate, data.Place, data.Price, region, data.ProblemDescription, now);
+            data.ModelCode, product?.Id, data.SerialNumber, data.PurchaseDate, data.Place, data.Price, region, data.ProblemDescription, now,
+            data.HasProtectionPlan);
 
         var evidence = new List<ClaimEvidence>(sanitized.Count);
         foreach (var file in sanitized)
@@ -320,6 +325,11 @@ public sealed partial class SubmitClaim(
             EvidenceUploads.AddError(errors, EvidenceUploads.PhotosKey, $"Add at most {MaxPhotos} photos.");
         }
 
+        if (command.ProtectionPlanDocuments is { Count: > 1 })
+        {
+            EvidenceUploads.AddError(errors, EvidenceUploads.ProtectionPlanDocumentKey, "Add one protection plan document.");
+        }
+
         EvidenceUploads.AddFileErrors(errors, files);
     }
 
@@ -384,11 +394,17 @@ public sealed partial class SubmitClaim(
 
         var invoices = evidence.Count(e => e.Kind == EvidenceKind.Invoice);
         var photos = evidence.Count(e => e.Kind == EvidenceKind.Photo);
+        var stored = $"{invoices} invoice{(invoices == 1 ? string.Empty : "s")} and {photos} photo{(photos == 1 ? string.Empty : "s")}";
+        if (evidence.Any(e => e.Kind == EvidenceKind.ProtectionPlanDocument))
+        {
+            stored = $"{invoices} invoice{(invoices == 1 ? string.Empty : "s")}, {photos} photo{(photos == 1 ? string.Empty : "s")} and the protection plan document";
+        }
+
         await trail.AppendAsync(
             claim.Id,
             TrailStep.EvidenceStored,
             "system",
-            $"{invoices} invoice{(invoices == 1 ? string.Empty : "s")} and {photos} photo{(photos == 1 ? string.Empty : "s")} stored for round {claim.CurrentRound}.",
+            $"{stored} stored for round {claim.CurrentRound}.",
             new
             {
                 round = claim.CurrentRound,
@@ -417,7 +433,8 @@ public sealed partial class SubmitClaim(
             purchase.Place!.Trim(),
             purchase.Price!.Value,
             purchase.Country!.Trim().ToUpperInvariant(),
-            claim.ProblemDescription!.Trim());
+            claim.ProblemDescription!.Trim(),
+            claim.HasProtectionPlan ?? false);
     }
 
     [GeneratedRegex(@"^[^\s@]+@[^\s@]+\.[^\s@]+$")]
@@ -446,5 +463,6 @@ public sealed partial class SubmitClaim(
         string Place,
         decimal Price,
         string PurchaseCountry,
-        string ProblemDescription);
+        string ProblemDescription,
+        bool HasProtectionPlan);
 }

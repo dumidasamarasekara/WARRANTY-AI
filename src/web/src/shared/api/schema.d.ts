@@ -984,6 +984,11 @@ export interface components {
             /** Format: binary */
             invoice?: string;
             photos?: string[];
+            /**
+             * Format: binary
+             * @description PDF or image; answers a PROTECTION_PLAN_DOCUMENT request (002 FR-036, FR-037)
+             */
+            protectionPlanDocument?: string;
         };
         SubmissionAccepted: {
             /**
