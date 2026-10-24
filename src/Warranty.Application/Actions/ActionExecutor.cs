@@ -3,6 +3,7 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Claims;
+using Warranty.Application.Fulfillment;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
@@ -88,6 +89,112 @@ public sealed class ActionExecutor(
         }
 
         await unitOfWork.ExecuteInTransactionAsync(token => ApplyReviewerDecisionAsync(decision, token), ct);
+    }
+
+    public async Task ExecuteRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (!tenantContext.IsResolved || decision.TenantId != tenantContext.TenantId)
+        {
+            throw new ActionRefusedException(
+                $"Remedy decision on claim {decision.ClaimId} does not belong to the current tenant scope.");
+        }
+
+        await unitOfWork.ExecuteInTransactionAsync(token => ApplyRemedyDecisionAsync(decision, token), ct);
+    }
+
+    /// <summary>
+    /// Applies a reviewer's remedy decision (002 research R4): the remedy's policy version is evaluated again for its
+    /// scenario and the repair facts, and the decision must stay inside both that evaluation and the remedy's allowed
+    /// list; the trail actor is the reviewer's <c>sub</c>.
+    /// </summary>
+    private async Task ApplyRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct)
+    {
+        var claim = await claims.GetAsync(decision.ClaimId, ct);
+        if (claim is null || claim.TenantId != decision.TenantId)
+        {
+            throw new ActionRefusedException($"Claim {decision.ClaimId} is not visible in the current tenant.");
+        }
+
+        // Separation of duties (001 research R29): RecordRemedyDecision refuses first; this is the last line of defense.
+        if (claim.WasSubmittedBy(decision.ReviewerSub))
+        {
+            throw new ActionRefusedException($"Reviewer {decision.ReviewerSub} submitted claim {claim.Id} and may not decide its remedy.");
+        }
+
+        var remedy = await remedies.GetAsync(claim.Id, ct);
+        if (remedy is null || remedy.TenantId != decision.TenantId)
+        {
+            throw new InvalidClaimTransitionException($"Claim {claim.Id} has no remedy to decide.");
+        }
+
+        var repair = await repairs.GetByClaimAsync(claim.Id, ct);
+        if (RemedyDecisionRules.WhyNotDecidable(remedy, repair, decision.Remedy) is { } notDecidable)
+        {
+            throw new InvalidClaimTransitionException(notDecidable);
+        }
+
+        var history = await remedies.GetDecisionsAsync(claim.Id, ct);
+        if (!RemedyDecisionRules.IsValidReason(decision.Reason, RemedyDecisionRules.RequiresReason(history)))
+        {
+            throw new ActionRefusedException($"The remedy decision on claim {claim.Id} needs a reason of 10–1000 characters.");
+        }
+
+        // Re-evaluation with the remedy's own policy version, scenario and repair facts (FR-002, FR-010).
+        var version = await policies.GetVersionAsync(remedy.PolicyVersionId, ct);
+        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        var failedAttempts = repair?.FailedAttempts ?? 0;
+        var estimate = repair?.Attempts.LastOrDefault(a => a.EstimateAmount is not null)?.EstimateAmount;
+        var evaluation = remedyEvaluator.Evaluate(version?.RemedyRules, remedy.Scenario, failedAttempts, estimate, product?.ClaimValue);
+        if (version is null || !evaluation.AllowedRemedies.Contains(decision.Remedy) || !remedy.AllowedRemedies.Contains(decision.Remedy))
+        {
+            throw new ActionRefusedException(
+                $"{decision.Remedy} is not allowed for claim {claim.Id} by its policy ({string.Join(", ", evaluation.AllowedRemedies)}).");
+        }
+
+        var now = time.GetUtcNow();
+        var previous = remedy.Remedy;
+        if (remedy.State == RemedyState.InProgress)
+        {
+            // A remedy change always passes AwaitingDecision (data-model.md, Remedy state machine).
+            remedy.ReturnToDecision(version.Id, remedy.Scenario, evaluation.AllowedRemedies, RemedyPendingReason.PolicyChoice, now);
+        }
+
+        remedy.Decide(decision.Remedy, now);
+        remedies.AddDecision(RemedyDecision.Decided(
+            Guid.CreateVersion7(), claim.TenantId, claim.Id, history.Count + 1, remedy.Scenario, version.Id, evaluation.TableRow,
+            evaluation.AllowedRemedies, decision.Remedy, RemedyDecidedBy.Reviewer, decision.ReviewerSub, decision.Reason,
+            failedAttempts, estimate, now));
+
+        var actor = decision.ReviewerSub;
+        await trail.AppendAsync(
+            claim.Id, TrailStep.RemedyDecided, actor,
+            previous is { } from
+                ? $"Remedy changed from {from} to {decision.Remedy} by reviewer {decision.ReviewerName}."
+                : $"Remedy {decision.Remedy} chosen by reviewer {decision.ReviewerName} (version {version.Version}, row {evaluation.TableRow}).",
+            new
+            {
+                remedy = decision.Remedy.ToString(),
+                previousRemedy = previous?.ToString(),
+                decidedBy = nameof(RemedyDecidedBy.Reviewer),
+                reviewer = decision.ReviewerName,
+                reason = decision.Reason,
+                scenario = remedy.Scenario.ToString(),
+                policyVersionId = version.Id,
+                tableRow = evaluation.TableRow,
+            },
+            ct);
+
+        switch (decision.Remedy)
+        {
+            case RemedyType.Repair when repair is null:
+                await CreateRepairAsync(claim, product, actor, now, ct);
+                break;
+            case RemedyType.Refund:
+                await RequestRefundAsync(claim, product, actor, ct);
+                break;
+        }
     }
 
     private async Task<ActionExecution> ApplyAsync(ApprovedAction action, CancellationToken ct)
@@ -323,13 +430,19 @@ public sealed class ActionExecutor(
                 await CreateRepairAsync(claim, product, actor, now, ct);
                 break;
             case RemedyType.Refund:
-                var amount = product?.ClaimValue ?? claim.PurchasePrice;
-                var refundRequestId = await refunds.RequestRefundAsync(claim.Id, amount, ct);
-                await trail.AppendAsync(
-                    claim.Id, TrailStep.ActionExecuted, actor, "Simulated refund requested.",
-                    new { action = "request_refund", refundRequestId, amount }, ct);
+                await RequestRefundAsync(claim, product, actor, ct);
                 break;
         }
+    }
+
+    /// <summary><c>request_refund</c>: the refund port is asked once for the claim value (research R10).</summary>
+    private async Task RequestRefundAsync(Claim claim, Product? product, string actor, CancellationToken ct)
+    {
+        var amount = product?.ClaimValue ?? claim.PurchasePrice;
+        var refundRequestId = await refunds.RequestRefundAsync(claim.Id, amount, ct);
+        await trail.AppendAsync(
+            claim.Id, TrailStep.ActionExecuted, actor, "Simulated refund requested.",
+            new { action = "request_refund", refundRequestId, amount }, ct);
     }
 
     /// <summary>The repair, suggested to the first active centre (priority, then name) that serves the claim; staff choose one otherwise.</summary>

@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<RecordRepairEvent>();
         services.AddScoped<RepairQueries>();
         services.AddScoped<RecordRemedyCompletion>();
+        services.AddScoped<RecordRemedyDecision>();
         services.AddScoped<IActionExecutor, ActionExecutor>();
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
