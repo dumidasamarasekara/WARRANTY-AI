@@ -9,6 +9,7 @@ namespace Warranty.Integrations.Simulated;
 /// Simulated service network over the tenant's service centers (research R8): only active centers in the
 /// region count, ordered by priority (lower first), then name. The suggested center is the first one that
 /// lists the product category among its capabilities, else the first active center of the region.
+/// Replacement locations are only the active centres that issue replacement units (003 research R8).
 /// </summary>
 internal sealed class SimulatedServiceNetwork(IIntegrationRepository integration) : IServiceNetwork
 {
@@ -26,6 +27,7 @@ internal sealed class SimulatedServiceNetwork(IIntegrationRepository integration
         var centers = await ActiveCentersAsync(region, ct);
         var category = Normalize(productCategory);
         return centers
+            .Where(c => purpose != ServiceCenterPurpose.Replacement || c.IssuesReplacements)
             .Select(c => new EligibleServiceCenter(
                 c.Id, c.Name, c.Region, c.Address, c.OpeningHours, c.Contact, c.Priority, c.Capabilities.Contains(category)))
             .ToArray();
