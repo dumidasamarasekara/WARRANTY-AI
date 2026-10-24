@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
@@ -272,9 +271,9 @@ public sealed class SeedFilesTests
 
     /// <summary>
     /// Feature 003 (T312): <c>issuesReplacements</c> is read from <c>service-centers.json</c> and defaults to false
-    /// (FR-007). Read through the loaded record's JSON form so the test compiles before the member exists.
+    /// (FR-007); every active centre of the repository seed issues replacements.
     /// </summary>
-    [Fact(Skip = "Pending T312")]
+    [Fact]
     public void Service_centers_read_whether_they_issue_replacements_defaulting_to_no()
     {
         var root = CopyOfSeed();
@@ -289,16 +288,11 @@ public sealed class SeedFilesTests
                 ]
                 """);
 
-            var centers = SeedFiles.Load(root).Tenants[1].ServiceCenters
-                .Select(c => JsonSerializer.SerializeToElement(c, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
-                .ToList();
-
-            centers.Select(c => c.GetProperty("issuesReplacements").GetBoolean()).ShouldBe([true, false]);
+            SeedFiles.Load(root).Tenants[1].ServiceCenters.Select(c => c.IssuesReplacements).ShouldBe([true, false]);
             SeedFiles.Load(SeedRoot()).Tenants
                 .SelectMany(t => t.ServiceCenters)
                 .Where(c => c.IsActive)
-                .Select(c => JsonSerializer.SerializeToElement(c, new JsonSerializerOptions(JsonSerializerDefaults.Web)).GetProperty("issuesReplacements").GetBoolean())
-                .ShouldAllBe(issues => issues);
+                .ShouldAllBe(c => c.IssuesReplacements);
         }
         finally
         {
@@ -325,7 +319,8 @@ public sealed class SeedFilesTests
             centers[0].ShouldBe(new ServiceCenterSeed(
                 Guid.Parse("22222222-0003-7000-8000-000000000001"), Region.NA, "Open", centers[0].Capabilities,
                 "1 Test Lane", "Mon–Fri 09:00–17:00", "desk@example.com", IsActive: true, Priority: 5));
-            (centers[1].IsActive, centers[1].Priority, centers[1].Address).ShouldBe((false, ServiceCenter.DefaultPriority, null));
+            (centers[1].IsActive, centers[1].Priority, centers[1].Address, centers[1].IssuesReplacements)
+                .ShouldBe((false, ServiceCenter.DefaultPriority, null, false));
         }
         finally
         {
