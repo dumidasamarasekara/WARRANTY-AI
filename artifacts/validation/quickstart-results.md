@@ -3,10 +3,10 @@
 Feature: `specs/001-ai-claim-adjudication`. Scenarios S1–S23 are defined in that feature's
 `quickstart.md` §4.
 
-**Status: partly complete.** The automated (headless) validation and a UI pass in replay mode are
-done and recorded below. The timed walkthroughs for SC-007 and SC-008 need people who have not
-seen the claims, and are still open (section 5). T116 stays unchecked in `tasks.md` until they are
-recorded.
+**Status: closed without the timed walkthroughs.** The automated (headless) validation and a UI pass
+in replay mode are done and recorded below. The timed walkthroughs for SC-007 and SC-008 need people
+who have not seen the claims and were not run. On 2026-10-24 the project owner accepted these results
+and closed T116 without them, so SC-007 and SC-008 remain unverified (section 5).
 
 ## 1. Run
 
@@ -90,10 +90,12 @@ start. Claims used the golden scenario data from `seed/golden/scenarios.json` an
 | S14 auditor | Signed in as `auditor.aurora`, opened the traces of S1 and S11 | 16 entries each, "Hash chain verified". S1 ends Guardrails 18/18 → Auto-approved → repair request + notification. S11 shows Guardrails 17/18 (`VALUE_ABOVE_LIMIT`) → Escalated → "rejected by reviewer reviewer.aurora, overriding the AI recommendation". Technical view shows model, prompt version, tokens, cache tokens, latency, estimated cost, tool calls with results, resolved clause keys with versions and dates |
 | S15 / S21 | Wrong email for the S11 reference, then the Security events page as `auditor.aurora` and `auditor.borealis` | Generic "We couldn't find a claim with those details". Aurora shows one "Claimant access failed" event (actor "claimant channel", target reference, no details or IP). Borealis shows no claims and no events |
 
-## 5. Timed walkthroughs (SC-007, SC-008): open
+## 5. Timed walkthroughs (SC-007, SC-008): not run
 
-These need people who have not seen the claims; they were not run. Record times to the nearest
-half minute and any screen that slowed the person down.
+These need people who have not seen the claims. They were not run, and T116 was closed without them
+on the project owner's decision, so SC-007 and SC-008 are **unverified**. If they are run later,
+record times to the nearest half minute and any screen that slowed the person down, against a
+master that includes the finding 1 fix (#297).
 
 | Tenant | Walkthrough | Target | Person (role) | Time | What slowed them down |
 |--------|-------------|--------|---------------|------|------------------------|
@@ -114,9 +116,9 @@ S5, S11 and S2 have Aurora data only, so the Borealis rows use S13 and S4-boreal
    `src/web/src/shared/presentation/trailEntry.ts`. It returns `system` only for the literal actor
    `system` and `ai` only for agent names, so every other actor becomes `human`. This contradicts the
    AI/human/system visual language in `ui-design.md`. It could mislead an auditor in the SC-007
-   walkthrough, because an automatic approval reads as a human action. Recommended fix: treat
-   `adjudication-service` and the deterministic `risk` step as system, and keep `human` for staff
-   subjects and the claimant.
+   walkthrough, because an automatic approval reads as a human action. **Fixed in #297:**
+   `adjudication-service` and the deterministic `risk` step are now system; staff subjects and the
+   claimant stay `human`.
 2. **The reviewer step shows a raw subject ID.** "Reviewer decision" and the action after it show the
    reviewer's Keycloak subject (a GUID) as the actor badge name. The entry text does name
    `reviewer.aurora`, so the information is there, but the badge is unreadable.
