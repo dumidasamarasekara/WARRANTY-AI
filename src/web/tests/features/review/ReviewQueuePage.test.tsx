@@ -165,7 +165,7 @@ describe('ReviewQueuePage', () => {
 
     const queue = await screen.findByRole('navigation', { name: 'Review queue' })
     const remedyCard = within(queue).getByRole('link', { name: /R3M3DY0001/ })
-    expect(remedyCard).toHaveAttribute('href', `/staff/claims/${remedyClaimId}/remedy`)
+    expect(remedyCard).toHaveAttribute('href', `/staff/claims/${remedyClaimId}/remedy?decide`)
     expect(remedyCard).toHaveTextContent('Remedy')
     expect(remedyCard).toHaveTextContent('The policy allows more than one remedy')
     expect(remedyCard).toHaveTextContent('Escalated 3 h ago')
