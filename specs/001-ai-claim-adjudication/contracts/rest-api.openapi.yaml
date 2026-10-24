@@ -871,7 +871,7 @@ components:
       properties:
         evidenceId: { type: string, format: uuid }
         ref: { type: string, description: 'EV-n reference used in the latest evaluation' }
-        kind: { type: string, enum: [Invoice, Photo, Other] }
+        kind: { type: string, enum: [Invoice, Photo, Other, ProtectionPlanDocument] }
         fileName: { type: string }
         contentType: { type: string }
         round: { type: integer }

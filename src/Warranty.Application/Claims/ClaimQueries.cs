@@ -57,7 +57,8 @@ public sealed record ClaimDetail(
     bool HasProtectionPlan,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyView? Remedy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreview,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RepairView? Repair);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RepairView? Repair,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreviewWithProtectionPlan = null);
 
 public sealed record ClaimCustomer(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FullName,
@@ -294,7 +295,10 @@ public sealed class ClaimQueries(
             claim.Status == ClaimStatus.UnderReview
                 ? await remedies.PreviewAsync(claim, product, RemedyScenario.CoveredDefect, ct)
                 : null,
-            await repairs.GetRepairAsync(claim, product, ct));
+            await repairs.GetRepairAsync(claim, product, ct),
+            claim.Status == ClaimStatus.UnderReview
+                ? await remedies.PreviewWithProtectionPlanAsync(claim, product, ct)
+                : null);
 
         return new ClaimDetailResult(detail, FormatETag(rowVersion));
     }

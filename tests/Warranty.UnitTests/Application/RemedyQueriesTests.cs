@@ -104,6 +104,41 @@ public sealed class RemedyQueriesTests
             "protectionPlan"));
     }
 
+    // ── Protection plan (T262, research R9, R13) ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task With_a_declared_plan_that_the_version_honours_the_plan_preview_reads_row_protectionPlan()
+    {
+        UseVersions(Version(VersionId, RemedyRulesContract.Borealis));
+
+        var preview = await Queries().PreviewWithProtectionPlanAsync(NewClaim(hasProtectionPlan: true), _product, Ct);
+
+        preview.ShouldNotBeNull().Scenario.ShouldBe(RemedyScenario.ProtectionPlanDamage);
+        preview.TableRow.ShouldBe("protectionPlan");
+        preview.AllowedRemedies.ShouldBe([RemedyType.Repair]);
+    }
+
+    [Fact]
+    public async Task Without_a_declared_plan_or_a_version_that_honours_it_there_is_no_plan_preview()
+    {
+        (await Queries().PreviewWithProtectionPlanAsync(NewClaim(hasProtectionPlan: true), _product, Ct)).ShouldBeNull("Aurora's plan does not lift the exclusion");
+
+        UseVersions(Version(VersionId, RemedyRulesContract.Borealis));
+        (await Queries().PreviewWithProtectionPlanAsync(NewClaim(), _product, Ct)).ShouldBeNull("the claim declares no plan");
+    }
+
+    [Theory]
+    [InlineData(true, true, RemedyScenario.ProtectionPlanDamage)]
+    [InlineData(true, false, RemedyScenario.CoveredDefect)]
+    [InlineData(false, true, RemedyScenario.CoveredDefect)]
+    public void The_initial_scenario_is_ProtectionPlanDamage_only_for_a_confirmed_plan_the_version_honours(
+        bool confirmed, bool honoured, RemedyScenario expected)
+    {
+        var version = Version(VersionId, honoured ? RemedyRulesContract.Borealis : RemedyRulesContract.Aurora);
+
+        RemedyQueries.InitialScenario(confirmed, version).ShouldBe(expected);
+    }
+
     // ── Remedy view ────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -200,8 +235,8 @@ public sealed class RemedyQueriesTests
             "tenant-aurora/policies/AUR-WP-v2.md", "checksum", rules);
     }
 
-    private static Claim NewClaim(Region? region = Region.NA) => Claim.Submit(
+    private static Claim NewClaim(Region? region = Region.NA, bool hasProtectionPlan = false) => Claim.Submit(
         Guid.CreateVersion7(), Tenant, ClaimReference.Generate(), ClaimChannel.ClaimantPortal, Claim.ClaimantSubmitter, CustomerId,
         "claimant@synthetic-mail.test", null, "AUR-TAB10", ProductId, "SN-1001", new DateOnly(2026, 1, 15), "Aurora Store",
-        349m, region, "The tablet does not power on after charging overnight.", At);
+        349m, region, "The tablet does not power on after charging overnight.", At, hasProtectionPlan: hasProtectionPlan);
 }

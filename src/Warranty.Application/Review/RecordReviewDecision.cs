@@ -203,7 +203,8 @@ public sealed class RecordReviewDecision(
 
         var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
         var version = RemedyQueries.ApplicableVersion(await policies.GetVersionsAsync(ct), claim, product);
-        var preview = remedyEvaluator.Evaluate(version?.RemedyRules, RemedyScenario.CoveredDefect, claimValue: product?.ClaimValue);
+        var scenario = RemedyQueries.InitialScenario(command.ProtectionPlanConfirmed == true, version);
+        var preview = remedyEvaluator.Evaluate(version?.RemedyRules, scenario, claimValue: product?.ClaimValue);
         var allowed = string.Join(", ", preview.AllowedRemedies);
         if (command.Remedy is not { } remedy)
         {
