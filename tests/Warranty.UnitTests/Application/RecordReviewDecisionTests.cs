@@ -63,6 +63,13 @@ public sealed class RecordReviewDecisionTests
     private readonly FakeTimeProvider _time = new(Now);
     private readonly List<TrailRecord> _entries = [];
     private readonly ServiceCenterInfo _center = new(Guid.Parse("0199b000-0000-7000-8000-0000000000f1"), "Aurora Service North", Region.NA);
+    private readonly EligibleServiceCenter _eligible = new(
+        Guid.Parse("0199b000-0000-7000-8000-0000000000f1"), "Aurora Service North", Region.NA, "1 Example Road", "Mon–Fri", null, 10, ServesClaim: true);
+    private readonly IRemedyRepository _remedies = Substitute.For<IRemedyRepository>();
+    private readonly IRepairRepository _repairRecords = Substitute.For<IRepairRepository>();
+    private readonly IRefundService _refunds = Substitute.For<IRefundService>();
+    private readonly List<ClaimRemedy> _addedRemedies = [];
+    private readonly List<Repair> _addedRepairs = [];
     private readonly Guid _repairRequestId = Guid.Parse("0199b000-0000-7000-8000-0000000000a1");
     private readonly Guid _notificationId = Guid.Parse("0199b000-0000-7000-8000-0000000000a2");
 
@@ -83,15 +90,19 @@ public sealed class RecordReviewDecisionTests
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", 349m, "EUR"));
         _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns(_center);
+        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_eligible]);
         _repairs.CreateAsync(default, default, default).ReturnsForAnyArgs(_repairRequestId);
         _notifications.EnqueueAsync(default, default!, default).ReturnsForAnyArgs(_notificationId);
+        _remedies.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRemedies.Add(call.Arg<ClaimRemedy>()));
+        _repairRecords.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRepairs.Add(call.Arg<Repair>()));
+        UseRemedyRules(SingleRepairRules);
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     // ── Approve / Reject / RequestInformation ─────────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task Approving_in_line_with_an_AI_approve_needs_no_justification_and_finalizes_by_the_reviewer()
     {
         var claim = ArrangeUnderReview(Valid(AiDecision.Approve));
@@ -114,15 +125,18 @@ public sealed class RecordReviewDecisionTests
         claim.FinalizedAt.ShouldBe(Now);
         _reviews.Received(1).Add(recorded.Decision);
 
-        Received.InOrder(() =>
-        {
-            _repairs.CreateAsync(claim.Id, _center.Id, Arg.Any<CancellationToken>());
-            _notifications.EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
-        });
-        _entries.Select(e => e.Step).ShouldBe([TrailStep.ReviewerDecided, TrailStep.ActionExecuted, TrailStep.ActionExecuted]);
+        // 002 research R8: the remedy Repair and a repair at the suggested centre replace the 001 repair request.
+        _addedRemedies.ShouldHaveSingleItem().Remedy.ShouldBe(RemedyType.Repair);
+        _addedRepairs.ShouldHaveSingleItem().ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(_eligible.Id);
+        await _repairs.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
+        await _notifications.Received(1).EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
+        _entries.Select(e => e.Step).ShouldBe(
+        [
+            TrailStep.ReviewerDecided, TrailStep.RemedyRecommended, TrailStep.RemedyDecided, TrailStep.RepairCentreAssigned,
+            TrailStep.ActionExecuted,
+        ]);
         _entries.ShouldAllBe(e => e.ClaimId == claim.Id && e.Actor == ReviewerSub);
-        _entries[1].Payload.GetProperty("action").GetString().ShouldBe("create_repair_request");
-        _entries[2].Payload.GetProperty("action").GetString().ShouldBe("notify_customer");
+        _entries[^1].Payload.GetProperty("action").GetString().ShouldBe("notify_customer");
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
@@ -717,7 +731,8 @@ public sealed class RecordReviewDecisionTests
             .ExecuteAsync(new RecordReviewDecisionCommand(claimId, ifMatch, decision, justification, claimantExplanation, requestedItems), Ct);
 
     private ActionExecutor Executor() => new(
-        _tenant, _claims, _adjudication, _reviews, _catalog, Substitute.For<IPolicyRepository>(), _network, Substitute.For<IRemedyRepository>(), Substitute.For<IRepairRepository>(), Substitute.For<IRefundService>(), _notifications, _trail, _unitOfWork, new Warranty.Guardrails.Remedies.RemedyPolicyEvaluator(), _time);
+        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairRecords, _refunds, _notifications,
+        _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
 
     private static Claim NewClaim(string submittedBy, Guid? tenantId = null)
     {
@@ -789,7 +804,8 @@ public sealed class RecordReviewDecisionTests
     }
 
     private void ShouldNotHaveCalledIntegrations()
-        => (_network.ReceivedCalls().Count() + _repairs.ReceivedCalls().Count() + _notifications.ReceivedCalls().Count()).ShouldBe(0);
+        => (_network.ReceivedCalls().Count() + _repairs.ReceivedCalls().Count() + _notifications.ReceivedCalls().Count()
+            + _refunds.ReceivedCalls().Count() + _addedRemedies.Count + _addedRepairs.Count).ShouldBe(0);
 
     private sealed record TrailRecord(Guid ClaimId, TrailStep Step, string Actor, string Summary, JsonElement Payload);
 }

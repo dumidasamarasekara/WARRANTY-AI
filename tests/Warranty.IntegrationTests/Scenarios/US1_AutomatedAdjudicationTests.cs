@@ -27,12 +27,12 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         "ClaimSubmitted", "TenantResolved", "EvidenceStored", "IntakeValidated", "ClaimExtracted", "CustomerVerified", "ProductIdentified",
         "PolicyRetrieved", "EvidenceAnalyzed", "CoverageAssessed", "RiskEvaluated", "AiRecommended", "GuardrailsEvaluated", "AutoApproved",
         "AutoRejected", "InformationRequested", "EscalatedToReview", "ReviewerDecided", "SupplementReceived", "ActionExecuted", "AiStepFailed",
-        "Correction",
+        "Correction", "RemedyRecommended", "RemedyDecided", "RepairCentreAssigned",
     ];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S1_a_clear_defect_within_the_period_is_approved_by_the_system_citing_the_coverage_clause()
     {
         var scenario = GoldenScenario.Load("S1");
@@ -62,7 +62,10 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         cited.Select(r => r.ClauseKey).ShouldBe(scenario.ExpectedClauseKeys, ignoreOrder: true);
 
         // The approval is executed through the simulated integrations.
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
         (await CountAsync("select count(*) from integration.notifications where claim_id = @value", claimId)).ShouldBeGreaterThanOrEqualTo(1);
 
         // The claimant sees the outcome and its explanation, never risk data.
@@ -121,7 +124,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         ShouldContainNoRiskData(view);
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task The_trace_of_S1_lists_every_step_in_order_ending_with_the_automatic_approval()
     {
         var claimId = await SubmitOnceAsync(GoldenScenario.Load("S1"));
@@ -158,6 +161,10 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         steps[steps.IndexOf("GuardrailsEvaluated") + 1].ShouldBe("AutoApproved");
         steps.IndexOf("PolicyRetrieved").ShouldBeLessThan(steps.IndexOf("CoverageAssessed"));
         steps.IndexOf("EvidenceAnalyzed").ShouldBeLessThan(steps.IndexOf("RiskEvaluated"));
+
+        // 002 research R3: the remedy set by policy and the suggested repair centre follow the approval.
+        string[] remedy = ["AutoApproved", "RemedyRecommended", "RemedyDecided", "RepairCentreAssigned"];
+        remedy.Select(step => steps.IndexOf(step)).ShouldBeInOrder(SortDirection.Ascending);
     }
 
     [Fact]
@@ -231,7 +238,7 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         }
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task A_claims_agent_submission_reaches_the_same_automatic_approval()
     {
         var scenario = GoldenScenario.Load("S1-agent");
@@ -251,7 +258,10 @@ public sealed class US1_AutomatedAdjudicationTests(WarrantyAppFixture fixture)
         var run = await LatestRunAsync(claimId);
         run.Disposition.ShouldBe(Disposition.AutoApprove);
         (await CitedPolicyRefsAsync(run.Id)).Select(r => r.ClauseKey).ShouldBe(scenario.ExpectedClauseKeys, ignoreOrder: true);
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
     [Fact]

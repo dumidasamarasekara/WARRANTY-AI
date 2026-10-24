@@ -35,7 +35,7 @@ public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
     // ---- S1, S2: automatic outcomes -----------------------------------------------------------------
 
     [Theory]
-    [InlineData("S1", "AutoApproved", "Approved", Skip = "Pending T226")]
+    [InlineData("S1", "AutoApproved", "Approved")]
     [InlineData("S2", "AutoRejected", "Rejected")]
     public async Task The_trace_of_an_automatic_outcome_holds_every_step_in_seq_order_with_an_intact_hash_chain(
         string scenarioId, string routingStep, string outcome)
@@ -54,7 +54,8 @@ public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
         routing.Step.ShouldBe(routingStep);
         routing.Details.GetProperty("outcome").GetString().ShouldBe(outcome);
         routing.Details.GetProperty("decidedBy").GetString().ShouldBe("System");
-        trace.Entries.Skip(trace.Entries.IndexOf(routing) + 1).ShouldAllBe(e => e.Step == "ActionExecuted", "only the executed actions follow the outcome");
+        trace.Entries.Skip(trace.Entries.IndexOf(routing) + 1)
+            .ShouldAllBe(e => GoldenScenario.FollowsTheOutcome(e.Step), "only the executed actions and the remedy steps follow the outcome");
         trace.Entries.Select(e => e.Step).ShouldNotContain("ReviewerDecided");
     }
 

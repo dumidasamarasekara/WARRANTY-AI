@@ -80,7 +80,7 @@ public sealed class US5_RequestInformationTests(WarrantyAppFixture fixture)
         view.TryGetProperty("outcomeExplanation", out _).ShouldBeFalse();
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S6_round2_after_the_claimant_supplies_the_invoice_runs_every_step_and_the_trail_keeps_both_runs()
     {
         var scenario = GoldenScenario.Load("S6-round2");
@@ -392,8 +392,8 @@ public sealed class US5_RequestInformationTests(WarrantyAppFixture fixture)
 
         if (expected.LastTrailEntries.Count > 0)
         {
-            // Only the executed side effects (notifications, repair requests) may follow the outcome's entries.
-            var steps = observed.Trail.Select(e => e.Step).Where(s => s != "ActionExecuted").ToList();
+            // Only the executed side effects (notifications) and the 002 remedy steps may follow the outcome's entries.
+            var steps = observed.Trail.Select(e => e.Step).Where(s => !GoldenScenario.FollowsTheOutcome(s)).ToList();
             steps.TakeLast(expected.LastTrailEntries.Count).ShouldBe(expected.LastTrailEntries, at);
         }
     }

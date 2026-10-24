@@ -195,6 +195,13 @@ public sealed class GoldenScenario
     public IReadOnlyList<string> ExpectedLastTrailEntries => ExpectedList("lastTrailEntries");
 
     /// <summary>
+    /// Trail steps that may follow a claim's outcome entry: the executed actions and, from 002, the remedy set at
+    /// approval (research R3, R8: <c>RemedyRecommended</c>, <c>RemedyDecided</c>, <c>RepairCentreAssigned</c>).
+    /// </summary>
+    public static bool FollowsTheOutcome(string step)
+        => step is "ActionExecuted" or "RemedyRecommended" or "RemedyDecided" or "RepairCentreAssigned";
+
+    /// <summary>
     /// Submits the scenario's claim at most once per test run, across every test class, and returns its claim ID:
     /// a second claim for the same serial or evidence would raise duplicate-serial or evidence-reuse signals in
     /// its own adjudication, so scenario classes that share a scenario (e.g. S4-aurora) share its claim.

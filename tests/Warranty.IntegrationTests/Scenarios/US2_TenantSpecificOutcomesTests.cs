@@ -22,7 +22,7 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S3_an_EU_purchase_after_12_months_is_approved_citing_the_EU_warranty_period_only()
     {
         var scenario = GoldenScenario.Load("S3");
@@ -44,7 +44,10 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
         var cited = (await CitedPolicyRefsAsync(run.Id)).Select(r => r.ClauseKey).ToList();
         cited.ShouldBe(scenario.ExpectedClauseKeys, ignoreOrder: true);
         cited.ShouldNotContain("AUR-WP-2.1");
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
     [Fact]
@@ -73,7 +76,7 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
         (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S4_Borealis_approves_the_same_accidental_screen_crack_citing_its_accidental_damage_clause()
     {
         var scenario = GoldenScenario.Load("S4-borealis");
@@ -94,7 +97,10 @@ public sealed class US2_TenantSpecificOutcomesTests(WarrantyAppFixture fixture)
 
         (await CitedPolicyRefsAsync(run.Id)).Select(r => r.ClauseKey).ShouldContain("BOR-WP-1.2");
         await ShouldOnlyReferenceClausesOfAsync(run.Id, "BOR-WP-");
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
     [Fact]
