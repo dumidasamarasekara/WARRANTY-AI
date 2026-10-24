@@ -6,21 +6,24 @@ using System.Text.Json.Nodes;
 using Npgsql;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.IntegrationTests.Infrastructure;
 
 namespace Warranty.IntegrationTests.Fulfillment;
 
 /// <summary>
-/// Feature 002 user story 4 (quickstart R11; FR-034, FR-035): staff record that a Replacement was handed to the
-/// customer or a Refund was completed through <c>POST /api/claims/{claimId}/remedy-completions</c> (T252) with the
-/// remedy ETag of the claim detail; the remedy is then Completed and the claimant sees "Replacement handed over" /
-/// "Refund completed" (T242).
+/// Feature 002 user story 4 (quickstart R11; FR-035) as changed by 003 research R12: staff record that a Refund was
+/// completed through <c>POST /api/claims/{claimId}/remedy-completions</c> (T252) with the remedy ETag of the claim
+/// detail; the remedy is then Completed and the claimant sees "Refund completed" (T242). A Replacement no longer
+/// completes here: the request is refused (400 naming <c>remedy</c>) and the remedy completes through the
+/// <c>HandedToCustomer</c> replacement event (T326, 003 quickstart X20); completion rows with remedy Replacement written
+/// before 003 still read as "Replacement handed over".
 /// <para>
 /// R11 uses the seeded R11 claims (<c>remedy-scenarios.json</c>, T251): RMDYR11A01 at Aurora with Replacement and
 /// RMDYR11B01 at Borealis with Refund, each decided by a reviewer after two failed repairs. A seeded claim can be
-/// completed only once, so each claim's requests run once per test run (<see cref="CompleteOnceAsync"/>) and every
-/// test of that claim reads the same outcome, whatever the test order. The seeded R1 claim (remedy Repair) only gets
-/// requests that must be refused.
+/// completed only once, so each claim's requests run once per test run (<see cref="CompleteOnceAsync"/>,
+/// <see cref="LegacyReplacementOnceAsync"/>) and every test of that claim reads the same outcome, whatever the test
+/// order. The seeded R1 claim (remedy Repair) only gets requests that must be refused.
 /// </para>
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
@@ -43,47 +46,108 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
     /// <summary>The once-per-run requests of each seeded R11 claim (the fixture, and so the database, is shared by the collection).</summary>
     private static readonly ConcurrentDictionary<Guid, Lazy<Task<CompletionRun>>> Runs = new();
 
+    /// <summary>The once-per-run refusals and simulated pre-003 completion of R11-aurora.</summary>
+    private static readonly ConcurrentDictionary<Guid, Lazy<Task<LegacyReplacementRun>>> LegacyRuns = new();
+
     private static CancellationToken Ct => CancellationToken.None;
 
-    // ---- R11: Replacement handed to the customer (Aurora) ------------------------------------------
+    // ---- R11: a Replacement is not completed by a completion record (003 research R12) -------------
 
     [Fact]
-    public async Task R11_recording_the_replacement_handed_over_completes_the_Aurora_remedy()
+    public async Task R11_a_Replacement_completion_request_is_refused_and_changes_nothing()
     {
-        var run = await CompleteOnceAsync(R11Aurora, TestStaffUsers.AgentAurora, TestStaffUsers.AuditorAurora, TestStaffUsers.AgentBorealis,
-            Completion("Replacement", Yesterday()));
+        var run = await LegacyReplacementOnceAsync();
 
         // Before: Replacement in progress, no completion.
         (run.Before.GetProperty("state").GetString(), run.Before.GetProperty("remedy").GetString()).ShouldBe(("InProgress", "Replacement"));
         run.Before.TryGetProperty("completion", out _).ShouldBeFalse();
 
-        // Refused requests changed nothing (each is checked before the completion is recorded).
-        ShouldBeRefused(run, "noIfMatch", HttpStatusCode.PreconditionFailed);
-        ShouldBeRefused(run, "staleIfMatch", HttpStatusCode.PreconditionFailed);
-        ShouldBeRefused(run, "auditor", HttpStatusCode.Forbidden);
-        ShouldBeRefused(run, "otherTenant", HttpStatusCode.NotFound);
-        ShouldBeRefused(run, "repair", HttpStatusCode.BadRequest, "remedy");
-        ShouldBeRefused(run, "tomorrow", HttpStatusCode.BadRequest, "completedOn");
-        ShouldBeRefused(run, "notTheCurrentRemedy", HttpStatusCode.Conflict, "Replacement");
-        run.Refused["otherTenant"].Body.ShouldNotContain(R11Aurora.Reference);
+        // A Replacement completes through the HandedToCustomer replacement event, whoever sends the request.
+        ShouldBeRefused(run.Refused, "replacement", HttpStatusCode.BadRequest, "HandedToCustomer");
+        ShouldBeRefused(run.Refused, "replacementByReviewer", HttpStatusCode.BadRequest, "HandedToCustomer");
+        ShouldBeRefused(run.Refused, "replacementWithReference", HttpStatusCode.BadRequest, "remedy");
 
-        // The completion: 201 with the completed remedy and a new ETag.
-        run.Recorded.Status.ShouldBe(HttpStatusCode.Created, run.Recorded.Body);
-        var remedy = JsonSerializer.Deserialize<JsonElement>(run.Recorded.Body);
-        (remedy.GetProperty("state").GetString(), remedy.GetProperty("remedy").GetString()).ShouldBe(("Completed", "Replacement"));
-        var completion = remedy.GetProperty("completion");
-        completion.GetProperty("completedOn").GetString().ShouldBe(Yesterday());
+        // A Refund is not the current remedy.
+        ShouldBeRefused(run.Refused, "refund", HttpStatusCode.Conflict, "Replacement");
+
+        // None of them wrote anything (checked before the pre-003 completion was simulated).
+        (run.UnchangedState, run.UnchangedETag).ShouldBe(("InProgress", ETagOf(run.Before)));
+        run.CompletionRowsBefore.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task R11_a_Replacement_completed_before_003_still_reads_as_completed_for_staff_and_the_claimant()
+    {
+        var run = await LegacyReplacementOnceAsync();
+
+        // Staff: the remedy view shows the pre-003 completion row.
+        var detail = await RemedyAsync(TestStaffUsers.AuditorAurora, R11Aurora.Id);
+        (detail.GetProperty("state").GetString(), detail.GetProperty("remedy").GetString()).ShouldBe(("Completed", "Replacement"));
+        var completion = detail.GetProperty("completion");
+        completion.GetProperty("completedOn").GetString().ShouldBe(run.LegacyCompletedOn);
         completion.TryGetProperty("reference", out _).ShouldBeFalse();
         completion.GetProperty("recordedBy").GetString().ShouldNotBeNullOrWhiteSpace();
-        remedy.GetProperty("etag").GetString().ShouldNotBe(ETagOf(run.Before));
 
-        // The same request again with the old ETag cannot apply twice.
-        run.Repeated.Status.ShouldBe(HttpStatusCode.PreconditionFailed, run.Repeated.Body);
+        // Claimant: "Replacement handed over".
+        var remedy = (await ClaimantViewAsync(R11Aurora)).GetProperty("remedy");
+        (remedy.GetProperty("remedy").GetString(), remedy.GetProperty("label").GetString(), remedy.GetProperty("completed").GetBoolean())
+            .ShouldBe(("Replacement", "Replacement handed over", true));
+        remedy.TryGetProperty("repairCentre", out _).ShouldBeFalse();
 
-        await ShouldBeCompletedAsync(R11Aurora.Id, "Replacement", Yesterday(), reference: null, TestStaffUsers.AgentAurora);
-        var detail = await RemedyAsync(TestStaffUsers.AuditorAurora, R11Aurora.Id);
-        detail.GetProperty("state").GetString().ShouldBe("Completed");
-        detail.GetProperty("etag").GetString().ShouldBe(remedy.GetProperty("etag").GetString());
+        // The completed remedy cannot be completed again, by either remedy.
+        var again = await CompletionAsync(TestStaffUsers.AgentAurora, R11Aurora.Id, ETagOf(detail), Completion("Replacement", Today()));
+        again.Status.ShouldBe(HttpStatusCode.BadRequest, again.Body);
+        var refund = await CompletionAsync(TestStaffUsers.AgentAurora, R11Aurora.Id, ETagOf(detail), Completion("Refund", Today(), RefundReference));
+        refund.Status.ShouldBe(HttpStatusCode.Conflict, refund.Body);
+        refund.Body.ShouldContain("Completed");
+        (await CountAsync("select count(*) from claims.remedy_completions where claim_id = @value", R11Aurora.Id)).ShouldBe(1);
+    }
+
+    // ---- 003: a Replacement completes through the HandedToCustomer replacement event --------------
+
+    [Fact(Skip = "Pending T329")]
+    public async Task A_Replacement_handed_to_the_customer_completes_the_remedy_without_a_completion_record()
+    {
+        // An Aurora replacement awaiting its unit, faulty product returned at collection (003 quickstart X1, T321).
+        // T326 may point this at a dedicated claim of replacement-scenarios.json if X1 is reserved for the US1 tests.
+        var claimId = await ScalarAsync<Guid>(
+            $"""
+            select claim_id from claims.replacements
+            where tenant_id = @value and status = '{WireName.Of(ReplacementStatus.AwaitingUnit)}'
+              and return_rule = '{WireName.Of(ReplacementReturnRule.AtCollection)}'
+            order by claim_id desc limit 1
+            """,
+            TestStaffUsers.AuroraTenantId);
+        var serial = $"SN-T327-{Guid.NewGuid():N}"[..24];
+
+        var reserved = await ReplacementEventAsync(TestStaffUsers.AgentAurora, claimId, await ReplacementETagAsync(claimId), new JsonObject
+        {
+            ["type"] = "UnitReserved", ["reportedAt"] = DateTimeOffset.UtcNow.AddMinutes(-2), ["source"] = "Phone", ["serialNumber"] = serial,
+        });
+        reserved.Status.ShouldBe(HttpStatusCode.Created, reserved.Body);
+        JsonSerializer.Deserialize<JsonElement>(reserved.Body).GetProperty("status").GetString().ShouldBe("ReadyForCollection");
+
+        var before = await RemedyAsync(TestStaffUsers.AgentAurora, claimId);
+        (before.GetProperty("state").GetString(), before.GetProperty("remedy").GetString()).ShouldBe(("InProgress", "Replacement"));
+
+        // The 002 completion request is refused; the hand-over completes the remedy.
+        var refused = await CompletionAsync(TestStaffUsers.AgentAurora, claimId, ETagOf(before), Completion("Replacement", Yesterday()));
+        refused.Status.ShouldBe(HttpStatusCode.BadRequest, refused.Body);
+
+        var handedOver = await ReplacementEventAsync(TestStaffUsers.AgentAurora, claimId, await ReplacementETagAsync(claimId), new JsonObject
+        {
+            ["type"] = "HandedToCustomer", ["reportedAt"] = DateTimeOffset.UtcNow.AddMinutes(-1), ["source"] = "InPerson",
+            ["handedOverOn"] = Today(), ["returnConfirmed"] = true,
+        });
+        handedOver.Status.ShouldBe(HttpStatusCode.Created, handedOver.Body);
+        JsonSerializer.Deserialize<JsonElement>(handedOver.Body).GetProperty("status").GetString().ShouldBe("HandedToCustomer");
+
+        var after = await RemedyAsync(TestStaffUsers.AuditorAurora, claimId);
+        (after.GetProperty("state").GetString(), after.GetProperty("remedy").GetString()).ShouldBe(("Completed", "Replacement"));
+        after.GetProperty("etag").GetString().ShouldNotBe(ETagOf(before));
+        (await CountAsync("select count(*) from claims.remedy_completions where claim_id = @value", claimId)).ShouldBe(0);
+        (await CountAsync("select count(*) from catalog.replacement_serials where claim_id = @value", claimId)).ShouldBe(1);
+        (await ScalarAsync<string>("select status from claims.claims where id = @value", claimId)).ShouldBe(WireName.Of(ClaimStatus.Approved));
     }
 
     // ---- R11: Refund completed with its reference (Borealis) ---------------------------------------
@@ -95,23 +159,35 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
             Completion("Refund", Today(), RefundReference));
 
         (run.Before.GetProperty("state").GetString(), run.Before.GetProperty("remedy").GetString()).ShouldBe(("InProgress", "Refund"));
-        ShouldBeRefused(run, "noIfMatch", HttpStatusCode.PreconditionFailed);
-        ShouldBeRefused(run, "staleIfMatch", HttpStatusCode.PreconditionFailed);
-        ShouldBeRefused(run, "auditor", HttpStatusCode.Forbidden);
-        ShouldBeRefused(run, "otherTenant", HttpStatusCode.NotFound);
-        ShouldBeRefused(run, "repair", HttpStatusCode.BadRequest, "remedy");
-        ShouldBeRefused(run, "tomorrow", HttpStatusCode.BadRequest, "completedOn");
-        ShouldBeRefused(run, "notTheCurrentRemedy", HttpStatusCode.Conflict, "Refund");
-        ShouldBeRefused(run, "refundWithoutReference", HttpStatusCode.BadRequest, "reference");
+        run.Before.TryGetProperty("completion", out _).ShouldBeFalse();
 
+        // Refused requests changed nothing (each is checked before the completion is recorded).
+        ShouldBeRefused(run.Refused, "noIfMatch", HttpStatusCode.PreconditionFailed);
+        ShouldBeRefused(run.Refused, "staleIfMatch", HttpStatusCode.PreconditionFailed);
+        ShouldBeRefused(run.Refused, "auditor", HttpStatusCode.Forbidden);
+        ShouldBeRefused(run.Refused, "otherTenant", HttpStatusCode.NotFound);
+        ShouldBeRefused(run.Refused, "repair", HttpStatusCode.BadRequest, "remedy");
+        ShouldBeRefused(run.Refused, "replacement", HttpStatusCode.BadRequest, "HandedToCustomer");
+        ShouldBeRefused(run.Refused, "tomorrow", HttpStatusCode.BadRequest, "completedOn");
+        ShouldBeRefused(run.Refused, "refundWithoutReference", HttpStatusCode.BadRequest, "reference");
+        run.Refused["otherTenant"].Body.ShouldNotContain(R11Borealis.Reference);
+
+        // The completion: 201 with the completed remedy and a new ETag.
         run.Recorded.Status.ShouldBe(HttpStatusCode.Created, run.Recorded.Body);
         var remedy = JsonSerializer.Deserialize<JsonElement>(run.Recorded.Body);
         (remedy.GetProperty("state").GetString(), remedy.GetProperty("remedy").GetString()).ShouldBe(("Completed", "Refund"));
         var completion = remedy.GetProperty("completion");
         (completion.GetProperty("completedOn").GetString(), completion.GetProperty("reference").GetString()).ShouldBe((Today(), RefundReference));
+        completion.GetProperty("recordedBy").GetString().ShouldNotBeNullOrWhiteSpace();
+        remedy.GetProperty("etag").GetString().ShouldNotBe(ETagOf(run.Before));
+
+        // The same request again with the old ETag cannot apply twice.
         run.Repeated.Status.ShouldBe(HttpStatusCode.PreconditionFailed, run.Repeated.Body);
 
         await ShouldBeCompletedAsync(R11Borealis.Id, "Refund", Today(), RefundReference, TestStaffUsers.ReviewerBorealis);
+        var detail = await RemedyAsync(TestStaffUsers.AuditorBorealis, R11Borealis.Id);
+        detail.GetProperty("state").GetString().ShouldBe("Completed");
+        detail.GetProperty("etag").GetString().ShouldBe(remedy.GetProperty("etag").GetString());
 
         // Completing the remedy never changes the claim's outcome (FR-016).
         (await ScalarAsync<string>("select status from claims.claims where id = @value", R11Borealis.Id))
@@ -121,17 +197,10 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
     // ---- R11: the claimant view ---------------------------------------------------------------------
 
     [Fact]
-    public async Task R11_the_claimant_sees_Replacement_handed_over_and_Refund_completed()
+    public async Task R11_the_claimant_sees_Refund_completed()
     {
-        (await CompleteOnceAsync(R11Aurora, TestStaffUsers.AgentAurora, TestStaffUsers.AuditorAurora, TestStaffUsers.AgentBorealis,
-            Completion("Replacement", Yesterday()))).Recorded.Status.ShouldBe(HttpStatusCode.Created);
         (await CompleteOnceAsync(R11Borealis, TestStaffUsers.ReviewerBorealis, TestStaffUsers.AuditorBorealis, TestStaffUsers.AgentAurora,
             Completion("Refund", Today(), RefundReference))).Recorded.Status.ShouldBe(HttpStatusCode.Created);
-
-        var replacement = (await ClaimantViewAsync(R11Aurora)).GetProperty("remedy");
-        (replacement.GetProperty("remedy").GetString(), replacement.GetProperty("label").GetString(), replacement.GetProperty("completed").GetBoolean())
-            .ShouldBe(("Replacement", "Replacement handed over", true));
-        replacement.TryGetProperty("repairCentre", out _).ShouldBeFalse();
 
         var refund = await ClaimantViewAsync(R11Borealis);
         var refundRemedy = refund.GetProperty("remedy");
@@ -150,11 +219,14 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
         var repair = await CompletionAsync(TestStaffUsers.AgentAurora, R1, ETagOf(before), Completion("Repair", Today()));
         var replacement = await CompletionAsync(TestStaffUsers.ReviewerAurora, R1, ETagOf(before), Completion("Replacement", Today()));
+        var refund = await CompletionAsync(TestStaffUsers.ReviewerAurora, R1, ETagOf(before), Completion("Refund", Today(), RefundReference));
 
         repair.Status.ShouldBe(HttpStatusCode.BadRequest, repair.Body);
-        repair.Body.ShouldContain("remedy");
-        replacement.Status.ShouldBe(HttpStatusCode.Conflict, replacement.Body);
-        replacement.Body.ShouldContain("Repair");
+        repair.Body.ShouldContain("Collected");
+        replacement.Status.ShouldBe(HttpStatusCode.BadRequest, replacement.Body);
+        replacement.Body.ShouldContain("HandedToCustomer");
+        refund.Status.ShouldBe(HttpStatusCode.Conflict, refund.Body);
+        refund.Body.ShouldContain("Repair");
         var after = await RemedyAsync(TestStaffUsers.AgentAurora, R1);
         (after.GetProperty("state").GetString(), ETagOf(after)).ShouldBe(("InProgress", ETagOf(before)));
         (await CountAsync("select count(*) from claims.remedy_completions where claim_id = @value", R1)).ShouldBe(0);
@@ -177,7 +249,6 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
         var before = await RemedyAsync(staff, claim.Id);
         var etag = ETagOf(before);
         var remedy = completion["remedy"]!.GetValue<string>();
-        var other = remedy == "Refund" ? "Replacement" : "Refund";
 
         var refused = new Dictionary<string, PostResponse>(StringComparer.Ordinal)
         {
@@ -187,12 +258,9 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
             ["otherTenant"] = await CompletionAsync(otherTenantAgent, claim.Id, etag, completion),
             ["repair"] = await CompletionAsync(staff, claim.Id, etag, Completion("Repair", Today())),
             ["tomorrow"] = await CompletionAsync(staff, claim.Id, etag, Completion(remedy, Tomorrow(), RefundReference)),
-            ["notTheCurrentRemedy"] = await CompletionAsync(staff, claim.Id, etag, Completion(other, Today(), RefundReference)),
+            ["replacement"] = await CompletionAsync(staff, claim.Id, etag, Completion("Replacement", Today())),
+            ["refundWithoutReference"] = await CompletionAsync(staff, claim.Id, etag, Completion("Refund", Today())),
         };
-        if (remedy == "Refund")
-        {
-            refused["refundWithoutReference"] = await CompletionAsync(staff, claim.Id, etag, Completion("Refund", Today()));
-        }
 
         var unchanged = await RemedyAsync(staff, claim.Id);
         (unchanged.GetProperty("state").GetString(), ETagOf(unchanged)).ShouldBe(("InProgress", etag), "a refused request changed the remedy");
@@ -203,9 +271,52 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
         return new CompletionRun(before, refused, recorded, repeated);
     }
 
-    private static void ShouldBeRefused(CompletionRun run, string request, HttpStatusCode status, string? bodyContains = null)
+    private Task<LegacyReplacementRun> LegacyReplacementOnceAsync()
+        => LegacyRuns.GetOrAdd(R11Aurora.Id, _ => new Lazy<Task<LegacyReplacementRun>>(LegacyReplacementAsync)).Value;
+
+    /// <summary>
+    /// R11-aurora once per test run: the completion requests that must be refused since 003 (none may change anything),
+    /// then a completion row as 002 wrote it before 003 (research R12: such rows stay), written directly to the database.
+    /// </summary>
+    private async Task<LegacyReplacementRun> LegacyReplacementAsync()
     {
-        var response = run.Refused[request];
+        var before = await RemedyAsync(TestStaffUsers.AgentAurora, R11Aurora.Id);
+        var etag = ETagOf(before);
+        var refused = new Dictionary<string, PostResponse>(StringComparer.Ordinal)
+        {
+            ["replacement"] = await CompletionAsync(TestStaffUsers.AgentAurora, R11Aurora.Id, etag, Completion("Replacement", Yesterday())),
+            ["replacementByReviewer"] = await CompletionAsync(TestStaffUsers.ReviewerAurora, R11Aurora.Id, etag, Completion("Replacement", Today())),
+            ["replacementWithReference"] = await CompletionAsync(
+                TestStaffUsers.AgentAurora, R11Aurora.Id, etag, Completion("Replacement", Today(), "DN-55120")),
+            ["refund"] = await CompletionAsync(TestStaffUsers.AgentAurora, R11Aurora.Id, etag, Completion("Refund", Today(), RefundReference)),
+        };
+
+        var unchanged = await RemedyAsync(TestStaffUsers.AgentAurora, R11Aurora.Id);
+        var rows = await CountAsync("select count(*) from claims.remedy_completions where claim_id = @value", R11Aurora.Id);
+
+        var completedOn = Yesterday();
+        await using var connection = await OpenAsync();
+        await using var command = new NpgsqlCommand(
+            $"""
+            insert into claims.remedy_completions (id, tenant_id, claim_id, remedy, completed_on, reference, refund_request_id, recorded_by, recorded_at)
+            select @id, tenant_id, claim_id, '{WireName.Of(RemedyType.Replacement)}', @completedOn, null, null, @recordedBy, now()
+            from claims.claim_remedies where claim_id = @claimId;
+            update claims.claim_remedies set state = '{WireName.Of(RemedyState.Completed)}', updated_at = now() where claim_id = @claimId;
+            """,
+            connection);
+        command.Parameters.AddWithValue("id", Guid.CreateVersion7());
+        command.Parameters.AddWithValue("completedOn", DateOnly.Parse(completedOn, System.Globalization.CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("recordedBy", TestStaffUsers.AgentAurora.Subject);
+        command.Parameters.AddWithValue("claimId", R11Aurora.Id);
+        await command.ExecuteNonQueryAsync(Ct);
+
+        return new LegacyReplacementRun(before, refused, unchanged.GetProperty("state").GetString(), ETagOf(unchanged), rows, completedOn);
+    }
+
+    private static void ShouldBeRefused(
+        IReadOnlyDictionary<string, PostResponse> refused, string request, HttpStatusCode status, string? bodyContains = null)
+    {
+        var response = refused[request];
         response.Status.ShouldBe(status, $"{request}: {response.Body}");
         if (status is HttpStatusCode.BadRequest or HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed)
         {
@@ -297,6 +408,29 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
         return new PostResponse(response.StatusCode, response.Content.Headers.ContentType?.MediaType, await response.Content.ReadAsStringAsync(Ct));
     }
 
+    /// <summary>The claim detail's <c>replacement.etag</c> (ReplacementView, 003).</summary>
+    private async Task<string> ReplacementETagAsync(Guid claimId)
+    {
+        using var client = fixture.CreateStaffClient(TestStaffUsers.AgentAurora);
+        using var response = await client.GetAsync($"/api/claims/{claimId}", Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("replacement").GetProperty("etag").GetString().ShouldNotBeNull();
+    }
+
+    /// <summary><c>POST /api/claims/{claimId}/replacement/events</c> with a <c>ReplacementEventRequest</c> (003).</summary>
+    private async Task<PostResponse> ReplacementEventAsync(TestStaffUser user, Guid claimId, string ifMatch, JsonObject body)
+    {
+        using var client = fixture.CreateStaffClient(user);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/claims/{claimId}/replacement/events")
+        {
+            Content = JsonContent.Create(body),
+        };
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+
+        using var response = await client.SendAsync(request, Ct);
+        return new PostResponse(response.StatusCode, response.Content.Headers.ContentType?.MediaType, await response.Content.ReadAsStringAsync(Ct));
+    }
+
     /// <summary>The claimant view on the claim's channel, opened with the reference and the customer's email.</summary>
     private async Task<JsonElement> ClaimantViewAsync(SeededClaim claim)
     {
@@ -337,4 +471,12 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     private sealed record CompletionRun(
         JsonElement Before, IReadOnlyDictionary<string, PostResponse> Refused, PostResponse Recorded, PostResponse Repeated);
+
+    private sealed record LegacyReplacementRun(
+        JsonElement Before,
+        IReadOnlyDictionary<string, PostResponse> Refused,
+        string? UnchangedState,
+        string UnchangedETag,
+        long CompletionRowsBefore,
+        string LegacyCompletedOn);
 }

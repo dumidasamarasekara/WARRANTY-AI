@@ -48,10 +48,10 @@ public static class FulfillmentEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status412PreconditionFailed);
 
-        // POST /api/claims/{claimId}/remedy-completions: a Replacement handed over or a Refund completed (FR-034, FR-035).
+        // POST /api/claims/{claimId}/remedy-completions: a Refund completed (FR-035); Refund only since 003 research R12.
         group.MapPost("/{claimId:guid}/remedy-completions", RecordRemedyCompletionAsync)
             .WithName("RecordRemedyCompletion")
-            .WithSummary("Record completion of a Replacement or Refund remedy (FR-034, FR-035)")
+            .WithSummary("Record completion of a Refund remedy (FR-035; 003 research R12)")
             .RequireAuthorization(AuthPolicies.ClaimsAgentOrReviewer)
             .Accepts<RemedyCompletionRequest>("application/json")
             .Produces<RemedyView>(StatusCodes.Status201Created)
@@ -165,8 +165,9 @@ public static class FulfillmentEndpoints
 
     /// <summary>
     /// <c>POST /api/claims/{claimId}/remedy-completions</c>: claims agents and reviewers. The staff member comes from the
-    /// access token, the expected remedy version from <c>If-Match</c> (the remedy's ETag in the claim detail). A Repair
-    /// is named so that the use case can refuse it (it completes through the <c>Collected</c> repair event).
+    /// access token, the expected remedy version from <c>If-Match</c> (the remedy's ETag in the claim detail). Only a
+    /// Refund is completed here (003 research R12); a Repair or a Replacement is named so that the use case can refuse
+    /// it naming the event that completes it (<c>Collected</c> repair event, <c>HandedToCustomer</c> replacement event).
     /// </summary>
     private static async Task<IResult> RecordRemedyCompletionAsync(
         Guid claimId,

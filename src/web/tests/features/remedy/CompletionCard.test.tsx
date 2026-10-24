@@ -135,8 +135,30 @@ const today = () => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+const replacementView: NonNullable<ClaimDetail['replacement']> = {
+  status: 'ReadyForCollection',
+  productRule: 'SameModel',
+  returnRule: 'AtCollection',
+  returnState: 'NotYetReturned',
+  allowedEvents: ['HandedToCustomer'],
+  events: [],
+  etag: '"x-1"',
+}
+
 describe('CompletionCard', () => {
-  it('shows an in-progress Replacement without a completion form: it completes through its hand-over event', async () => {
+  it.each([['InProgress'], ['Completed']] as const)(
+    'defers a %s Replacement with a replacement to the Replacement card: no completion card, no form',
+    async (state) => {
+      detail = { ...approvedClaim({ ...replacement, state }), replacement: replacementView }
+      renderTab(['claims-agent'])
+
+      expect(await screen.findByRole('heading', { name: 'Remedy', level: 2 })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Completion' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Record completion' })).not.toBeInTheDocument()
+    },
+  )
+
+  it('shows an in-progress Replacement decided before 003 (no replacement) read-only: no completion form', async () => {
     renderTab(['claims-agent'])
 
     const card = await completionCard()
@@ -145,7 +167,7 @@ describe('CompletionCard', () => {
     expect(card.queryByRole('textbox')).not.toBeInTheDocument()
   })
 
-  it('shows a completed Replacement read-only', async () => {
+  it('shows a Replacement completed before 003 (no replacement) read-only', async () => {
     detail = approvedClaim({ ...replacement, state: 'Completed', completion: { completedOn: '2026-10-20', recordedBy: '[AGENT]' }, etag: '"r-6"' })
     renderTab(['claims-agent'])
 
