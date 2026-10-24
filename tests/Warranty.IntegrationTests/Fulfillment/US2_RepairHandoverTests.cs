@@ -26,8 +26,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 {
-    private const string PendingAttemptEnded = "Pending T248";
-
     /// <summary>The fresh-claim cases approve through the reviewer path, which sets the remedy and creates the repair (T225/T228).</summary>
     private const string PendingApproval = "Pending T228";
 
@@ -267,7 +265,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
         trail.Single(e => e.Step == "RepairStatusUpdated").Payload.ShouldContain("reportedAt");
     }
 
-    [Fact(Skip = PendingAttemptEnded)]
+    [Fact(Skip = PendingApproval)]
     public async Task R17_a_failed_attempt_shows_RepairAttemptEnded_in_the_trail_with_its_actor_and_policy_version()
     {
         var (claimId, _) = await HandedOverClaimAsync();

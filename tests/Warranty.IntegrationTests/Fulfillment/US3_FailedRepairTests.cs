@@ -25,8 +25,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 {
-    private const string PendingFailureEvents = "Pending T248";
-
     /// <summary>The queue lists remedy items from T228; the reviewer confirms a remedy after a failure from T249.</summary>
     private const string PendingReviewerConfirmation = "Pending T228 and T249";
 
@@ -55,7 +53,7 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 
     // ---- R4 / R8 / R9: the same facts reach the attempt limit -----------------------------------------
 
-    [Fact(Skip = PendingFailureEvents)]
+    [Fact]
     public async Task R4_R8_the_same_facts_reach_the_attempt_limit_and_each_company_recommends_its_own_remedy()
     {
         var aurora = await FailTwiceAsync(TestStaffUsers.AgentAurora, R4Aurora);
@@ -118,7 +116,7 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 
     // ---- R10: an estimate above the economic limit ----------------------------------------------------
 
-    [Fact(Skip = PendingFailureEvents)]
+    [Fact]
     public async Task R10_an_estimate_at_60_percent_continues_and_one_cent_more_needs_a_reviewer_without_counting_a_failure()
     {
         var repair = await RepairAsync(TestStaffUsers.AgentBorealis, R10Borealis);

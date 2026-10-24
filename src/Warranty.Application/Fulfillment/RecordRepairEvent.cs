@@ -6,6 +6,8 @@ using Warranty.Application.Claims;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
 
 namespace Warranty.Application.Fulfillment;
 
@@ -59,15 +61,19 @@ public abstract record RecordRepairEventResult
 }
 
 /// <summary>
-/// Records a staff update of a repair (002 FR-019 – FR-028, FR-038, research R5 – R7). In order: the claim must be
+/// Records a staff update of a repair (002 FR-019 – FR-032, FR-038, research R2, R5 – R7). In order: the claim must be
 /// visible in the tenant (404) and have a repair (409); the request fields must be valid for the event type and
 /// <c>reportedAt</c> neither in the future nor before the hand-over (400); <c>If-Match</c> must equal the repair's row
 /// version (412); a repair centre must be an eligible centre of the tenant (404 + <c>ACCESS_DENIED</c>); the event must
 /// be allowed from the current status (409 naming the status and the allowed events). One transaction then writes the
 /// repair, its <c>audit.repair_events</c> row and a trail entry; <c>MarkedReady</c> queues the
 /// <c>RepairReadyForCollection</c> notification with the dedupe key <c>repair-ready:{attemptId}</c>, and
-/// <c>Collected</c> completes the remedy. A concurrent change detected on save is a 409. The roles (claims-agent,
-/// claims-reviewer) are enforced by the endpoint. US2 events; T248 and T256 add the US3 and US5 events.
+/// <c>Collected</c> completes the remedy. A failure or an uneconomical estimate ends the attempt (trail
+/// <c>RepairAttemptEnded</c>) and re-evaluates the remedy with the claim's own policy version
+/// (<see cref="RemedyPolicyEvaluator"/>, an <c>Evaluated</c> remedy decision): below the attempt limit a new attempt is
+/// allowed, otherwise the remedy goes back to a reviewer (<c>REPAIR_FAILED_LIMIT</c>, <c>REPAIR_NOT_ECONOMICAL</c>) and
+/// no new attempt can start. A concurrent change detected on save is a 409. The roles (claims-agent, claims-reviewer)
+/// are enforced by the endpoint. T256 adds the US5 events.
 /// </summary>
 public sealed class RecordRepairEvent(
     ITenantContext tenant,
@@ -75,7 +81,9 @@ public sealed class RecordRepairEvent(
     ICatalogRepository catalog,
     IRemedyRepository remedies,
     IRepairRepository repairs,
+    IPolicyRepository policies,
     IServiceNetwork network,
+    RemedyPolicyEvaluator evaluator,
     INotificationService notifications,
     IDecisionTrailWriter trail,
     ISecurityEventWriter securityEvents,
@@ -89,6 +97,9 @@ public sealed class RecordRepairEvent(
 
     public const int MaxReasonLength = 1000;
 
+    /// <summary>The largest estimate a <c>numeric(12,2)</c> column holds.</summary>
+    public const decimal MaxEstimateAmount = 9_999_999_999.99m;
+
     public const string NoRepairDetail = "This claim has no repair.";
 
     public const string MissingIfMatchDetail = "An If-Match header with the repair's ETag is required.";
@@ -97,8 +108,23 @@ public sealed class RecordRepairEvent(
 
     public const string ConcurrentChangeDetail = "The repair was changed by another request; reload it and record the update again.";
 
+    public const string RemedyNotInProgressDetail =
+        "The claim's remedy is not a repair in progress, so the repair cannot be updated this way.";
+
     /// <summary>The dedupe key of the ready notification of <paramref name="attemptId"/> (research R7).</summary>
     public static string ReadyDedupeKey(Guid attemptId) => $"repair-ready:{attemptId}";
+
+    /// <summary>
+    /// The events allowed for <paramref name="repair"/> given the claim's <paramref name="remedy"/>: the repair's own list,
+    /// without <see cref="RepairEventType.NewAttemptStarted"/> once the remedy has left the repair (attempt limit reached,
+    /// FR-031). Drives <c>RepairView.allowedEvents</c> and the 409 detail.
+    /// </summary>
+    public static IReadOnlyList<RepairEventType> AllowedEvents(Repair repair, ClaimRemedy? remedy)
+    {
+        ArgumentNullException.ThrowIfNull(repair);
+        var allowed = repair.AllowedEvents();
+        return IsRepairInProgress(remedy) ? allowed : [.. allowed.Where(e => e != RepairEventType.NewAttemptStarted)];
+    }
 
     public async Task<RecordRepairEventResult> ExecuteAsync(RecordRepairEventCommand command, CancellationToken ct)
     {
@@ -147,22 +173,22 @@ public sealed class RecordRepairEvent(
             return new RecordRepairEventResult.NotFound();
         }
 
-        if (!repair.AllowedEvents().Contains(type))
+        var remedy = await remedies.GetAsync(claim.Id, ct);
+        if (!AllowedEvents(repair, remedy).Contains(type))
         {
-            return NotAllowed(repair, type);
+            return NotAllowed(repair, remedy, type);
         }
 
-        ClaimRemedy? remedy = null;
-        if (type == RepairEventType.Collected)
+        if (type is RepairEventType.Collected or RepairEventType.EstimateReported or RepairEventType.RepairFailed
+                or RepairEventType.NewAttemptStarted
+            && !IsRepairInProgress(remedy))
         {
-            remedy = await remedies.GetAsync(claim.Id, ct);
-            if (remedy is not { State: RemedyState.InProgress, Remedy: RemedyType.Repair })
-            {
-                return new RecordRepairEventResult.Conflict(
-                    "The claim's remedy is not a repair in progress, so the collection cannot complete it.",
-                    repair.Status, repair.AllowedEvents());
-            }
+            return new RecordRepairEventResult.Conflict(RemedyNotInProgressDetail, repair.Status, AllowedEvents(repair, remedy));
         }
+
+        var basis = type is RepairEventType.EstimateReported or RepairEventType.RepairFailed
+            ? await RemedyBasisAsync(claim, remedy!, ct)
+            : null;
 
         var report = new RepairReport(
             command.ReportedAt!.Value, command.Source!.Value, tenant.PrincipalId, command.Note, now, tenant.PrincipalName);
@@ -171,18 +197,25 @@ public sealed class RecordRepairEvent(
             await unitOfWork.ExecuteInTransactionAsync(
                 async token =>
                 {
-                    var recorded = Apply(repair, type, command, report);
+                    var (recorded, evaluation) = Apply(repair, type, command, report, basis);
                     repairs.AddEvent(recorded);
-                    await AppendTrailAsync(claim.Id, repair, recorded, token);
+
+                    if (evaluation is not null)
+                    {
+                        // The attempt ended: record the re-evaluation and, at the limit or above the economic limit, return the remedy to a reviewer.
+                        await ReEvaluateAsync(claim.Id, remedy!, repair, evaluation, basis!, now, token);
+                    }
+
+                    await AppendTrailAsync(claim.Id, repair, recorded, evaluation, basis, token);
 
                     if (type == RepairEventType.MarkedReady && repair.CurrentAttemptId is { } attemptId)
                     {
                         await notifications.EnqueueAsync(claim.Id, ReadyTemplate, ReadyDedupeKey(attemptId), token);
                     }
 
-                    if (remedy is not null)
+                    if (type == RepairEventType.Collected)
                     {
-                        remedy.Complete(RemedyType.Repair, now);
+                        remedy!.Complete(RemedyType.Repair, now);
                         await trail.AppendAsync(
                             claim.Id, TrailStep.RemedyCompleted, tenant.PrincipalId, "Repair remedy completed: the product was collected.",
                             new { remedy = nameof(RemedyType.Repair), repairEventSeq = recorded.Seq, recordedAt = now }, token);
@@ -196,23 +229,76 @@ public sealed class RecordRepairEvent(
         }
         catch (InvalidClaimTransitionException)
         {
-            return NotAllowed(repair, type);
+            return NotAllowed(repair, remedy, type);
         }
 
         return new RecordRepairEventResult.Recorded(repair);
     }
 
-    private static RepairEvent Apply(Repair repair, RepairEventType type, RecordRepairEventCommand command, RepairReport report)
-        => type switch
+    /// <summary>
+    /// Applies the event to the repair. For an estimate the economic limit comes from the evaluator; when the estimate or a
+    /// failure ends the attempt, the evaluation of the claim's own rules is returned for the re-evaluation.
+    /// </summary>
+    private (RepairEvent Recorded, RemedyEvaluation? Evaluation) Apply(
+        Repair repair, RepairEventType type, RecordRepairEventCommand command, RepairReport report, RemedyBasis? basis)
+    {
+        switch (type)
         {
-            RepairEventType.CentreChanged => repair.ChangeCentre(command.RepairCentreId!.Value, command.Reason!.Trim(), report),
-            RepairEventType.HandedOver => repair.RecordHandover(command.HandedOverOn!.Value, command.CentreReference, report),
-            RepairEventType.MarkedReady => repair.MarkReady(report),
-            RepairEventType.Collected => repair.RecordCollection(report),
-            _ => throw new InvalidClaimTransitionException($"Cannot record {type} on a repair in status {repair.Status}."),
-        };
+            case RepairEventType.CentreChanged:
+                return (repair.ChangeCentre(command.RepairCentreId!.Value, command.Reason!.Trim(), report), null);
+            case RepairEventType.HandedOver:
+                return (repair.RecordHandover(command.HandedOverOn!.Value, command.CentreReference, report), null);
+            case RepairEventType.MarkedReady:
+                return (repair.MarkReady(report), null);
+            case RepairEventType.Collected:
+                return (repair.RecordCollection(report), null);
+            case RepairEventType.NewAttemptStarted:
+                return (repair.StartNewAttempt(command.ProductLocation!.Value, report), null);
+            case RepairEventType.EstimateReported:
+            {
+                var estimate = command.EstimateAmount!.Value;
+                var evaluation = evaluator.Evaluate(
+                    basis!.Rules, RemedyScenario.RepairNotEconomical, repair.FailedAttempts, estimate, basis.ClaimValue);
+                var recorded = repair.RecordEstimate(estimate, evaluation.EconomicLimitAmount, report);
+                return (recorded, repair.NotPossibleReason == RepairNotPossibleReason.NotEconomical ? evaluation : null);
+            }
 
-    private Task AppendTrailAsync(Guid claimId, Repair repair, RepairEvent recorded, CancellationToken ct)
+            case RepairEventType.RepairFailed:
+            {
+                var recorded = repair.RecordFailure(command.Reason!.Trim(), report);
+                return (recorded, evaluator.Evaluate(basis!.Rules, RemedyScenario.RepairFailed, repair.FailedAttempts));
+            }
+
+            default:
+                throw new InvalidClaimTransitionException($"Cannot record {type} on a repair in status {repair.Status}.");
+        }
+    }
+
+    /// <summary>
+    /// Writes the <see cref="RemedyDecisionKind.Evaluated"/> row of an ended attempt and, unless the repair continues,
+    /// returns the remedy to a reviewer with the evaluation's allowed remedies and pending reason (FR-031, FR-032).
+    /// </summary>
+    private async Task ReEvaluateAsync(
+        Guid claimId, ClaimRemedy remedy, Repair repair, RemedyEvaluation evaluation, RemedyBasis basis, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var decisions = await remedies.GetDecisionsAsync(claimId, ct);
+        var seq = decisions.Count == 0 ? 1 : decisions.Max(d => d.Seq) + 1;
+        var estimate = evaluation.Scenario == RemedyScenario.RepairNotEconomical ? repair.CurrentAttempt?.EstimateAmount : null;
+        remedies.AddDecision(RemedyDecision.Evaluated(
+            Guid.CreateVersion7(now), tenant.TenantId, claimId, seq, evaluation.Scenario, basis.PolicyVersionId, evaluation.TableRow,
+            evaluation.AllowedRemedies, repair.FailedAttempts, estimate, now));
+
+        if (!evaluation.ContinueRepair)
+        {
+            remedy.ReturnToDecision(
+                basis.PolicyVersionId, evaluation.Scenario, evaluation.AllowedRemedies,
+                evaluation.PendingReason ?? RemedyPendingReason.NoRemedyRule, now);
+        }
+    }
+
+    private Task AppendTrailAsync(
+        Guid claimId, Repair repair, RepairEvent recorded, RemedyEvaluation? evaluation, RemedyBasis? basis, CancellationToken ct)
     {
         var (step, summary) = recorded.Type switch
         {
@@ -220,27 +306,77 @@ public sealed class RecordRepairEvent(
             RepairEventType.HandedOver => (TrailStep.RepairHandedOver, "Product handed over to the repair centre."),
             RepairEventType.MarkedReady => (TrailStep.RepairStatusUpdated, "Repair ready for collection."),
             RepairEventType.Collected => (TrailStep.RepairStatusUpdated, "Repaired product collected."),
+            RepairEventType.EstimateReported when evaluation is not null => (TrailStep.RepairAttemptEnded, AttemptEndedSummary(evaluation)),
+            RepairEventType.EstimateReported => (TrailStep.RepairStatusUpdated, "Repair estimate reported by the repair centre."),
+            RepairEventType.RepairFailed => (TrailStep.RepairAttemptEnded, AttemptEndedSummary(evaluation!)),
+            RepairEventType.NewAttemptStarted => (TrailStep.RepairStatusUpdated, "New repair attempt started."),
             var other => (TrailStep.RepairStatusUpdated, $"Repair update recorded: {other}."),
         };
 
         var handover = repair.ActiveHandover;
-        var payload = new
+        var attempt = repair.CurrentAttempt;
+        var payload = new Dictionary<string, object?>
         {
-            repairId = repair.Id,
-            eventSeq = recorded.Seq,
-            type = recorded.Type.ToString(),
-            fromStatus = recorded.FromStatus?.ToString(),
-            toStatus = recorded.ToStatus?.ToString(),
-            reportedAt = recorded.ReportedAt,
-            recordedAt = recorded.RecordedAt,
-            source = recorded.Source.ToString(),
-            serviceCenterId = handover?.ServiceCenterId,
-            handedOverOn = recorded.Type == RepairEventType.HandedOver ? handover?.HandedOverOn : null,
-            attemptId = repair.CurrentAttemptId,
-            reason = recorded.Type == RepairEventType.CentreChanged ? handover?.Reason : null,
+            ["repairId"] = repair.Id,
+            ["eventSeq"] = recorded.Seq,
+            ["type"] = recorded.Type.ToString(),
+            ["fromStatus"] = recorded.FromStatus?.ToString(),
+            ["toStatus"] = recorded.ToStatus?.ToString(),
+            ["reportedAt"] = recorded.ReportedAt,
+            ["recordedAt"] = recorded.RecordedAt,
+            ["source"] = recorded.Source.ToString(),
+            ["serviceCenterId"] = handover?.ServiceCenterId,
+            ["handedOverOn"] = recorded.Type == RepairEventType.HandedOver ? handover?.HandedOverOn : null,
+            ["attemptId"] = repair.CurrentAttemptId,
+            ["reason"] = recorded.Type == RepairEventType.CentreChanged ? handover?.Reason : null,
         };
+
+        if (recorded.Type is RepairEventType.EstimateReported or RepairEventType.RepairFailed)
+        {
+            payload["attemptSeq"] = attempt?.Seq;
+            payload["attemptResult"] = attempt?.Result.ToString();
+            payload["estimateAmount"] = attempt?.EstimateAmount;
+            payload["failedAttempts"] = repair.FailedAttempts;
+        }
+
+        if (evaluation is not null && basis is not null)
+        {
+            payload["failureReason"] = attempt?.FailureReason;
+            payload["policyCode"] = basis.PolicyCode;
+            payload["policyVersion"] = basis.Version;
+            payload["policyVersionId"] = basis.PolicyVersionId;
+            payload["scenario"] = evaluation.Scenario.ToString();
+            payload["tableRow"] = evaluation.TableRow;
+            payload["attemptLimit"] = basis.Rules?.RepairFailed?.AfterFailedAttempts;
+            payload["economicLimitAmount"] = evaluation.EconomicLimitAmount;
+            payload["allowedRemedies"] = evaluation.AllowedRemedies.Select(r => r.ToString()).ToArray();
+            payload["recommendedRemedy"] = evaluation.SingleRemedy?.ToString();
+            payload["pendingReason"] = evaluation.PendingReason?.ToString();
+            payload["newAttemptAllowed"] = evaluation.ContinueRepair;
+        }
+
         return trail.AppendAsync(claimId, step, tenant.PrincipalId, summary, payload, ct);
     }
+
+    private static string AttemptEndedSummary(RemedyEvaluation evaluation)
+        => (evaluation.Scenario, evaluation.ContinueRepair) switch
+        {
+            (RemedyScenario.RepairFailed, true) => "Repair attempt failed; a new attempt is allowed.",
+            (RemedyScenario.RepairFailed, false) => "Repair attempt failed at the attempt limit; the remedy goes to a reviewer.",
+            _ => "Repair not economical: the estimate is above the policy's limit; the remedy goes to a reviewer.",
+        };
+
+    /// <summary>The claim's remedy rules (its remedy's policy version), the policy code for the trail and the claim value.</summary>
+    private async Task<RemedyBasis> RemedyBasisAsync(Claim claim, ClaimRemedy remedy, CancellationToken ct)
+    {
+        var version = await policies.GetVersionAsync(remedy.PolicyVersionId, ct);
+        var policy = version is null ? null : await policies.GetPolicyAsync(version.PolicyId, ct);
+        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        return new RemedyBasis(remedy.PolicyVersionId, version?.RemedyRules, policy?.Code, version?.Version, product?.ClaimValue);
+    }
+
+    private static bool IsRepairInProgress(ClaimRemedy? remedy)
+        => remedy is { State: RemedyState.InProgress, Remedy: RemedyType.Repair };
 
     private async Task<bool> IsEligibleCentreAsync(Claim claim, Guid centreId, CancellationToken ct)
     {
@@ -249,9 +385,9 @@ public sealed class RecordRepairEvent(
         return centres.Any(c => c.Id == centreId);
     }
 
-    private static RecordRepairEventResult.Conflict NotAllowed(Repair repair, RepairEventType type)
+    private static RecordRepairEventResult.Conflict NotAllowed(Repair repair, ClaimRemedy? remedy, RepairEventType type)
     {
-        var allowed = repair.AllowedEvents();
+        var allowed = AllowedEvents(repair, remedy);
         return new RecordRepairEventResult.Conflict(
             $"{type} is not allowed while the repair is {repair.Status}; allowed events: "
             + (allowed.Count == 0 ? "none" : string.Join(", ", allowed)) + ".",
@@ -312,6 +448,22 @@ public sealed class RecordRepairEvent(
                 }
 
                 break;
+
+            case RepairEventType.EstimateReported:
+                ValidateEstimate(command.EstimateAmount, Add);
+                break;
+
+            case RepairEventType.RepairFailed:
+                ValidateReason(command.Reason, Add);
+                break;
+
+            case RepairEventType.NewAttemptStarted:
+                if (command.ProductLocation is not { } location || !Enum.IsDefined(location))
+                {
+                    Add("productLocation", "Where the product is (AtCentre or ReturnedToCustomer) is required.");
+                }
+
+                break;
         }
 
         if (command.ReportedAt is not { } reportedAt)
@@ -346,4 +498,23 @@ public sealed class RecordRepairEvent(
             add("reason", $"A reason has {MinReasonLength} to {MaxReasonLength} characters.");
         }
     }
+
+    private static void ValidateEstimate(decimal? estimate, Action<string, string> add)
+    {
+        if (estimate is not { } amount)
+        {
+            add("estimateAmount", "The estimate amount is required.");
+        }
+        else if (amount < 0)
+        {
+            add("estimateAmount", "The estimate amount must not be negative.");
+        }
+        else if (amount > MaxEstimateAmount || decimal.Round(amount, 2) != amount)
+        {
+            add("estimateAmount", "The estimate amount has at most two decimals and at most ten digits before them.");
+        }
+    }
+
+    /// <summary>What a re-evaluation reads: the remedy's policy version and its rules, the policy code and the claim value.</summary>
+    private sealed record RemedyBasis(Guid PolicyVersionId, RemedyRules? Rules, string? PolicyCode, int? Version, decimal? ClaimValue);
 }

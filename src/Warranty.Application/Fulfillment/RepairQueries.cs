@@ -117,7 +117,8 @@ public sealed class RepairQueries(
             return null;
         }
 
-        var rules = await RulesAsync(claim.Id, ct);
+        var remedy = await remedies.GetAsync(claim.Id, ct);
+        var rules = remedy is null ? null : (await policies.GetVersionAsync(remedy.PolicyVersionId, ct))?.RemedyRules;
         var economicLimit = rules?.RepairNotEconomical is { } limitRule && product?.ClaimValue is { } claimValue
             ? Math.Round(claimValue * limitRule.LimitPercentOfClaimValue / 100m, 2, MidpointRounding.AwayFromZero)
             : (decimal?)null;
@@ -140,7 +141,7 @@ public sealed class RepairQueries(
             rules?.RepairFailed?.AfterFailedAttempts,
             economicLimit,
             latestEstimate,
-            repair.AllowedEvents(),
+            RecordRepairEvent.AllowedEvents(repair, remedy),
             repair.Events
                 .OrderBy(e => e.Seq)
                 .Select(e => new RepairEventView(
@@ -158,11 +159,6 @@ public sealed class RepairQueries(
             ClaimQueries.FormatETag(rowVersion));
     }
 
-    private async Task<Domain.Policies.RemedyRules?> RulesAsync(Guid claimId, CancellationToken ct)
-    {
-        var remedy = await remedies.GetAsync(claimId, ct);
-        return remedy is null ? null : (await policies.GetVersionAsync(remedy.PolicyVersionId, ct))?.RemedyRules;
-    }
 
     /// <summary>The active hand-over's centre as stored (it may since have become inactive), or null when it is not visible.</summary>
     private async Task<RepairCentreView?> CentreAsync(Claim claim, Product? product, RepairHandover handover, CancellationToken ct)
