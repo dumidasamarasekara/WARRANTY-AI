@@ -27,9 +27,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 {
-    private const string PendingCompletion = "Pending T252";
-    private const string PendingClaimantLabel = "Pending T252 and T242";
-
     private const string RefundReference = "RF-BOR-2026-0042";
 
     /// <summary>Seeded R11-aurora: AUR-TAB10, North America; Replacement decided by a reviewer, in progress.</summary>
@@ -50,7 +47,7 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- R11: Replacement handed to the customer (Aurora) ------------------------------------------
 
-    [Fact(Skip = PendingCompletion)]
+    [Fact]
     public async Task R11_recording_the_replacement_handed_over_completes_the_Aurora_remedy()
     {
         var run = await CompleteOnceAsync(R11Aurora, TestStaffUsers.AgentAurora, TestStaffUsers.AuditorAurora, TestStaffUsers.AgentBorealis,
@@ -91,7 +88,7 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- R11: Refund completed with its reference (Borealis) ---------------------------------------
 
-    [Fact(Skip = PendingCompletion)]
+    [Fact]
     public async Task R11_recording_the_refund_completion_with_its_reference_completes_the_Borealis_remedy()
     {
         var run = await CompleteOnceAsync(R11Borealis, TestStaffUsers.ReviewerBorealis, TestStaffUsers.AuditorBorealis, TestStaffUsers.AgentAurora,
@@ -123,7 +120,7 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- R11: the claimant view ---------------------------------------------------------------------
 
-    [Fact(Skip = PendingClaimantLabel)]
+    [Fact]
     public async Task R11_the_claimant_sees_Replacement_handed_over_and_Refund_completed()
     {
         (await CompleteOnceAsync(R11Aurora, TestStaffUsers.AgentAurora, TestStaffUsers.AuditorAurora, TestStaffUsers.AgentBorealis,
@@ -145,7 +142,7 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- A Repair completes through the Collected repair event ---------------------------------------
 
-    [Fact(Skip = PendingCompletion)]
+    [Fact]
     public async Task A_Repair_remedy_cannot_be_completed_by_a_completion_record()
     {
         var before = await RemedyAsync(TestStaffUsers.AgentAurora, R1);

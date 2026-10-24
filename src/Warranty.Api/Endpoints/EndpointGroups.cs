@@ -39,7 +39,7 @@ public static class EndpointGroups
         => app.MapGroup("/api/claims").WithTags("Trace").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
             .MapTraceRoutes();
 
-    /// <summary><c>/api/claims/{claimId}/repair-centres</c> and <c>/api/claims/{claimId}/repair/events</c> (002).</summary>
+    /// <summary><c>/api/claims/{claimId}/repair-centres</c>, <c>/repair/events</c> and <c>/remedy-completions</c> (002).</summary>
     public static RouteGroupBuilder MapFulfillmentEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api/claims").WithTags("Fulfillment").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
             .MapFulfillmentRoutes();

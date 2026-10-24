@@ -176,7 +176,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Implementation for User Story 4
 
-- [ ] T252 [US4] Implement `src/Warranty.Application/Fulfillment/RecordRemedyCompletion.cs` (roles claims-agent and claims-reviewer, `If-Match` on the remedy, `RemedyCompletion` row, remedy `Completed`, trail `RemedyCompleted`) and `POST /api/claims/{claimId}/remedy-completions` in `src/Warranty.Api/Endpoints/Fulfillment/FulfillmentEndpoints.cs`
+- [X] T252 [US4] Implement `src/Warranty.Application/Fulfillment/RecordRemedyCompletion.cs` (roles claims-agent and claims-reviewer, `If-Match` on the remedy, `RemedyCompletion` row, remedy `Completed`, trail `RemedyCompleted`) and `POST /api/claims/{claimId}/remedy-completions` in `src/Warranty.Api/Endpoints/Fulfillment/FulfillmentEndpoints.cs`
 - [X] T253 [US4] Build the completion card in `src/web/src/features/remedy/CompletionCard.tsx` and the Replacement and Refund labels on `src/web/src/features/claimant/ClaimStatusPage.tsx`; Vitest tests
 
 **Checkpoint**: every remedy type reaches `Completed`; validate R11

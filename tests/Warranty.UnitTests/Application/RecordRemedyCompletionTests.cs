@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using NSubstitute.Extensions;
 using Warranty.Application;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
@@ -21,12 +22,10 @@ namespace Warranty.UnitTests.Application;
 /// without its reference (400 naming the field); a missing or stale remedy ETag (412); a remedy that is not the current
 /// one or not <see cref="RemedyState.InProgress"/>, and a lost race on save (409) — all without writing anything. A
 /// recorded completion writes one <see cref="RemedyCompletion"/> row, completes the remedy and appends one
-/// <see cref="TrailStep.RemedyCompleted"/> entry in one transaction. All pending T252.
+/// <see cref="TrailStep.RemedyCompleted"/> entry in one transaction.
 /// </summary>
 public sealed class RecordRemedyCompletionTests
 {
-    private const string Pending = "Pending T252";
-
     private const string AgentSub = "agent-sub-t251";
     private const string AgentName = "Aurora Agent";
     private const uint RowVersion = 6210;
@@ -76,7 +75,7 @@ public sealed class RecordRemedyCompletionTests
 
     // ── Recorded completions (FR-034, FR-035) ──────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_replacement_handed_over_completes_the_remedy_with_one_row_and_one_trail_entry_in_one_transaction()
     {
         var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
@@ -99,7 +98,7 @@ public sealed class RecordRemedyCompletionTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_refund_completion_keeps_the_trimmed_reference_and_completes_the_remedy()
     {
         var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
@@ -115,7 +114,7 @@ public sealed class RecordRemedyCompletionTests
         entry.Payload.GetRawText().ShouldContain(RefundReference);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_replacement_may_carry_an_optional_reference()
     {
         var (claim, _) = ArrangeInProgress(RemedyType.Replacement);
@@ -128,7 +127,7 @@ public sealed class RecordRemedyCompletionTests
 
     // ── Roles (contracts: claims-agent and claims-reviewer) ─────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(Principals.ClaimsAgentRole)]
     [InlineData(Principals.ClaimsReviewerRole)]
     public async Task Claims_agents_and_claims_reviewers_may_record_a_completion(string role)
@@ -139,7 +138,7 @@ public sealed class RecordRemedyCompletionTests
         (await Execute(claim, Command(RemedyType.Replacement, Today))).ShouldBeOfType<RecordRemedyCompletionResult.Recorded>();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_auditor_is_forbidden_and_nothing_is_written()
     {
         _tenant.Roles.Returns(new HashSet<string>(StringComparer.Ordinal) { Principals.AuditorRole });
@@ -162,7 +161,7 @@ public sealed class RecordRemedyCompletionTests
         { "referenceTooLong", "reference" },
     };
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [MemberData(nameof(MissingOrInvalidFields))]
     public async Task Missing_or_invalid_fields_are_refused_naming_the_field(string request, string field)
     {
@@ -183,7 +182,7 @@ public sealed class RecordRemedyCompletionTests
         await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -197,7 +196,7 @@ public sealed class RecordRemedyCompletionTests
         await ShouldBeUnchangedAsync(remedy, RemedyType.Refund);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_repair_is_refused_even_when_the_current_remedy_is_Repair()
     {
         var claim = NewClaim();
@@ -214,7 +213,7 @@ public sealed class RecordRemedyCompletionTests
 
     // ── Remedy state (FR-034, data-model.md "Remedy") ──────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(RemedyType.Replacement, RemedyType.Refund)]
     [InlineData(RemedyType.Refund, RemedyType.Replacement)]
     public async Task A_remedy_that_is_not_the_current_one_conflicts_naming_the_current_remedy(RemedyType current, RemedyType requested)
@@ -229,7 +228,7 @@ public sealed class RecordRemedyCompletionTests
         await ShouldBeUnchangedAsync(remedy, current);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_remedy_awaiting_a_decision_conflicts()
     {
         var claim = NewClaim();
@@ -247,7 +246,7 @@ public sealed class RecordRemedyCompletionTests
         await ShouldNotWriteAsync();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_completed_remedy_cannot_be_completed_again()
     {
         var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
@@ -259,7 +258,7 @@ public sealed class RecordRemedyCompletionTests
         await ShouldNotWriteAsync();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_claim_without_a_remedy_conflicts()
     {
         var claim = NewClaim();
@@ -273,7 +272,7 @@ public sealed class RecordRemedyCompletionTests
 
     // ── Tenant isolation ───────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_unknown_claim_or_a_claim_of_another_tenant_is_not_found()
     {
         (await UseCase().ExecuteAsync(Command(RemedyType.Replacement, Today) with { ClaimId = Guid.NewGuid() }, Ct))
@@ -288,7 +287,7 @@ public sealed class RecordRemedyCompletionTests
 
     // ── Concurrency (If-Match on the remedy) ───────────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("*")]
@@ -305,18 +304,18 @@ public sealed class RecordRemedyCompletionTests
         await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_concurrent_change_detected_on_save_conflicts()
     {
         var (claim, _) = ArrangeInProgress(RemedyType.Replacement);
-        _unitOfWork.ExecuteInTransactionAsync(default!, Ct).ThrowsAsyncForAnyArgs(new ConcurrencyConflictException("xmin changed"));
+        _unitOfWork.Configure().ExecuteInTransactionAsync(default!, Ct).ThrowsAsyncForAnyArgs(new ConcurrencyConflictException("xmin changed"));
 
         var result = await Execute(claim, Command(RemedyType.Replacement, Today));
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
         var services = new ServiceCollection();
