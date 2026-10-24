@@ -65,6 +65,7 @@ public sealed class GuardrailEngine : IGuardrailEngine
         new NotReturnedFromReviewCheck(),
         new AutoInfoRequestsWithinLimitCheck(),
         new ClaimantTextSafeCheck(),
+        new ProtectionPlanNotReliedOnCheck(),
     ];
 
     /// <summary>Evaluates one run.</summary>
