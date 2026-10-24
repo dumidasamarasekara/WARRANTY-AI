@@ -212,9 +212,11 @@ public sealed class SeedFilesTests
         var borealis = seed.Tenants[1].RemedyScenarios;
 
         aurora.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.Region)).ShouldBe(
-            [("R1", "RMDYR1A001", "AUR-TAB10", Region.NA), ("R4-aurora", "RMDYR4A001", "AUR-TAB10", Region.EU)]);
+            [("R1", "RMDYR1A001", "AUR-TAB10", Region.NA), ("R4-aurora", "RMDYR4A001", "AUR-TAB10", Region.EU),
+             ("R11-aurora", "RMDYR11A01", "AUR-TAB10", Region.NA)]);
         borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.Region)).ShouldBe(
-            [("R2", "RMDYR2B001", "BOR-SLATE11", Region.EU), ("R4-borealis", "RMDYR4B001", "BOR-SLATE11", Region.EU)]);
+            [("R2", "RMDYR2B001", "BOR-SLATE11", Region.EU), ("R4-borealis", "RMDYR4B001", "BOR-SLATE11", Region.EU),
+             ("R11-borealis", "RMDYR11B01", "BOR-SLATE11", Region.EU)]);
         aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System);
         aurora[0].Id.ShouldBe(Guid.Parse("11111111-0005-7000-8000-000000000001"));
         borealis[0].Id.ShouldBe(Guid.Parse("22222222-0005-7000-8000-000000000001"));
@@ -246,7 +248,7 @@ public sealed class SeedFilesTests
             var seed = SeedFiles.Load(root);
 
             seed.Tenants[1].RemedyScenarios.ShouldBeEmpty();
-            seed.Tenants[0].RemedyScenarios.Count.ShouldBe(2);
+            seed.Tenants[0].RemedyScenarios.Count.ShouldBe(3);
         }
         finally
         {
@@ -273,6 +275,51 @@ public sealed class SeedFilesTests
             var file = Path.Combine(root, "tenants", "aurora", "remedy-scenarios.json");
             var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
             document["claims"]![0]![field] = System.Text.Json.Nodes.JsonNode.Parse(json);
+            File.WriteAllText(file, document.ToJsonString());
+
+            Should.Throw<InvalidDataException>(() => SeedFiles.Load(root)).Message.ShouldContain(message);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Feature 002 (T251): R11 needs claims whose remedy a reviewer already decided — Replacement at Aurora, Refund at
+    /// Borealis, each after two failed repairs (row <c>repairFailed</c>). Only these claims carry a decided remedy.
+    /// </summary>
+    [Fact]
+    public void The_R11_claims_carry_a_reviewer_decided_Replacement_and_Refund()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+        var decided = seed.Tenants.SelectMany(t => t.RemedyScenarios).Where(s => s.DecidedRemedy is not null).ToList();
+
+        decided.Select(s => (s.Scenario, s.DecidedRemedy!.Scenario, s.DecidedRemedy.Remedy, s.DecidedRemedy.FailedAttempts)).ShouldBe(
+        [
+            ("R11-aurora", RemedyScenario.RepairFailed, RemedyType.Replacement, 2),
+            ("R11-borealis", RemedyScenario.RepairFailed, RemedyType.Refund, 2),
+        ]);
+        decided.ShouldAllBe(s => s.DecidedRemedy!.DecidedDaysAgo >= s.ApprovedDaysAgo && s.DecidedRemedy.DecidedDaysAgo < 0);
+        var seedingTime = new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+        decided[0].DecidedRemedy!.DecidedAt(seedingTime).ShouldBe(seedingTime.AddDays(decided[0].DecidedRemedy!.DecidedDaysAgo));
+    }
+
+    [Theory]
+    [InlineData("decidedDaysAgo", "-40", "must decide its remedy after the approval, in the past")]
+    [InlineData("decidedDaysAgo", "1", "must decide its remedy after the approval, in the past")]
+    [InlineData("reason", "\"too short\"", "needs a remedy decision reason")]
+    [InlineData("failedAttempts", "-1", "negative failed-attempt count or estimate")]
+    [InlineData("estimateAmount", "-5", "negative failed-attempt count or estimate")]
+    public void An_invalid_decided_remedy_is_rejected_before_anything_is_written(string field, string json, string message)
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var file = Path.Combine(root, "tenants", "aurora", "remedy-scenarios.json");
+            var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+            var r11 = document["claims"]!.AsArray().Single(c => (string?)c!["scenario"] == "R11-aurora")!;
+            r11["decidedRemedy"]![field] = System.Text.Json.Nodes.JsonNode.Parse(json);
             File.WriteAllText(file, document.ToJsonString());
 
             Should.Throw<InvalidDataException>(() => SeedFiles.Load(root)).Message.ShouldContain(message);

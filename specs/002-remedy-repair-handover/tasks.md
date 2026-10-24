@@ -172,7 +172,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Tests for User Story 4 ⚠️ write first, ensure they fail
 
-- [ ] T251 [P] [US4] Write `tests/Warranty.UnitTests/Application/RecordRemedyCompletionTests.cs` (remedy must match and be `InProgress`; Refund needs a reference; date not in the future; Repair refused) and `tests/Warranty.IntegrationTests/Fulfillment/US4_RemedyCompletionTests.cs` for R11, adding claims with decided Replacement and Refund remedies to `seed/tenants/*/remedy-scenarios.json`
+- [X] T251 [P] [US4] Write `tests/Warranty.UnitTests/Application/RecordRemedyCompletionTests.cs` (remedy must match and be `InProgress`; Refund needs a reference; date not in the future; Repair refused) and `tests/Warranty.IntegrationTests/Fulfillment/US4_RemedyCompletionTests.cs` for R11, adding claims with decided Replacement and Refund remedies to `seed/tenants/*/remedy-scenarios.json`
 
 ### Implementation for User Story 4
 

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
 using Warranty.Knowledge.Ingestion;
@@ -100,13 +101,32 @@ public sealed record RemedyScenarioClaimSeed(
     int SubmittedDaysAgo,
     int ApprovedDaysAgo,
     DecidedBy ApprovedBy,
-    string Explanation)
+    string Explanation,
+    DecidedRemedySeed? DecidedRemedy = null)
 {
     public DateOnly PurchaseDate(DateTimeOffset seedingTime) => DateOnly.FromDateTime(seedingTime.UtcDateTime).AddDays(PurchasedDaysAgo);
 
     public DateTimeOffset SubmittedAt(DateTimeOffset seedingTime) => seedingTime.AddDays(SubmittedDaysAgo);
 
     public DateTimeOffset ApprovedAt(DateTimeOffset seedingTime) => seedingTime.AddDays(ApprovedDaysAgo);
+}
+
+/// <summary>
+/// A remedy a reviewer decided after a re-evaluation (002 T251, used by R11): the seeder evaluates the claim's own
+/// policy version for <see cref="Scenario"/> with <see cref="FailedAttempts"/> and <see cref="EstimateAmount"/>; the
+/// evaluation must send the remedy to a reviewer and allow <see cref="Remedy"/>, otherwise seeding fails. The remedy
+/// is then decided by the seeded-history reviewer with <see cref="Reason"/>, <see cref="DecidedDaysAgo"/> days from
+/// the seeding day. Only the remedy and its history are seeded, not the repair that led to the re-evaluation.
+/// </summary>
+public sealed record DecidedRemedySeed(
+    RemedyScenario Scenario,
+    RemedyType Remedy,
+    string Reason,
+    int DecidedDaysAgo,
+    int FailedAttempts = 0,
+    decimal? EstimateAmount = null)
+{
+    public DateTimeOffset DecidedAt(DateTimeOffset seedingTime) => seedingTime.AddDays(DecidedDaysAgo);
 }
 
 /// <summary>
@@ -313,6 +333,24 @@ public static class SeedFiles
             if (string.IsNullOrWhiteSpace(s.ProblemDescription) || string.IsNullOrWhiteSpace(s.Explanation))
             {
                 yield return $"{name} needs a problem description and an explanation";
+            }
+
+            if (s.DecidedRemedy is { } decided)
+            {
+                if (!(s.ApprovedDaysAgo <= decided.DecidedDaysAgo && decided.DecidedDaysAgo <= 0))
+                {
+                    yield return $"{name} must decide its remedy after the approval, in the past";
+                }
+
+                if (decided.Reason?.Trim() is not { Length: >= RemedyDecision.MinReasonLength and <= RemedyDecision.MaxReasonLength })
+                {
+                    yield return $"{name} needs a remedy decision reason of {RemedyDecision.MinReasonLength}–{RemedyDecision.MaxReasonLength} characters";
+                }
+
+                if (decided.FailedAttempts < 0 || decided.EstimateAmount < 0)
+                {
+                    yield return $"{name} has a negative failed-attempt count or estimate";
+                }
             }
         }
 
