@@ -12,6 +12,9 @@ using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
+using Warranty.UnitTests.Domain;
 
 namespace Warranty.UnitTests.Application;
 
@@ -21,8 +24,8 @@ namespace Warranty.UnitTests.Application;
 /// centre that is not an eligible centre of the tenant (404 + <c>ACCESS_DENIED</c>), a missing or stale repair ETag
 /// (412) and an event the current status does not allow (409 naming the status and the allowed events) — all without
 /// changing the repair. <c>MarkedReady</c> queues exactly one <c>RepairReadyForCollection</c> notification with the
-/// dedupe key <c>repair-ready:{attemptId}</c>; <c>Collected</c> completes the remedy. US2 events only; T248 and T256
-/// add the US3 and US5 events. Implemented in T239.
+/// dedupe key <c>repair-ready:{attemptId}</c>; <c>Collected</c> completes the remedy. A failure or an uneconomical estimate
+/// re-evaluates the remedy with the claim's own rules (T248). T256 adds the US5 events. Implemented in T239.
 /// </summary>
 public sealed class RecordRepairEventTests
 {
@@ -38,6 +41,7 @@ public sealed class RecordRepairEventTests
     private static readonly Guid OtherTenant = Guid.Parse("22222222-2222-7222-8222-222222222222");
     private static readonly Guid CustomerId = Guid.Parse("0199b000-0000-7000-8000-0000000004d7");
     private static readonly Guid ProductId = Guid.Parse("0199b000-0000-7000-8000-0000000004e7");
+    private static readonly Guid PolicyId = Guid.Parse("0199b000-0000-7000-8000-0000000004a1");
     private static readonly Guid VersionId = Guid.Parse("0199b000-0000-7000-8000-0000000004b2");
     private static readonly Guid SuggestedCentre = Guid.Parse("33333333-3333-7333-8333-333333333331");
     private static readonly Guid OtherCentre = Guid.Parse("33333333-3333-7333-8333-333333333332");
@@ -55,6 +59,8 @@ public sealed class RecordRepairEventTests
     private readonly ICatalogRepository _catalog = Substitute.For<ICatalogRepository>();
     private readonly IRemedyRepository _remedies = Substitute.For<IRemedyRepository>();
     private readonly IRepairRepository _repairs = Substitute.For<IRepairRepository>();
+    private readonly IPolicyRepository _policies = Substitute.For<IPolicyRepository>();
+    private readonly List<RemedyDecision> _decisions = [];
     private readonly IServiceNetwork _network = Substitute.For<IServiceNetwork>();
     private readonly INotificationService _notifications = Substitute.For<INotificationService>();
     private readonly IDecisionTrailWriter _trail = Substitute.For<IDecisionTrailWriter>();
@@ -86,6 +92,9 @@ public sealed class RecordRepairEventTests
         ]);
         _notifications.EnqueueAsync(default, default!, default!, default)
             .ReturnsForAnyArgs(NotificationEnqueueResult.Queued(Guid.Parse("0199b000-0000-7000-8000-0000000004f1")));
+        _remedies.GetDecisionsAsync(default, default).ReturnsForAnyArgs(_ => _decisions.ToList());
+        _remedies.WhenForAnyArgs(r => r.AddDecision(default!)).Do(call => _decisions.Add(call.Arg<RemedyDecision>()));
+        UseRules(RemedyRulesContract.Aurora, "AUR-WP");
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -143,6 +152,12 @@ public sealed class RecordRepairEventTests
         { "handOverWithoutDate", "handedOverOn" },
         { "handOverInTheFuture", "handedOverOn" },
         { "handOverWithLongReference", "centreReference" },
+        { "estimateWithoutAmount", "estimateAmount" },
+        { "negativeEstimate", "estimateAmount" },
+        { "estimateWithThreeDecimals", "estimateAmount" },
+        { "failureWithoutReason", "reason" },
+        { "failureWithShortReason", "reason" },
+        { "newAttemptWithoutLocation", "productLocation" },
     };
 
     [Theory]
@@ -164,6 +179,12 @@ public sealed class RecordRepairEventTests
             "handOverWithoutDate" => HandedOver() with { HandedOverOn = null },
             "handOverInTheFuture" => HandedOver() with { HandedOverOn = DateOnly.FromDateTime(Now.UtcDateTime).AddDays(1) },
             "handOverWithLongReference" => HandedOver() with { CentreReference = new string('J', RepairHandover.MaxCentreReferenceLength + 1) },
+            "estimateWithoutAmount" => Estimate(0m) with { EstimateAmount = null },
+            "negativeEstimate" => Estimate(-0.01m),
+            "estimateWithThreeDecimals" => Estimate(100.005m),
+            "failureWithoutReason" => Failed() with { Reason = null },
+            "failureWithShortReason" => Failed() with { Reason = "broken" },
+            "newAttemptWithoutLocation" => NewAttempt() with { ProductLocation = null },
             _ => throw new ArgumentOutOfRangeException(nameof(request), request, null),
         };
 
@@ -349,6 +370,128 @@ public sealed class RecordRepairEventTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
+    // ── Failed and uneconomical repairs (US3, T248; FR-029 – FR-032) ───────────────────────────
+
+    [Fact]
+    public async Task A_failure_below_the_attempt_limit_keeps_the_remedy_and_records_the_evaluation_and_the_ended_attempt()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var remedy = _remedy.ShouldNotBeNull();
+
+        var result = await Execute(claim, Failed());
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        (repair.Status, repair.NotPossibleReason, repair.FailedAttempts).ShouldBe(
+            (RepairStatus.RepairNotPossible, (RepairNotPossibleReason?)RepairNotPossibleReason.Failed, 1));
+        (remedy.State, remedy.Remedy).ShouldBe((RemedyState.InProgress, (RemedyType?)RemedyType.Repair));
+        RecordRepairEvent.AllowedEvents(repair, remedy).ShouldContain(RepairEventType.NewAttemptStarted);
+
+        var evaluated = _decisions.ShouldHaveSingleItem();
+        (evaluated.Kind, evaluated.Scenario, evaluated.TableRow, evaluated.FailedAttempts, evaluated.PolicyVersionId).ShouldBe(
+            (RemedyDecisionKind.Evaluated, RemedyScenario.RepairFailed, "repairFailed", 1, VersionId));
+        var entry = _entries.ShouldHaveSingleItem();
+        (entry.Step, entry.Actor).ShouldBe((TrailStep.RepairAttemptEnded, AgentSub));
+        entry.Payload.GetProperty("policyCode").GetString().ShouldBe("AUR-WP");
+        entry.Payload.GetProperty("newAttemptAllowed").GetBoolean().ShouldBeTrue();
+        entry.Payload.GetProperty("failedAttempts").GetInt32().ShouldBe(1);
+        await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
+    }
+
+    [Theory]
+    [InlineData("AUR-WP", RemedyType.Replacement)]
+    [InlineData("BOR-WP", RemedyType.Refund)]
+    public async Task A_failure_at_the_attempt_limit_returns_the_remedy_to_a_reviewer_with_the_company_remedy(string policy, RemedyType expected)
+    {
+        UseRules(policy == "AUR-WP" ? RemedyRulesContract.Aurora : RemedyRulesContract.Borealis, policy);
+        var (claim, repair) = ArrangeAtRepairCentre();
+        repair.RecordFailure("The display flickers again after the panel was replaced.", Report(1));
+        repair.StartNewAttempt(ProductLocation.AtCentre, Report(1));
+        var remedy = _remedy.ShouldNotBeNull();
+
+        var result = await Execute(claim, Failed());
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        repair.FailedAttempts.ShouldBe(2);
+        (remedy.State, remedy.Scenario, remedy.PendingReason, remedy.Remedy).ShouldBe(
+            (RemedyState.AwaitingDecision, RemedyScenario.RepairFailed, (RemedyPendingReason?)RemedyPendingReason.RepairFailedLimit, (RemedyType?)null));
+        remedy.AllowedRemedies.ShouldBe([expected]);
+        (_decisions.ShouldHaveSingleItem().Kind, _decisions[0].FailedAttempts).ShouldBe((RemedyDecisionKind.Evaluated, 2));
+        var entry = _entries.ShouldHaveSingleItem();
+        entry.Step.ShouldBe(TrailStep.RepairAttemptEnded);
+        (entry.Payload.GetProperty("policyCode").GetString(), entry.Payload.GetProperty("recommendedRemedy").GetString())
+            .ShouldBe((policy, expected.ToString()));
+        entry.Payload.GetProperty("newAttemptAllowed").GetBoolean().ShouldBeFalse();
+
+        // No new attempt can start: the remedy waits for the reviewer.
+        var refused = (await Execute(claim, NewAttempt() with { ReportedAt = ReportedOn(3) }))
+            .ShouldBeOfType<RecordRepairEventResult.Conflict>();
+        refused.Status.ShouldBe(RepairStatus.RepairNotPossible);
+        refused.AllowedEvents.ShouldNotContain(RepairEventType.NewAttemptStarted);
+        repair.Status.ShouldBe(RepairStatus.RepairNotPossible);
+    }
+
+    [Fact]
+    public async Task A_new_attempt_below_the_limit_opens_the_next_attempt_at_the_centre()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        repair.RecordFailure("The display flickers again after the panel was replaced.", Report(1));
+
+        var result = await Execute(claim, NewAttempt());
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
+        repair.CurrentAttempt.ShouldNotBeNull().Seq.ShouldBe(2);
+        _entries.ShouldHaveSingleItem().Step.ShouldBe(TrailStep.RepairStatusUpdated);
+        _decisions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_estimate_at_the_economic_limit_continues_the_repair_without_an_evaluation()
+    {
+        UseRules(RemedyRulesContract.Borealis, "BOR-WP");
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var limit = ClaimValue * 60 / 100m;
+
+        var result = await Execute(claim, Estimate(limit));
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        (repair.Status, repair.CurrentAttempt.ShouldNotBeNull().EstimateAmount).ShouldBe((RepairStatus.AtRepairCentre, (decimal?)limit));
+        _remedy.ShouldNotBeNull().State.ShouldBe(RemedyState.InProgress);
+        _decisions.ShouldBeEmpty();
+        _entries.ShouldHaveSingleItem().Step.ShouldBe(TrailStep.RepairStatusUpdated);
+    }
+
+    [Fact]
+    public async Task An_estimate_above_the_economic_limit_offers_the_reviewer_a_choice_without_counting_a_failure()
+    {
+        UseRules(RemedyRulesContract.Borealis, "BOR-WP");
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var above = (ClaimValue * 60 / 100m) + 0.01m;
+        var remedy = _remedy.ShouldNotBeNull();
+
+        var result = await Execute(claim, Estimate(above));
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        (repair.Status, repair.NotPossibleReason, repair.FailedAttempts).ShouldBe(
+            (RepairStatus.RepairNotPossible, (RepairNotPossibleReason?)RepairNotPossibleReason.NotEconomical, 0));
+        (remedy.State, remedy.Scenario, remedy.PendingReason).ShouldBe(
+            (RemedyState.AwaitingDecision, RemedyScenario.RepairNotEconomical, (RemedyPendingReason?)RemedyPendingReason.RepairNotEconomical));
+        remedy.AllowedRemedies.ShouldBe([RemedyType.Refund, RemedyType.Replacement], ignoreOrder: true);
+        var evaluated = _decisions.ShouldHaveSingleItem();
+        (evaluated.TableRow, evaluated.EstimateAmount, evaluated.FailedAttempts).ShouldBe(("repairNotEconomical", (decimal?)above, 0));
+        _entries.ShouldHaveSingleItem().Step.ShouldBe(TrailStep.RepairAttemptEnded);
+    }
+
+    [Fact]
+    public async Task Without_an_economic_limit_no_estimate_ends_the_repair()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+
+        (await Execute(claim, Estimate(ClaimValue * 10))).ShouldBeOfType<RecordRepairEventResult.Recorded>();
+
+        repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
+        _remedy.ShouldNotBeNull().State.ShouldBe(RemedyState.InProgress);
+    }
     [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
@@ -365,7 +508,9 @@ public sealed class RecordRepairEventTests
         => UseCase().ExecuteAsync(command with { ClaimId = claim.Id }, Ct);
 
     private RecordRepairEvent UseCase()
-        => new(_tenant, _claims, _catalog, _remedies, _repairs, _network, _notifications, _trail, _securityEvents, _unitOfWork, _time);
+        => new(
+            _tenant, _claims, _catalog, _remedies, _repairs, _policies, _network, new RemedyPolicyEvaluator(), _notifications, _trail,
+            _securityEvents, _unitOfWork, _time);
 
     private static RecordRepairEventCommand Command(RepairEventType type, int day = 1)
         => new(Guid.Empty, ValidIfMatch, type, ReportedOn(day), ReportSource.Phone);
@@ -380,6 +525,27 @@ public sealed class RecordRepairEventTests
 
     private static RecordRepairEventCommand Collected() => Command(RepairEventType.Collected, day: 3);
 
+    private static RecordRepairEventCommand Estimate(decimal amount)
+        => Command(RepairEventType.EstimateReported, day: 2) with { EstimateAmount = amount };
+
+    private static RecordRepairEventCommand Failed()
+        => Command(RepairEventType.RepairFailed, day: 2) with { Reason = "The fault came back after the board was replaced." };
+
+    private static RecordRepairEventCommand NewAttempt()
+        => Command(RepairEventType.NewAttemptStarted, day: 2) with { ProductLocation = ProductLocation.AtCentre };
+
+    /// <summary>The remedy's policy version (<see cref="VersionId"/>, policy <paramref name="code"/>) carries <paramref name="rules"/>.</summary>
+    private void UseRules(RemedyRules rules, string code)
+    {
+        var terms = new CoverageTerms(
+            new Dictionary<Region, int> { [Region.NA] = 12, [Region.EU] = 24 }, new Dictionary<string, int>(),
+            AccidentalDamageTerms.NotCovered, [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage]);
+        var version = PolicyVersion.Create(
+            VersionId, Tenant, PolicyId, 2, new DateOnly(2025, 1, 1), null, [Region.NA, Region.EU], [], terms,
+            $"tenant/policies/{code}-v2.md", "checksum", rules);
+        _policies.GetVersionAsync(VersionId, Arg.Any<CancellationToken>()).Returns(version);
+        _policies.GetPolicyAsync(PolicyId, Arg.Any<CancellationToken>()).Returns(WarrantyPolicy.Create(PolicyId, Tenant, code, "Warranty"));
+    }
     /// <summary>10:00 UTC, <paramref name="day"/> days after the hand-over date (all before <see cref="Now"/>).</summary>
     private static DateTimeOffset ReportedOn(int day)
         => new(HandedOverOn.AddDays(day).ToDateTime(new TimeOnly(10, 0)), TimeSpan.Zero);
