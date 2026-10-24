@@ -130,7 +130,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Implementation for User Story 2
 
-- [ ] T238 [US2] Implement `ChangeCentre`, `RecordHandover`, `MarkReady`, `RecordCollection` and `AllowedEvents` on `Repair` (opening attempt 1 on the first hand-over, emitting `RepairEvent`s) in `src/Warranty.Domain/Fulfillment/Repair.cs` and `RepairAttempt.cs`
+- [X] T238 [US2] Implement `ChangeCentre`, `RecordHandover`, `MarkReady`, `RecordCollection` and `AllowedEvents` on `Repair` (opening attempt 1 on the first hand-over, emitting `RepairEvent`s) in `src/Warranty.Domain/Fulfillment/Repair.cs` and `RepairAttempt.cs`
 - [ ] T239 [US2] Implement `src/Warranty.Application/Fulfillment/RecordRepairEvent.cs` for `CentreChanged`, `HandedOver`, `MarkedReady`, `Collected`: roles claims-agent and claims-reviewer, `If-Match` on the repair, centre eligibility through `IServiceNetwork` (same tenant, active), one transaction writing the repair, `audit.repair_events` and a trail entry, the ready notification with its dedupe key, and remedy `Completed` on `Collected`
 - [ ] T240 [US2] Create `RepairView` (with `allowedEvents`, events with staff display names, economic limit amount) and the eligible-centre query in `src/Warranty.Application/Fulfillment/RepairQueries.cs`; add `repair` to the claim detail in `src/Warranty.Application/Claims/ClaimQueries.cs`
 - [ ] T241 [US2] Add `GET /api/claims/{claimId}/repair-centres` (any staff role) and `POST /api/claims/{claimId}/repair/events` (claims-agent, claims-reviewer) to `src/Warranty.Api/Endpoints/Fulfillment/FulfillmentEndpoints.cs` with the error mapping of plan.md

@@ -56,4 +56,27 @@ public sealed class RepairAttempt
             StartedAt = startedAt,
         };
     }
+
+    /// <summary>The repair centre has finished: the open attempt ends as <see cref="AttemptResult.Ready"/>.</summary>
+    internal void MarkReady(DateTimeOffset endedAt)
+    {
+        if (!IsOpen)
+        {
+            throw new InvalidOperationException($"Repair attempt {Seq} is not open ({Result}).");
+        }
+
+        Result = AttemptResult.Ready;
+        EndedAt = endedAt;
+    }
+
+    /// <summary>The customer collected the product: a <see cref="AttemptResult.Ready"/> attempt becomes <see cref="AttemptResult.Collected"/>.</summary>
+    internal void MarkCollected()
+    {
+        if (Result != AttemptResult.Ready)
+        {
+            throw new InvalidOperationException($"Repair attempt {Seq} is not ready for collection ({Result}).");
+        }
+
+        Result = AttemptResult.Collected;
+    }
 }

@@ -16,7 +16,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class RepairStateMachineTests
 {
-    private const string PendingUs2 = "Pending T238";
     private const string PendingUs3 = "Pending T247";
     private const string PendingUs5 = "Pending T256";
     private const string PendingUs3AndUs5 = "Pending T247 and T256";
@@ -134,7 +133,7 @@ public sealed class RepairStateMachineTests
         }
     }
 
-    [Theory(Skip = PendingUs2)]
+    [Theory]
     [InlineData(Stage.AwaitingHandover, new[] { RepairEventType.CentreChanged, RepairEventType.HandedOver })]
     [InlineData(Stage.AtRepairCentre, new[] { RepairEventType.MarkedReady })]
     [InlineData(Stage.ReadyForCollection, new[] { RepairEventType.Collected })]
@@ -161,7 +160,7 @@ public sealed class RepairStateMachineTests
 
     // ── Collected is final ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingUs2)]
+    [Fact]
     public void Collected_is_final()
     {
         var repair = RepairAt(Stage.Collected);
@@ -180,7 +179,7 @@ public sealed class RepairStateMachineTests
 
     // ── Rules of the US2 transitions ───────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingUs2)]
+    [Fact]
     public void The_first_hand_over_opens_attempt_1_at_the_active_centre_and_records_the_date_and_reference()
     {
         var repair = RepairAt(Stage.AwaitingHandover);
@@ -194,7 +193,7 @@ public sealed class RepairStateMachineTests
         (handover.HandedOverOn, handover.CentreReference).ShouldBe(((DateOnly?)HandedOverOn, "JOB-1001"));
     }
 
-    [Fact(Skip = PendingUs2)]
+    [Fact]
     public void A_hand_over_needs_an_active_centre()
     {
         var repair = Repair.Create(Guid.CreateVersion7(), Tenant, ClaimId, suggestedServiceCenterId: null, CreatedAt);
@@ -207,7 +206,7 @@ public sealed class RepairStateMachineTests
         repair.Events.ShouldBeEmpty();
     }
 
-    [Fact(Skip = PendingUs2)]
+    [Fact]
     public void A_centre_change_makes_the_chosen_centre_the_only_active_hand_over()
     {
         var repair = RepairAt(Stage.AwaitingHandover);
@@ -222,7 +221,7 @@ public sealed class RepairStateMachineTests
         repair.Handovers.Count(h => h.IsActive).ShouldBe(1);
     }
 
-    [Theory(Skip = PendingUs2)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -236,7 +235,7 @@ public sealed class RepairStateMachineTests
         repair.Events.Count.ShouldBe(1);
     }
 
-    [Fact(Skip = PendingUs2)]
+    [Fact]
     public void Marking_ready_ends_the_attempt_as_ready_and_collection_as_collected()
     {
         var repair = RepairAt(Stage.AtRepairCentre);
@@ -253,7 +252,7 @@ public sealed class RepairStateMachineTests
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    private static string SkipFor(Stage stage, RepairEventType type)
+    private static string? SkipFor(Stage stage, RepairEventType type)
     {
         var needsUs3 = Us3Events.Contains(type) || stage is Stage.NotPossibleFailed or Stage.NotPossibleNotEconomical;
         var needsUs5 = type is RepairEventType.Transferred or RepairEventType.Correction;
@@ -262,7 +261,7 @@ public sealed class RepairStateMachineTests
             (true, true) => PendingUs3AndUs5,
             (true, false) => PendingUs3,
             (false, true) => PendingUs5,
-            _ => PendingUs2,
+            _ => null,
         };
     }
 
