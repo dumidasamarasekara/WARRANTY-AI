@@ -20,6 +20,9 @@ public static class AuthPolicies
 
     public const string ReviewerOrAuditor = nameof(ReviewerOrAuditor);
 
+    /// <summary>Claims agents and claims reviewers (repair events and remedy completions, 002).</summary>
+    public const string ClaimsAgentOrReviewer = nameof(ClaimsAgentOrReviewer);
+
     public const string AnyStaff = nameof(AnyStaff);
 
     /// <summary>A claimant token for one claim (<c>/api/public/claims/{reference}/...</c>).</summary>
@@ -31,6 +34,7 @@ public static class AuthPolicies
         options.AddPolicy(ClaimsReviewer, Staff(Principals.ClaimsReviewerRole));
         options.AddPolicy(Auditor, Staff(Principals.AuditorRole));
         options.AddPolicy(ReviewerOrAuditor, Staff(Principals.ClaimsReviewerRole, Principals.AuditorRole));
+        options.AddPolicy(ClaimsAgentOrReviewer, Staff(Principals.ClaimsAgentRole, Principals.ClaimsReviewerRole));
 
         var anyStaff = Staff(Principals.ClaimsAgentRole, Principals.ClaimsReviewerRole, Principals.AuditorRole);
         options.AddPolicy(AnyStaff, anyStaff);
