@@ -10,12 +10,10 @@ namespace Warranty.UnitTests.Fulfillment;
 /// The claimant's view of the remedy (002 T236; FR-039 – FR-041, data-model.md "Claimant projection"):
 /// <see cref="ClaimantRemedyProjection"/> gives the label of each remedy and repair state, the four Repair timeline
 /// steps and the active centre's name, address and opening hours, and never anything staff-only: notes, centre
-/// references, failure reasons, contact details or staff names. The states after a hand-over need the repair
-/// transitions (T238); the states after a failed repair need T247.
+/// references, failure reasons, contact details or staff names. The states after a failed repair need T247.
 /// </summary>
 public sealed class ClaimantRemedyProjectionTests
 {
-    private const string PendingTransitions = "Pending T238";
     private const string PendingWithFailure = "Pending T247";
 
     private const string StaffSub = "0b9e7a52-1f2c-4c1a-9a01-a0000000a001";
@@ -44,9 +42,9 @@ public sealed class ClaimantRemedyProjectionTests
     [
         Row("firstDecision", null, "We are deciding how to resolve your claim", false),
         Row("repairAwaitingHandover", RemedyType.Repair, "Take your product to the repair centre", false),
-        Row("repairAtRepairCentre", RemedyType.Repair, "With repair centre", false, PendingTransitions),
-        Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false, PendingTransitions),
-        Row("repairCollected", RemedyType.Repair, "Collected", true, PendingTransitions),
+        Row("repairAtRepairCentre", RemedyType.Repair, "With repair centre", false),
+        Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false),
+        Row("repairCollected", RemedyType.Repair, "Collected", true),
         Row("repairNotPossible", null, "Repair not possible. Your claim is being reviewed.", false, PendingWithFailure),
         Row("replacementInProgress", RemedyType.Replacement, "Replacement on its way", false),
         Row("replacementCompleted", RemedyType.Replacement, "Replacement handed over", true),
@@ -58,9 +56,9 @@ public sealed class ClaimantRemedyProjectionTests
     public static IEnumerable<TheoryDataRow<string, string[]>> RepairSteps =>
     [
         new("repairAwaitingHandover", ["current", "upcoming", "upcoming", "upcoming"]),
-        new("repairAtRepairCentre", ["done", "current", "upcoming", "upcoming"]) { Skip = PendingTransitions },
-        new("repairReadyForCollection", ["done", "done", "current", "upcoming"]) { Skip = PendingTransitions },
-        new("repairCollected", ["done", "done", "done", "done"]) { Skip = PendingTransitions },
+        new("repairAtRepairCentre", ["done", "current", "upcoming", "upcoming"]),
+        new("repairReadyForCollection", ["done", "done", "current", "upcoming"]),
+        new("repairCollected", ["done", "done", "done", "done"]),
     ];
 
     // ── Labels ─────────────────────────────────────────────────────────────────────────────────
@@ -126,7 +124,7 @@ public sealed class ClaimantRemedyProjectionTests
 
     // ── Staff-only data never reaches the claimant (FR-041) ────────────────────────────────────
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void The_view_has_no_notes_centre_references_contact_details_or_staff_names()
     {
         var remedy = RepairByPolicy();

@@ -31,7 +31,8 @@ public sealed record ClaimSummaryPage(IReadOnlyList<ClaimSummary> Items, int Pag
 /// <summary>
 /// <c>ClaimDetail</c> (FR-033): the claim, its evidence, the latest evaluation and the review decisions.
 /// Members a role may not see are null and left out of the JSON (FR-005). From 002: the remedy once the claim is
-/// approved and, while it is <see cref="ClaimStatus.UnderReview"/>, the remedy preview of an approval.
+/// approved, its repair (with the repair's own ETag) when the remedy is Repair and, while it is
+/// <see cref="ClaimStatus.UnderReview"/>, the remedy preview of an approval.
 /// </summary>
 public sealed record ClaimDetail(
     Guid ClaimId,
@@ -55,7 +56,8 @@ public sealed record ClaimDetail(
     bool ReviewerInfoRequested,
     bool HasProtectionPlan,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyView? Remedy,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreview);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreview,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RepairView? Repair);
 
 public sealed record ClaimCustomer(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FullName,
@@ -194,7 +196,8 @@ public sealed class ClaimQueries(
     IPolicyRepository policies,
     IAdjudicationRepository adjudication,
     IReviewRepository reviews,
-    RemedyQueries remedies)
+    RemedyQueries remedies,
+    RepairQueries repairs)
 {
     public const int DefaultPageSize = 25;
 
@@ -290,7 +293,8 @@ public sealed class ClaimQueries(
             await remedies.GetRemedyAsync(claimId, ct),
             claim.Status == ClaimStatus.UnderReview
                 ? await remedies.PreviewAsync(claim, product, RemedyScenario.CoveredDefect, ct)
-                : null);
+                : null,
+            await repairs.GetRepairAsync(claim, product, ct));
 
         return new ClaimDetailResult(detail, FormatETag(rowVersion));
     }
