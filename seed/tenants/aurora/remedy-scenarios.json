@@ -1,5 +1,5 @@
 {
-  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own). Both are handed over and fail twice in quickstart R4/R8/R9. R11-aurora (T251) carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow the remedy named; the seeded-history reviewer then decides it with the reason given (no repair history is seeded).",
+  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own). Both are handed over and fail twice in quickstart R4/R8/R9. R12-aurora is transferred after one failure and gets a hand-over date correction (US5_TransferCorrectionTests, T255). R11-aurora (T251) carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow the remedy named; the seeded-history reviewer then decides it with the reason given (no repair history is seeded).",
   "claims": [
     {
       "scenario": "R1",
@@ -58,6 +58,23 @@
         "reason": "Two repair attempts did not fix the touch screen; the policy gives a replacement.",
         "decidedDaysAgo": -2
       }
+    },
+    {
+      "scenario": "R12-aurora",
+      "id": "11111111-0005-7000-8000-000000000012",
+      "reference": "RMDYR12A01",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0112",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The volume buttons do not respond and the tablet sometimes restarts when they are pressed.",
+      "purchasedDaysAgo": -80,
+      "submittedDaysAgo": -5,
+      "approvedDaysAgo": -5,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the button fault is a manufacturing defect."
     }
   ]
 }
