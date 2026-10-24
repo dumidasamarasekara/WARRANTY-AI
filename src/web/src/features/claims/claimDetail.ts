@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api, unwrap, type Schemas } from '../../shared/api/client'
 import type { Actor } from '../../shared/ui'
+import { remedyStepActor } from '../remedy/remedyView'
 
 /*
  * `GET /api/claims/{claimId}` per the contract's `ClaimDetail`. Members a role may not see are simply
@@ -98,7 +99,9 @@ const finalStatuses = new Set<ClaimDetail['status']>(['Approved', 'Rejected'])
  * The claim header's progress strip (ui-design.md §6.3): Submitted → Intake → Evidence → Policy →
  * Risk → Decision → Guardrails → Outcome (→ Review when escalated). A step is done when its part of
  * the latest evaluation is present, or a later step is (risk is absent from a claims agent's view);
- * the first step not done is current unless the claim is finalized.
+ * the first step not done is current unless the claim is finalized. An approved claim with a remedy
+ * gains a final Remedy step (002 ui-screens.md §2): system when set by policy, human when a reviewer
+ * decided or must decide, done when the remedy is Completed and current until then.
  */
 export function progressSteps(detail: ClaimDetail): ProgressStep[] {
   const evaluation = detail.latestEvaluation
@@ -138,7 +141,7 @@ export function progressSteps(detail: ClaimDetail): ProgressStep[] {
 
   const finalized = finalStatuses.has(detail.status)
   let currentAssigned = false
-  return steps.map(({ present, ...step }) => {
+  const result = steps.map(({ present, ...step }): ProgressStep => {
     if (present) return { ...step, state: 'done' }
     if (!finalized && !currentAssigned) {
       currentAssigned = true
@@ -146,6 +149,15 @@ export function progressSteps(detail: ClaimDetail): ProgressStep[] {
     }
     return { ...step, state: 'pending' }
   })
+  if (detail.remedy) {
+    result.push({
+      key: 'remedy',
+      label: 'Remedy',
+      actor: remedyStepActor(detail.remedy),
+      state: detail.remedy.state === 'Completed' ? 'done' : 'current',
+    })
+  }
+  return result
 }
 
 /** `SCREEN_PHYSICAL_DAMAGE` → "Screen physical damage" for AI-extracted enum values. */

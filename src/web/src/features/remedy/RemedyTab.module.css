@@ -1,0 +1,156 @@
+/* Remedy tab — 002 contracts/ui-screens.md §2 and §4. Two columns as the AI decision tab. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (width < 1280px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.remedyName {
+  font: var(--text-entity-title);
+  color: var(--color-text);
+}
+
+/* Origin line: grey system when set by policy, blue human when a reviewer decided. */
+.origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-body);
+  color: var(--t-ink);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sectionLabel {
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.facts dt {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+.facts dd {
+  margin: 0;
+  font: var(--text-data);
+}
+
+.facts dd.mono,
+.mono {
+  font: var(--text-mono);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.historyHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.time {
+  margin-left: auto;
+  font: var(--text-mono);
+  color: var(--color-text-secondary);
+}
+
+.muted {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+/* Decide remedy dialog */
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+  font: var(--text-label);
+  letter-spacing: var(--text-label-tracking);
+  color: var(--color-text-secondary);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-body);
+  cursor: pointer;
+}
+
+.choice input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.note {
+  font: var(--text-small);
+  color: var(--color-text-secondary);
+}
+
+.fieldError {
+  font: var(--text-small);
+  color: var(--color-error);
+}
+
+.problem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}

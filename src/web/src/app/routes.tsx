@@ -42,6 +42,12 @@ const staffRoutes: RouteObject = {
           ),
         },
         {
+          // Remedy tab (002 ui-screens.md §2), shown for Approved claims to every staff role.
+          path: ':claimId/remedy',
+          handle: crumb((params) => params.claimId ?? 'Claim'),
+          element: <ClaimDetailPage tab="remedy" />,
+        },
+        {
           path: ':claimId/*',
           handle: crumb((params) => params.claimId ?? 'Claim'),
           element: <ClaimDetailPage />,
