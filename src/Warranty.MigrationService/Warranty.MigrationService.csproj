@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Warranty.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Byte-for-byte copy of specs/002-remedy-repair-handover/contracts/remedy-rules.schema.json; validates the seed's remedies block. -->
     <EmbeddedResource Include="Seeding\Schemas\*.schema.json" LogicalName="Warranty.MigrationService.Seeding.Schemas.%(Filename)%(Extension)" />
   </ItemGroup>
