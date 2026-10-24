@@ -211,7 +211,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Tests for User Story 6 ⚠️ write first, ensure they fail
 
-- [ ] T258 [P] [US6] Write `tests/Warranty.UnitTests/Guardrails/ProtectionPlanCheckTests.cs` (escalation only when the plan is stated, the damage is accidental or beyond the allowance, and the version lets a plan lift the exclusion; no effect otherwise) and an intake validation test that a stated plan without a document requests `PROTECTION_PLAN_DOCUMENT`
+- [X] T258 [P] [US6] Write `tests/Warranty.UnitTests/Guardrails/ProtectionPlanCheckTests.cs` (escalation only when the plan is stated, the damage is accidental or beyond the allowance, and the version lets a plan lift the exclusion; no effect otherwise) and an intake validation test that a stated plan without a document requests `PROTECTION_PLAN_DOCUMENT`
 - [ ] T259 [P] [US6] Write `tests/Warranty.IntegrationTests/Fulfillment/US6_ProtectionPlanTests.cs` for R14 and R15: reuse the S4 recordings with a Borealis serial that already used its accidental-damage incident (add it to `seed/tenants/borealis/historical-claims.json` and map the serial in `seed/golden/scenarios.json`) and the Aurora S4 variant with a plan
 
 ### Implementation for User Story 6

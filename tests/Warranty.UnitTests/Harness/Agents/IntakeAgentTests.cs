@@ -67,6 +67,9 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         "REQUIRED_FIELDS", "PHOTO_PRESENT", "INVOICE_PRESENT", "FILE_TYPES", "PURCHASE_DATE_NOT_FUTURE", "PURCHASE_DATE_BEFORE_CLAIM", "REGION_DETERMINED",
     ];
 
+    /// <summary>Recorded after the 001 checks, only when the claim states a protection plan (002 research R9).</summary>
+    private const string ProtectionPlanCheck = "PROTECTION_PLAN_DOCUMENT_PRESENT";
+
     private readonly IAdjudicationRepository _adjudication = Substitute.For<IAdjudicationRepository>();
     private readonly FakeLookups _tools = new();
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(Today, new TimeOnly(9, 0), TimeSpan.Zero));
@@ -329,6 +332,62 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         missing.ShouldHaveSingleItem().Item.ShouldBe("INVOICE");
     }
 
+    // ---- Protection plan (002 FR-036, FR-037, research R9) --------------------------------------------
+
+    [Fact(Skip = "Pending T260")]
+    public void A_stated_protection_plan_without_its_document_asks_for_the_PROTECTION_PLAN_DOCUMENT()
+    {
+        var (validation, missing) = IntakeAgent.Validate(Case() with { HasProtectionPlan = true }, Customer(), Today);
+
+        Single(validation, ProtectionPlanCheck).Passed.ShouldBeFalse();
+        missing.ShouldHaveSingleItem().Item.ShouldBe("PROTECTION_PLAN_DOCUMENT");
+        validation.Where(v => v.Check != ProtectionPlanCheck).ShouldAllBe(v => v.Passed);
+    }
+
+    [Theory(Skip = "Pending T260")]
+    [InlineData("application/pdf")]
+    [InlineData("image/jpeg")]
+    public void A_stated_protection_plan_with_its_document_needs_nothing_more(string contentType)
+    {
+        var input = Case(evidence: [Invoice(), Photo(), PlanDocument(contentType)]) with { HasProtectionPlan = true };
+
+        var (validation, missing) = IntakeAgent.Validate(input, Customer(), Today);
+
+        validation.Select(v => v.Check).ShouldBe([.. CheckOrder, ProtectionPlanCheck]);
+        validation.ShouldAllBe(v => v.Passed);
+        missing.ShouldBeEmpty();
+    }
+
+    [Fact(Skip = "Pending T260")]
+    public void A_plan_document_of_an_unsupported_type_fails_FILE_TYPES_and_asks_for_the_document_again()
+    {
+        var input = Case(evidence: [Invoice(), Photo(), PlanDocument("text/html")]) with { HasProtectionPlan = true };
+
+        var (validation, missing) = IntakeAgent.Validate(input, Customer(), Today);
+
+        Single(validation, "FILE_TYPES").Passed.ShouldBeFalse();
+        missing.ShouldHaveSingleItem().Item.ShouldBe("PROTECTION_PLAN_DOCUMENT");
+    }
+
+    [Fact(Skip = "Pending T260")]
+    public void A_plan_document_without_a_stated_plan_is_an_accepted_file_and_requests_nothing()
+    {
+        var (validation, missing) = IntakeAgent.Validate(Case(evidence: [Invoice(), Photo(), PlanDocument("application/pdf")]), Customer(), Today);
+
+        validation.Select(v => v.Check).ShouldBe(CheckOrder);
+        validation.ShouldAllBe(v => v.Passed);
+        missing.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Without_a_stated_plan_the_001_checks_are_unchanged_and_no_plan_document_is_requested()
+    {
+        var (validation, missing) = IntakeAgent.Validate(Case(), Customer(), Today);
+
+        validation.Select(v => v.Check).ShouldBe(CheckOrder);
+        missing.ShouldNotContain(item => item.Item == "PROTECTION_PLAN_DOCUMENT");
+    }
+
     [Fact]
     public void A_purchase_date_in_the_future_fails_both_date_checks_and_asks_for_the_date_once()
     {
@@ -567,6 +626,8 @@ public sealed class IntakeAgentTests : IAsyncDisposable
     private static CaseEvidence Invoice(string contentType = "application/pdf") => Evidence(EvidenceKind.Invoice, "invoice.pdf", contentType);
 
     private static CaseEvidence Photo(string contentType = "image/jpeg") => Evidence(EvidenceKind.Photo, "photo.jpg", contentType);
+
+    private static CaseEvidence PlanDocument(string contentType) => Evidence(EvidenceKind.ProtectionPlanDocument, "protection-plan.pdf", contentType);
 
     private static CaseEvidence Evidence(EvidenceKind kind, string fileName, string contentType)
         => new(Guid.NewGuid(), kind, fileName, contentType, 2_048, new string('a', 64), 1, $"claims/{ClaimId}/1/{Guid.NewGuid()}");

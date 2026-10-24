@@ -34,7 +34,7 @@ internal sealed class GuardrailScenario
 
     private static readonly DateOnly ClaimDay = new(2026, 9, 1);
 
-    private GuardrailScenario(AccidentalDamageTerms? accidentalDamage = null)
+    private GuardrailScenario(AccidentalDamageTerms? accidentalDamage = null, RemedyRules? remedyRules = null)
     {
         accidentalDamage ??= AccidentalDamageTerms.NotCovered;
         Version = Policy(
@@ -42,7 +42,8 @@ internal sealed class GuardrailScenario
             accidentalDamage.Covered
                 ? [ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair]
                 : [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage, ExclusionCode.UnauthorizedRepair],
-            accidentalDamage);
+            accidentalDamage,
+            remedyRules);
         var otherVersion = Policy(Guid.Parse("33333333-3333-7333-8333-333333333333"), 1, [ExclusionCode.AccidentalDamage]);
         Clauses =
         [
@@ -86,6 +87,9 @@ internal sealed class GuardrailScenario
 
     /// <summary>All-time approved accidental-damage claims for the serial (<c>claim_history_lookup</c>).</summary>
     public int PriorApprovedAccidental { get; set; }
+
+    /// <summary>The claim states an additional protection plan (002 FR-036).</summary>
+    public bool HasProtectionPlan { get; set; }
 
     public List<RequestedItem> IntakeMissingItems { get; } = [];
 
@@ -159,15 +163,16 @@ internal sealed class GuardrailScenario
     public ActorInfo Actor { get; set; } = ActorInfo.Automation;
 
     /// <summary>A defect claim within the coverage window that the AI approves: every FR-026 condition holds.</summary>
-    public static GuardrailScenario ClearApprove() => new();
+    /// <param name="remedyRules">The applicable version's remedy rules (002), e.g. its protection-plan row; none by default.</param>
+    public static GuardrailScenario ClearApprove(RemedyRules? remedyRules = null) => new(remedyRules: remedyRules);
 
     /// <summary>
     /// Tenant B's allowance (one accidental-damage incident within 12 months, accidental damage not excluded):
     /// a cracked screen bought 10 months before the claim date that the AI approves on the coverage clause.
     /// </summary>
-    public static GuardrailScenario ApproveAccidentalDamage()
+    public static GuardrailScenario ApproveAccidentalDamage(RemedyRules? remedyRules = null)
     {
-        var scenario = new GuardrailScenario(new AccidentalDamageTerms(true, 12, 1))
+        var scenario = new GuardrailScenario(new AccidentalDamageTerms(true, 12, 1), remedyRules)
         {
             PurchaseDate = new DateOnly(2025, 11, 1),
             ClaimantExplanation = "Your plan includes one accidental-damage repair in the first 12 months, so your screen will be repaired.",
@@ -178,9 +183,9 @@ internal sealed class GuardrailScenario
     }
 
     /// <summary>A claim made after the coverage window ended that the AI rejects on the period clause: every FR-027 condition holds.</summary>
-    public static GuardrailScenario ClearReject()
+    public static GuardrailScenario ClearReject(RemedyRules? remedyRules = null)
     {
-        var scenario = new GuardrailScenario
+        var scenario = new GuardrailScenario(remedyRules: remedyRules)
         {
             Decision = AiDecision.Reject,
             Coverage = CoverageDetermination.NotCovered,
@@ -195,8 +200,12 @@ internal sealed class GuardrailScenario
 
     /// <summary>The AI rejects on one exclusion clause; the period ground is not cited and the claim is inside the window.</summary>
     public static GuardrailScenario RejectOnExclusion(string exclusionClause, params string[] photoDamageTypes)
+        => RejectOnExclusion((RemedyRules?)null, exclusionClause, photoDamageTypes);
+
+    /// <summary>As <see cref="RejectOnExclusion(string, string[])"/> on a version with <paramref name="remedyRules"/>.</summary>
+    public static GuardrailScenario RejectOnExclusion(RemedyRules? remedyRules, string exclusionClause, params string[] photoDamageTypes)
     {
-        var scenario = ClearReject();
+        var scenario = ClearReject(remedyRules);
         scenario.CoverageEndDate = new DateOnly(2027, 1, 15);
         scenario.WithinCoverageWindow = true;
         scenario.ClaimantExplanation = "Your tablet's screen damage is excluded from the warranty, so this repair is not covered.";
@@ -216,7 +225,7 @@ internal sealed class GuardrailScenario
             Tenant, "EUR", AutoApprovalLimit, MinConfidence, AutoApproveEnabled, AutoRejectEnabled, AlwaysReviewCategories);
         var caseFacts = new CaseFacts(
             Tenant, ClaimId, RunId, ProductInCatalog, ProductCategory, ClaimValue, ReviewerInfoRequested, AutoInfoRequestCount,
-            PurchaseDate, PriorApprovedAccidental);
+            PurchaseDate, PriorApprovedAccidental, HasProtectionPlan);
         var intake = IntakeResult.Create(
             RunId, Tenant, [new ValidationCheck("INVOICE_PRESENT", true, null), new ValidationCheck("PHOTO_PRESENT", true, null)],
             "{}", IntakeMissingItems);
@@ -248,7 +257,8 @@ internal sealed class GuardrailScenario
     }
 
     private static PolicyVersion Policy(
-        Guid id, int version, IReadOnlyList<ExclusionCode> exclusions, AccidentalDamageTerms? accidentalDamage = null) => PolicyVersion.Create(
+        Guid id, int version, IReadOnlyList<ExclusionCode> exclusions, AccidentalDamageTerms? accidentalDamage = null,
+        RemedyRules? remedyRules = null) => PolicyVersion.Create(
         id, Tenant, Guid.Parse("66666666-6666-7666-8666-666666666666"), version,
         new DateOnly(2024, 1, 1), null, [Region.NA, Region.EU], [],
         new CoverageTerms(
@@ -256,7 +266,8 @@ internal sealed class GuardrailScenario
             new Dictionary<string, int> { ["battery"] = 6 },
             accidentalDamage ?? AccidentalDamageTerms.NotCovered,
             exclusions),
-        $"tenant-a/warranty-v{version}.md", $"sha256-v{version}");
+        $"tenant-a/warranty-v{version}.md", $"sha256-v{version}",
+        remedyRules);
 
     private RetrievedPolicyRef Clause(string refId, PolicyVersion version, ClauseType type, ExclusionCode? code) => RetrievedPolicyRef.Create(
         Guid.CreateVersion7(), Tenant, RunId, refId, Guid.CreateVersion7(), version.Id, $"AUR-WP-{refId}", type, code,
