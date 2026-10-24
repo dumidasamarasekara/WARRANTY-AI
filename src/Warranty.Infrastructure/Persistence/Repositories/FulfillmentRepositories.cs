@@ -47,6 +47,12 @@ internal sealed class RepairRepository(WarrantyDbContext db) : IRepairRepository
             .AsSplitQuery()
             .SingleOrDefaultAsync(r => r.ClaimId == claimId, ct);
 
+    public async Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct)
+        => await db.Repairs.AsNoTracking()
+            .Where(r => r.ClaimId == claimId)
+            .Select(r => (uint?)EF.Property<uint>(r, RepairConfiguration.RowVersion))
+            .SingleOrDefaultAsync(ct);
+
     public void Add(Repair repair) => db.Repairs.Add(repair);
 
     public void AddEvent(RepairEvent repairEvent)

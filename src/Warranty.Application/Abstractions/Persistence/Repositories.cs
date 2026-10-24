@@ -221,6 +221,9 @@ public interface IRepairRepository
     /// <summary>The claim's repair (tracked) with its hand-overs, attempts and events, or null when it has none.</summary>
     Task<Repair?> GetByClaimAsync(Guid claimId, CancellationToken ct);
 
+    /// <summary>The repair's row version (<c>xmin</c>), exposed as the repair ETag; null when the claim has no repair.</summary>
+    Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct);
+
     void Add(Repair repair);
 
     /// <summary>Repair events are append-only: there is no update or delete.</summary>
