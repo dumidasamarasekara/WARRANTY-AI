@@ -32,7 +32,8 @@ public sealed record ClaimSummaryPage(IReadOnlyList<ClaimSummary> Items, int Pag
 /// <c>ClaimDetail</c> (FR-033): the claim, its evidence, the latest evaluation and the review decisions.
 /// Members a role may not see are null and left out of the JSON (FR-005). From 002: the remedy once the claim is
 /// approved, its repair (with the repair's own ETag) when the remedy is Repair and, while it is
-/// <see cref="ClaimStatus.UnderReview"/>, the remedy preview of an approval.
+/// <see cref="ClaimStatus.UnderReview"/>, the remedy preview of an approval. From 003: the replacement (with its own
+/// ETag and the events allowed for the caller's role) when the claim has one.
 /// </summary>
 public sealed record ClaimDetail(
     Guid ClaimId,
@@ -58,7 +59,8 @@ public sealed record ClaimDetail(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyView? Remedy,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreview,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RepairView? Repair,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreviewWithProtectionPlan = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreviewWithProtectionPlan = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ReplacementView? Replacement = null);
 
 public sealed record ClaimCustomer(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FullName,
@@ -198,7 +200,8 @@ public sealed class ClaimQueries(
     IAdjudicationRepository adjudication,
     IReviewRepository reviews,
     RemedyQueries remedies,
-    RepairQueries repairs)
+    RepairQueries repairs,
+    ReplacementQueries replacements)
 {
     public const int DefaultPageSize = 25;
 
@@ -298,7 +301,8 @@ public sealed class ClaimQueries(
             await repairs.GetRepairAsync(claim, product, ct),
             claim.Status == ClaimStatus.UnderReview
                 ? await remedies.PreviewWithProtectionPlanAsync(claim, product, ct)
-                : null);
+                : null,
+            await replacements.GetReplacementAsync(claim, product, ct));
 
         return new ClaimDetailResult(detail, FormatETag(rowVersion));
     }
