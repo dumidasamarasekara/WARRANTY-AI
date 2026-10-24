@@ -30,6 +30,8 @@ remedies:
   repairNotEconomical: { limitPercentOfClaimValue: 60, allowed: [Refund, Replacement] }
   repairFailed: { afterFailedAttempts: 2, remedy: Refund }
   protectionPlan: { liftsAccidentalDamageExclusion: true, remedy: Repair }
+  replacement: { productRule: SameModel, returnRule: BeforeReservation, minimumCoverMonths: 6 }
+  replacementNotAvailable: { remedy: Refund }
 ---
 # Borealis Care Warranty (version 1)
 

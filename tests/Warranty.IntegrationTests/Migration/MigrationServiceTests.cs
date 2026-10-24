@@ -41,8 +41,8 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenants"] = 2,
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
-            ["catalog.products"] = 6,
-            ["catalog.product_serials"] = 120,
+            ["catalog.products"] = 7,
+            ["catalog.product_serials"] = 135,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
             ["claims.claims"] = 12,
@@ -107,9 +107,9 @@ public sealed class MigrationServiceTests : IAsyncLifetime
         await using var warranty = await OpenAsync("warranty");
 
         const string aurora =
-            """{ "coveredDefect": { "remedy": "Repair" }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Replacement" }, "protectionPlan": { "liftsAccidentalDamageExclusion": false } }""";
+            """{ "coveredDefect": { "remedy": "Repair" }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Replacement" }, "protectionPlan": { "liftsAccidentalDamageExclusion": false }, "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "AtCollection", "minimumCoverMonths": 0 }, "replacementNotAvailable": { "remedy": "Refund" } }""";
         const string borealis =
-            """{ "coveredDefect": { "remedy": "Repair" }, "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" }, "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" } }""";
+            """{ "coveredDefect": { "remedy": "Repair" }, "repairNotEconomical": { "limitPercentOfClaimValue": 60, "allowed": ["Refund", "Replacement"] }, "repairFailed": { "afterFailedAttempts": 2, "remedy": "Refund" }, "protectionPlan": { "liftsAccidentalDamageExclusion": true, "remedy": "Repair" }, "replacement": { "productRule": "SameModel", "returnRule": "BeforeReservation", "minimumCoverMonths": 6 }, "replacementNotAvailable": { "remedy": "Refund" } }""";
         await using (var versions = new NpgsqlCommand(
                          """
                          select p.code || ' v' || v.version,

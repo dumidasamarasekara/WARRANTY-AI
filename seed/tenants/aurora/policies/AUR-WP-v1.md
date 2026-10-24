@@ -31,6 +31,8 @@ remedies:
   coveredDefect: { remedy: Repair }
   repairFailed: { afterFailedAttempts: 2, remedy: Replacement }
   protectionPlan: { liftsAccidentalDamageExclusion: false }
+  replacement: { productRule: SameCategoryAtLeastClaimValue, returnRule: AtCollection, minimumCoverMonths: 0 }
+  replacementNotAvailable: { remedy: Refund }
 ---
 # Aurora Limited Warranty (version 1)
 
