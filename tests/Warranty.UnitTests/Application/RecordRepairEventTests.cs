@@ -22,12 +22,10 @@ namespace Warranty.UnitTests.Application;
 /// (412) and an event the current status does not allow (409 naming the status and the allowed events) — all without
 /// changing the repair. <c>MarkedReady</c> queues exactly one <c>RepairReadyForCollection</c> notification with the
 /// dedupe key <c>repair-ready:{attemptId}</c>; <c>Collected</c> completes the remedy. US2 events only; T248 and T256
-/// add the US3 and US5 events. All pending T239 (the domain transitions of T238 come first).
+/// add the US3 and US5 events. Implemented in T239.
 /// </summary>
 public sealed class RecordRepairEventTests
 {
-    private const string Pending = "Pending T239";
-
     private const string AgentSub = "agent-sub-t235";
     private const string AgentName = "Aurora Agent";
     private const uint RowVersion = 7341;
@@ -94,7 +92,7 @@ public sealed class RecordRepairEventTests
 
     // ── Reported time (FR-025) ─────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_in_the_future_is_refused()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -105,7 +103,7 @@ public sealed class RecordRepairEventTests
         ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_before_the_hand_over_is_refused()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -117,7 +115,7 @@ public sealed class RecordRepairEventTests
         ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_on_the_hand_over_day_or_now_is_accepted()
     {
         var (claim, _) = ArrangeAtRepairCentre();
@@ -147,7 +145,7 @@ public sealed class RecordRepairEventTests
         { "handOverWithLongReference", "centreReference" },
     };
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [MemberData(nameof(MissingOrInvalidFields))]
     public async Task Missing_or_invalid_event_fields_are_refused_naming_the_field(string request, string field)
     {
@@ -177,7 +175,7 @@ public sealed class RecordRepairEventTests
 
     // ── Tenant isolation (FR-022) ──────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_centre_of_another_tenant_is_not_found_and_records_ACCESS_DENIED()
     {
         var (claim, repair) = ArrangeAwaitingHandover();
@@ -191,7 +189,7 @@ public sealed class RecordRepairEventTests
         repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(SuggestedCentre);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_unknown_claim_or_a_claim_of_another_tenant_is_not_found()
     {
         (await UseCase().ExecuteAsync(MarkedReady() with { ClaimId = Guid.NewGuid() }, Ct))
@@ -207,7 +205,7 @@ public sealed class RecordRepairEventTests
 
     // ── Concurrency (FR-028, research R5) ──────────────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("*")]
@@ -224,7 +222,7 @@ public sealed class RecordRepairEventTests
         ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task The_remedy_ETag_is_not_the_repair_ETag()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -237,7 +235,7 @@ public sealed class RecordRepairEventTests
 
     // ── Refused transitions (FR-024) ───────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_event_the_status_does_not_allow_conflicts_naming_the_status_and_the_allowed_events()
     {
         var (claim, repair) = ArrangeAwaitingHandover();
@@ -254,7 +252,7 @@ public sealed class RecordRepairEventTests
         ShouldBeUnchanged(repair, RepairStatus.AwaitingHandover);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_claim_without_a_repair_conflicts()
     {
         var claim = NewClaim();
@@ -270,7 +268,7 @@ public sealed class RecordRepairEventTests
 
     // ── Recorded events ────────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_hand_over_moves_the_repair_to_the_centre_with_one_event_and_one_trail_entry_in_one_transaction()
     {
         var (claim, repair) = ArrangeAwaitingHandover();
@@ -290,7 +288,7 @@ public sealed class RecordRepairEventTests
         _notifications.ReceivedCalls().ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_centre_change_to_an_eligible_centre_of_the_tenant_is_recorded()
     {
         var (claim, repair) = ArrangeAwaitingHandover();
@@ -304,7 +302,7 @@ public sealed class RecordRepairEventTests
         await _securityEvents.DidNotReceiveWithAnyArgs().RecordAsync(default, default!, default, default, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Marking_ready_queues_one_ready_notification_keyed_by_the_attempt()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -321,7 +319,7 @@ public sealed class RecordRepairEventTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_ready_notification_already_queued_for_the_attempt_still_records_the_event()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -333,7 +331,7 @@ public sealed class RecordRepairEventTests
         repair.Status.ShouldBe(RepairStatus.ReadyForCollection);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Collection_completes_the_repair_and_the_remedy()
     {
         var (claim, repair) = ArrangeAtRepairCentre();
@@ -351,7 +349,7 @@ public sealed class RecordRepairEventTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
         var services = new ServiceCollection();
