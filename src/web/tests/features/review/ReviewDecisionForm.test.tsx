@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReviewDecisionForm, type ReviewDecisionFormProps } from '../../../src/features/review/ReviewDecisionForm'
 import type { ClaimDetail, ReviewDecisionKind } from '../../../src/features/review/reviewDecision'
-import { aiExplanation, claimId, reviewClaim } from '../../support/reviewClaims'
+import { aiExplanation, claimId, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
 
 interface Received {
   ifMatch: string | null
@@ -262,5 +262,74 @@ describe('ReviewDecisionForm', () => {
     await user.click(confirm('Approve claim'))
     await waitFor(() => expect(onDecided).toHaveBeenCalled())
     expect(path).toBe(claimId)
+  })
+
+  describe('remedy choice (002)', () => {
+    const remedyGroup = () => screen.queryByRole('radiogroup', { name: 'Remedy' })
+
+    it('lists only the allowed remedies and blocks approving until one is chosen', async () => {
+      onDecision(() => decided('Approve'))
+      const { user } = renderForm(claimWithRemedyPreview(), 'Approve')
+
+      const group = remedyGroup()!
+      const options = within(group).getAllByRole('radio')
+      expect(options.map((option) => option.getAttribute('value'))).toEqual(['Replacement', 'Refund'])
+      expect(within(group).queryByRole('radio', { name: /Repair/ })).not.toBeInTheDocument()
+      for (const option of options) expect(option).not.toBeChecked()
+      expect(confirm('Approve claim')).toBeDisabled()
+
+      await user.click(within(group).getByRole('radio', { name: /Refund/ }))
+      expect(confirm('Approve claim')).toBeEnabled()
+      await user.click(confirm('Approve claim'))
+
+      await waitFor(() => expect(received).toHaveLength(1))
+      expect(received[0]!.body).toEqual({ decision: 'Approve', claimantExplanation: aiExplanation, remedy: 'Refund' })
+    })
+
+    it('pre-selects the policy recommendation and sends it', async () => {
+      onDecision(() => decided('Approve'))
+      const { user } = renderForm(
+        claimWithRemedyPreview({ scenario: 'CoveredDefect', allowedRemedies: ['Repair'], recommendedRemedy: 'Repair', needsChoice: false, tableRow: 'coveredDefect' }),
+        'Approve',
+      )
+
+      const repair = within(remedyGroup()!).getByRole('radio', { name: /Repair/ })
+      expect(repair).toBeChecked()
+      expect(within(remedyGroup()!).getByText('set by policy')).toBeInTheDocument()
+      expect(confirm('Approve claim')).toBeEnabled()
+      await user.click(confirm('Approve claim'))
+
+      await waitFor(() => expect(received).toHaveLength(1))
+      expect(received[0]!.body).toEqual({ decision: 'Approve', claimantExplanation: aiExplanation, remedy: 'Repair' })
+    })
+
+    it('shows no remedy choice when rejecting or requesting information', async () => {
+      onDecision(() => decided('Reject', true))
+      const { user } = renderForm(claimWithRemedyPreview(), 'Reject')
+
+      expect(remedyGroup()).not.toBeInTheDocument()
+      await user.type(messageField(), 'The damage is not covered by your warranty.')
+      await user.type(justificationField()!, 'Photos show impact damage')
+      await user.click(confirm('Reject claim'))
+
+      await waitFor(() => expect(received).toHaveLength(1))
+      expect(received[0]!.body).not.toHaveProperty('remedy')
+    })
+
+    it('has no remedy choice for an information request', () => {
+      renderForm(claimWithRemedyPreview(), 'RequestInformation')
+      expect(remedyGroup()).not.toBeInTheDocument()
+    })
+
+    it('shows a 400 naming the allowed remedies on the remedy group', async () => {
+      onDecision(() => problem(400, { errors: { remedy: ['Choose one of: Replacement, Refund.'] } }))
+      const { user } = renderForm(claimWithRemedyPreview(), 'Approve')
+
+      await user.click(within(remedyGroup()!).getByRole('radio', { name: /Replacement/ }))
+      await user.click(confirm('Approve claim'))
+
+      expect(await screen.findByText('Choose one of: Replacement, Refund.')).toBeInTheDocument()
+      expect(remedyGroup()).toHaveAccessibleDescription('Choose one of: Replacement, Refund.')
+    })
   })
 })

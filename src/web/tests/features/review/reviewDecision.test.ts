@@ -3,10 +3,14 @@ import {
   buildRequestedItems,
   claimantMessagePrefill,
   decidingAiDecision,
+  initialRemedy,
   overridesAi,
+  remedyOptions,
+  remedyPendingReasonLabel,
   requiresJustification,
+  requiresRemedyChoice,
 } from '../../../src/features/review/reviewDecision'
-import { aiExplanation, reviewClaim } from '../../support/reviewClaims'
+import { aiExplanation, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
 
 describe('review decision rules', () => {
   it('treats only a valid APPROVE or REJECT as an AI decision', () => {
@@ -53,5 +57,34 @@ describe('review decision rules', () => {
       { item: 'PHOTO_OF_SERIAL_LABEL', reason: 'Please upload a photo of the label showing the serial number.' },
       { item: 'OTHER', reason: 'The original packaging' },
     ])
+  })
+
+  it("offers only the preview's allowed remedies and pre-selects the recommendation", () => {
+    expect(remedyOptions(reviewClaim())).toEqual([])
+    expect(remedyOptions(claimWithRemedyPreview())).toEqual(['Replacement', 'Refund'])
+    expect(initialRemedy(claimWithRemedyPreview())).toBeNull()
+    expect(
+      initialRemedy(claimWithRemedyPreview({ scenario: 'CoveredDefect', allowedRemedies: ['Repair'], recommendedRemedy: 'Repair', needsChoice: false })),
+    ).toBe('Repair')
+    expect(initialRemedy(claimWithRemedyPreview({ allowedRemedies: ['Refund'] }))).toBe('Refund')
+    expect(initialRemedy(claimWithRemedyPreview({ recommendedRemedy: 'Repair' }))).toBeNull()
+  })
+
+  it('requires a remedy choice only when approving with more than one allowed remedy', () => {
+    const choice = claimWithRemedyPreview()
+    expect(requiresRemedyChoice(choice, 'Approve')).toBe(true)
+    expect(requiresRemedyChoice(choice, 'Reject')).toBe(false)
+    expect(requiresRemedyChoice(choice, 'RequestInformation')).toBe(false)
+    expect(requiresRemedyChoice(claimWithRemedyPreview({ allowedRemedies: ['Repair'] }), 'Approve')).toBe(false)
+    expect(requiresRemedyChoice(claimWithRemedyPreview({ allowedRemedies: [] }), 'Approve')).toBe(false)
+    expect(requiresRemedyChoice(reviewClaim(), 'Approve')).toBe(false)
+  })
+
+  it('labels the reason a remedy waits for a reviewer', () => {
+    expect(remedyPendingReasonLabel('POLICY_CHOICE')).toBe('The policy allows more than one remedy')
+    expect(remedyPendingReasonLabel('NO_REMEDY_RULE')).toBe('No remedy rule applies')
+    expect(remedyPendingReasonLabel('REPAIR_FAILED_LIMIT')).toBe('Repair attempts limit reached')
+    expect(remedyPendingReasonLabel('REPAIR_NOT_ECONOMICAL')).toBe('Repair is not economical')
+    expect(remedyPendingReasonLabel(undefined)).toBe('Awaiting remedy decision')
   })
 })

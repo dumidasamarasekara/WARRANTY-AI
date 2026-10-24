@@ -42,6 +42,7 @@ function renderPage(path = '/staff/review') {
     [
       { path: '/staff/review/:claimId?', element: <ReviewQueuePage now={now} /> },
       { path: '/staff/claims/:claimId', element: <h1>Case file</h1> },
+      { path: '/staff/claims/:claimId/remedy', element: <h1>Remedy tab</h1> },
     ],
     { initialEntries: [path] },
   )
@@ -141,5 +142,50 @@ describe('ReviewQueuePage', () => {
     queueResponds(() => [])
     renderPage()
     expect(await screen.findByText('No claims waiting for review')).toBeInTheDocument()
+  })
+
+  it("lists remedy decisions with the Remedy badge and pending reason, opening the claim's Remedy tab", async () => {
+    const remedyClaimId = 'c0000000-0000-4000-8000-000000000003'
+    queueResponds(() => [
+      queueItem({
+        kind: 'RemedyDecision',
+        claimId: remedyClaimId,
+        reference: 'R3M3DY0001',
+        productName: 'Aurora Phone 12',
+        aiDecision: undefined,
+        confidence: undefined,
+        riskLevel: undefined,
+        escalationReasons: [],
+        remedyPendingReason: 'POLICY_CHOICE',
+        escalatedAt: '2026-10-06T07:00:00Z',
+      }),
+      queueItem(),
+    ])
+    const user = renderPage()
+
+    const queue = await screen.findByRole('navigation', { name: 'Review queue' })
+    const remedyCard = within(queue).getByRole('link', { name: /R3M3DY0001/ })
+    expect(remedyCard).toHaveAttribute('href', `/staff/claims/${remedyClaimId}/remedy`)
+    expect(remedyCard).toHaveTextContent('Remedy')
+    expect(remedyCard).toHaveTextContent('The policy allows more than one remedy')
+    expect(remedyCard).toHaveTextContent('Escalated 3 h ago')
+    expect(remedyCard).not.toHaveAttribute('aria-current')
+
+    // The oldest claim decision, not the remedy item, opens in the workspace.
+    expect(within(queue).getByRole('link', { name: /K7M2Q9X4TB/ })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('region', { name: 'Human review required' })).toBeInTheDocument()
+
+    await user.click(remedyCard)
+    expect(await screen.findByRole('heading', { name: 'Remedy tab' })).toBeInTheDocument()
+  })
+
+  it('shows no decision workspace when only remedy decisions are waiting', async () => {
+    queueResponds(() => [queueItem({ kind: 'RemedyDecision', remedyPendingReason: 'REPAIR_FAILED_LIMIT', escalationReasons: [] })])
+    renderPage()
+
+    const card = await screen.findByRole('link', { name: /K7M2Q9X4TB/ })
+    expect(card).toHaveTextContent('Repair attempts limit reached')
+    expect(screen.getByText('No claims waiting for a review decision. Open a remedy decision from the queue.')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Decision' })).not.toBeInTheDocument()
   })
 })

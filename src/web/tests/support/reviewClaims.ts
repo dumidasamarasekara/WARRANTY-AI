@@ -91,3 +91,19 @@ export function queueItem(overrides: Partial<ReviewQueueItem> = {}): ReviewQueue
     ...overrides,
   }
 }
+
+type RemedyPreview = NonNullable<ClaimDetail['remedyPreview']>
+
+/** A claim under review whose remedy preview offers `allowedRemedies` (002), recommending one only when given. */
+export function claimWithRemedyPreview(preview: Partial<RemedyPreview> = {}, overrides: Overrides = {}): ClaimDetail {
+  return {
+    ...reviewClaim(overrides),
+    remedyPreview: {
+      scenario: 'RepairNotEconomical',
+      allowedRemedies: ['Replacement', 'Refund'],
+      needsChoice: true,
+      tableRow: 'repairNotEconomical',
+      ...preview,
+    },
+  }
+}
