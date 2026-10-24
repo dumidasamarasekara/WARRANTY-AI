@@ -8,7 +8,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ClaimDetailPage } from '../../../src/features/claims/ClaimDetailPage'
 import type { ClaimDetail } from '../../../src/features/claims/claimDetail'
 import type { RemedyView, RepairCentre, RepairView } from '../../../src/features/remedy/remedyQueries'
-import { repairActions, repairEventOrigin } from '../../../src/features/remedy/remedyView'
+import {
+  estimateText,
+  failedAttemptsText,
+  isAboveEconomicLimit,
+  repairActions,
+  repairEventOrigin,
+} from '../../../src/features/remedy/remedyView'
 import { setStaffAccessTokenProvider } from '../../../src/shared/api/client'
 
 const auth = vi.hoisted(() => ({ roles: ['claims-agent'] as string[] }))
@@ -194,9 +200,26 @@ describe('repair actions', () => {
       { type: 'HandedOver', primary: true },
       { type: 'CentreChanged', primary: false },
     ])
-    expect(repairActions(atCentre)).toEqual([{ type: 'MarkedReady', primary: true }])
+    expect(repairActions(atCentre)).toEqual([
+      { type: 'EstimateReported', primary: false },
+      { type: 'MarkedReady', primary: true },
+      { type: 'RepairFailed', primary: false },
+    ])
     expect(repairActions({ allowedEvents: ['Collected'] })).toEqual([{ type: 'Collected', primary: true }])
+    expect(repairActions({ allowedEvents: ['NewAttemptStarted'] })).toEqual([{ type: 'NewAttemptStarted', primary: true }])
     expect(repairActions({ allowedEvents: [] })).toEqual([])
+  })
+
+  it('words failed attempts and the estimate against the economic limit', () => {
+    expect(failedAttemptsText({ failedAttempts: 1, attemptLimit: 2 })).toBe('1 of 2')
+    expect(failedAttemptsText({ failedAttempts: 0, attemptLimit: null })).toBe('0')
+    expect(estimateText({ latestEstimate: 310, economicLimitAmount: 288 }, 'USD')?.replace(/\s/g, ' ')).toBe('Estimate USD 310.00 · limit USD 288.00')
+    expect(estimateText({ economicLimitAmount: 288 }, 'USD')?.replace(/\s/g, ' ')).toBe('No estimate yet · limit USD 288.00')
+    expect(estimateText({ latestEstimate: 120 }, undefined)).toBe('Estimate 120.00 · no economic limit')
+    expect(estimateText({}, 'USD')).toBeUndefined()
+    expect(isAboveEconomicLimit(288, 288)).toBe(false)
+    expect(isAboveEconomicLimit(288.01, 288)).toBe(true)
+    expect(isAboveEconomicLimit(5000, undefined)).toBe(false)
   })
 
   it('words the event origin with source and both times', () => {
@@ -227,7 +250,9 @@ describe('RepairCard', () => {
     const card = await repairCard()
     expect(card.getByText('At repair centre')).toBeInTheDocument()
     expect(card.getByText('NRC-4411')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Mark ready'])
+    expect(actionNames()).toEqual(['Record estimate', 'Mark ready', 'Repair failed'])
+    expect(screen.getByRole('button', { name: 'Mark ready' }).className).toMatch(/primary/)
+    expect(screen.getByRole('button', { name: 'Repair failed' }).className).not.toMatch(/primary/)
     expect(screen.queryByRole('button', { name: 'Record hand-over' })).not.toBeInTheDocument()
 
     const timeline = within(screen.getByRole('list', { name: 'Repair events' }))
@@ -254,6 +279,130 @@ describe('RepairCard', () => {
 
     expect(await screen.findByRole('heading', { name: 'Remedy', level: 2 })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Repair', level: 2 })).not.toBeInTheDocument()
+  })
+})
+
+const failedOnce: RepairView = {
+  ...atCentre,
+  status: 'RepairNotPossible',
+  notPossibleReason: 'Failed',
+  failedAttempts: 1,
+  allowedEvents: ['NewAttemptStarted', 'Correction'],
+  etag: '"p-4"',
+}
+
+describe('Repair attempts and estimates (US3)', () => {
+  it('shows failed attempts against the limit and the estimate against the economic limit', async () => {
+    detail = approvedClaim({ ...atCentre, failedAttempts: 1, latestEstimate: 310, economicLimitAmount: 288 })
+    renderTab(['claims-agent'])
+
+    const card = await repairCard()
+    const attempts = within(card.getByRole('region', { name: 'Attempts' }))
+    expect(attempts.getByText('1 of 2')).toBeInTheDocument()
+    expect(await attempts.findByText('Estimate EUR 310.00 · limit EUR 288.00')).toBeInTheDocument()
+  })
+
+  it('shows no estimate line when the policy has no economic limit and nothing was estimated', async () => {
+    detail = approvedClaim(atCentre)
+    renderTab(['claims-agent'])
+
+    const attempts = within((await repairCard()).getByRole('region', { name: 'Attempts' }))
+    expect(attempts.getByText('0 of 2')).toBeInTheDocument()
+    expect(attempts.queryByText(/Estimate/)).not.toBeInTheDocument()
+  })
+
+  it('offers Start new attempt as the primary action after a failure below the limit', async () => {
+    detail = approvedClaim(failedOnce)
+    renderTab(['claims-agent'])
+
+    const card = await repairCard()
+    expect(card.getByText('Repair not possible')).toBeInTheDocument()
+    expect(actionNames()).toEqual(['Start new attempt'])
+    expect(screen.getByRole('button', { name: 'Start new attempt' }).className).toMatch(/primary/)
+  })
+
+  it('keeps the repair visible while the remedy awaits a reviewer after the last failure', async () => {
+    detail = {
+      ...approvedClaim({ ...failedOnce, failedAttempts: 2, allowedEvents: [] }),
+      remedy: {
+        ...remedy,
+        state: 'AwaitingDecision',
+        remedy: undefined,
+        recommendedRemedy: 'Replacement',
+        allowedRemedies: ['Replacement'],
+        scenario: 'RepairFailed',
+        tableRow: 'repairFailed',
+        pendingReason: 'REPAIR_FAILED_LIMIT',
+      },
+    }
+    renderTab(['claims-agent'])
+
+    const card = await repairCard()
+    expect(card.getByText('Repair not possible')).toBeInTheDocument()
+    expect(card.getByText('Repair failed')).toBeInTheDocument()
+    expect(within(card.getByRole('region', { name: 'Attempts' })).getByText('2 of 2')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Repair actions' })).not.toBeInTheDocument()
+    expect(screen.getByText(/The repair failed as many times as the policy allows/)).toBeInTheDocument()
+  })
+
+  it('records an estimate and warns when it is above the economic limit', async () => {
+    detail = approvedClaim({ ...atCentre, economicLimitAmount: 288 })
+    onEvent(() => HttpResponse.json(atCentre as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Record estimate')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    const submit = dialog.getByRole('button', { name: 'Record estimate' })
+    expect(submit).toBeDisabled()
+    expect(await dialog.findByText(/Economic limit: EUR 288\.00/)).toBeInTheDocument()
+
+    const amount = dialog.getByRole('spinbutton', { name: /Estimate/ })
+    await user.type(amount, '288')
+    expect(dialog.queryByText(/Above the economic limit/)).not.toBeInTheDocument()
+    await user.type(amount, '.01')
+    expect(dialog.getByText(/Above the economic limit/)).toBeInTheDocument()
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"p-2"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['estimateAmount', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'EstimateReported', source: 'Email', estimateAmount: 288.01 })
+  })
+
+  it('records a failed repair with a required reason', async () => {
+    detail = approvedClaim(atCentre)
+    onEvent(() => HttpResponse.json(failedOnce as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Repair failed')
+    expect(dialog.getByText(/Failed attempts so far: 0 of 2/)).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Repair failed' })
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'Fault')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), ' came back after the board swap.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.body).toMatchObject({ type: 'RepairFailed', source: 'Phone', reason: 'Fault came back after the board swap.' })
+    expect(events[0]!.body).not.toHaveProperty('repairCentreId')
+  })
+
+  it('starts a new attempt with where the product is', async () => {
+    detail = approvedClaim(failedOnce)
+    onEvent(() => HttpResponse.json({ ...atCentre, failedAttempts: 1 } as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Start new attempt')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Start new attempt' })
+    expect(submit).toBeDisabled()
+    await user.click(dialog.getByRole('radio', { name: 'The product was returned to the customer' }))
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"p-4"')
+    expect(events[0]!.body).toMatchObject({ type: 'NewAttemptStarted', source: 'Phone', productLocation: 'ReturnedToCustomer' })
   })
 })
 

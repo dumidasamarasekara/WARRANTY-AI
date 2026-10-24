@@ -1,6 +1,14 @@
-import { formatDateTime, remedyTypePresentation, type RemedyType } from '../../shared/presentation'
+import { formatDateTime, formatMoney, remedyTypePresentation, type RemedyType } from '../../shared/presentation'
 import type { Actor } from '../../shared/ui'
-import type { RemedyHistoryEntry, RemedyView, RepairEvent, RepairEventType, RepairView, ReportSource } from './remedyQueries'
+import type {
+  RemedyHistoryEntry,
+  RemedyView,
+  RepairEvent,
+  RepairEventRequest,
+  RepairEventType,
+  RepairView,
+  ReportSource,
+} from './remedyQueries'
 
 /** Limits of `RemedyDecisionRequest.reason` (002 rest-api delta). */
 export const remedyReasonLimits = { min: 10, max: 1000 } as const
@@ -113,24 +121,66 @@ export function repairEventOrigin(event: Pick<RepairEvent, 'reportedAt' | 'recor
   return `reported by ${reportSourceLabel(event.source).toLowerCase()} ${formatDateTime(event.reportedAt)} · recorded by ${event.actor} ${formatDateTime(event.recordedAt)}`
 }
 
-/** Event types this dialog records; T250 and T257 add the remaining ones. */
-export const repairDialogEvents = ['HandedOver', 'CentreChanged', 'MarkedReady', 'Collected'] as const satisfies readonly RepairEventType[]
+/** Event types this dialog records; T257 adds the remaining ones. */
+export const repairDialogEvents = [
+  'HandedOver',
+  'CentreChanged',
+  'EstimateReported',
+  'MarkedReady',
+  'RepairFailed',
+  'Collected',
+  'NewAttemptStarted',
+] as const satisfies readonly RepairEventType[]
 
 export type RepairDialogEvent = (typeof repairDialogEvents)[number]
 
 export const isRepairDialogEvent = (type: RepairEventType): type is RepairDialogEvent =>
   (repairDialogEvents as readonly RepairEventType[]).includes(type)
 
-/** Button and dialog title per event: the action, as ui-screens.md §6. */
+/** Button and dialog title per event: the action, in the button order of ui-screens.md §2. */
 export const repairActionLabels: Record<RepairDialogEvent, string> = {
   HandedOver: 'Record hand-over',
   CentreChanged: 'Change centre',
+  EstimateReported: 'Record estimate',
   MarkedReady: 'Mark ready',
+  RepairFailed: 'Repair failed',
   Collected: 'Record collection',
+  NewAttemptStarted: 'Start new attempt',
 }
 
 /** Happy-path order: the first allowed of these is the one primary button. */
-const happyPath: readonly RepairEventType[] = ['HandedOver', 'MarkedReady', 'Collected']
+const happyPath: readonly RepairEventType[] = ['HandedOver', 'MarkedReady', 'Collected', 'NewAttemptStarted']
+
+/** Where the product is when a new attempt starts (`RepairEventRequest.productLocation`). */
+export const productLocationLabels: Record<NonNullable<RepairEventRequest['productLocation']>, string> = {
+  AtCentre: 'The product stays at the repair centre',
+  ReturnedToCustomer: 'The product was returned to the customer',
+}
+
+/** "1 of 2"; just the count when the policy has no repairFailed row. */
+export const failedAttemptsText = (repair: Pick<RepairView, 'failedAttempts' | 'attemptLimit'>) =>
+  repair.attemptLimit === null ? `${repair.failedAttempts}` : `${repair.failedAttempts} of ${repair.attemptLimit}`
+
+const amount = (value: number, currency: string | undefined) =>
+  currency ? formatMoney(value, currency) : value.toFixed(2)
+
+/**
+ * The latest estimate against the economic limit (ui-screens.md §2): "Estimate USD 310.00 · limit USD 288.00".
+ * Undefined when there is neither an estimate nor a limit.
+ */
+export function estimateText(
+  repair: Pick<RepairView, 'latestEstimate' | 'economicLimitAmount'>,
+  currency: string | undefined,
+): string | undefined {
+  const { latestEstimate, economicLimitAmount } = repair
+  if (latestEstimate === undefined && economicLimitAmount === undefined) return undefined
+  const estimate = latestEstimate === undefined ? 'No estimate yet' : `Estimate ${amount(latestEstimate, currency)}`
+  const limit = economicLimitAmount === undefined ? 'no economic limit' : `limit ${amount(economicLimitAmount, currency)}`
+  return `${estimate} · ${limit}`
+}
+
+/** Strictly above the limit makes the repair not economical (data-model.md, FR-027). */
+export const isAboveEconomicLimit = (estimate: number, limit: number | undefined) => limit !== undefined && estimate > limit
 
 /** Action buttons in the contract's order, rendered only from `RepairView.allowedEvents`. */
 export function repairActions(repair: Pick<RepairView, 'allowedEvents'>): { type: RepairDialogEvent; primary: boolean }[] {
