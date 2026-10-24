@@ -213,3 +213,16 @@ public enum ModelProposalState
     Approved,
     Declined,
 }
+
+/// <summary>
+/// The staff role a replacement event is recorded with (the caller's <c>claims-agent</c>, <c>claims-reviewer</c> or
+/// <c>auditor</c> role; 003 FR-016, FR-024): agents and reviewers record replacement updates, only reviewers record
+/// <see cref="ReplacementEventType.ReturnAccepted"/>, <see cref="ReplacementEventType.ModelApproved"/> and
+/// <see cref="ReplacementEventType.ModelDeclined"/>, auditors record nothing.
+/// </summary>
+public enum StaffRole
+{
+    ClaimsAgent,
+    ClaimsReviewer,
+    Auditor,
+}

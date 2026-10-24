@@ -167,6 +167,156 @@ public sealed class Replacement
         return replacement;
     }
 
+    // Transitions (data-model.md, Replacement state machine). Role rules are checked first: an auditor records no
+    // event and a claims agent no reviewer-only event (ReturnAccepted, ModelApproved, ModelDeclined) — refused with an
+    // UnauthorizedAccessException (403). A transition not allowed from the current status throws an
+    // InvalidClaimTransitionException naming the current status and the allowed events (409). A refused event leaves
+    // the replacement unchanged; an allowed one appends exactly one ReplacementEvent and returns it.
+
+    /// <summary>
+    /// The staff event types allowed from the current status for <paramref name="role"/> (drives
+    /// <c>ReplacementView.allowedEvents</c> and the 409 detail): the rows of the data-model.md table, where
+    /// <see cref="ReplacementEventType.LocationChanged"/> needs <see cref="ReplacementStatus.AwaitingReturn"/> or
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>; <see cref="ReplacementEventType.ReturnRecorded"/>,
+    /// <see cref="ReplacementEventType.UnitReserved"/> and <see cref="ReplacementEventType.Moved"/> an active location;
+    /// <see cref="ReplacementEventType.ReturnRecorded"/> no recorded return, and outside <see cref="ReplacementStatus.AwaitingReturn"/>
+    /// the <see cref="ReplacementReturnRule.AtCollection"/> rule; <see cref="ReplacementEventType.ReturnAccepted"/> a
+    /// <see cref="ReturnState.Mismatch"/>; <see cref="ReplacementEventType.ModelProposed"/> the
+    /// <see cref="ReplacementProductRule.SameCategoryAtLeastClaimValue"/> rule and no pending proposal;
+    /// <see cref="ReplacementEventType.ModelApproved"/> and <see cref="ReplacementEventType.ModelDeclined"/> a pending proposal;
+    /// <see cref="ReplacementEventType.UnitReserved"/> and <see cref="ReplacementEventType.HandedToCustomer"/> no unresolved
+    /// mismatch; a correction is allowed in every status except <see cref="ReplacementStatus.HandedToCustomer"/> and
+    /// <see cref="ReplacementStatus.Cancelled"/>. Reviewer-only events are left out for a claims agent, every event for an
+    /// auditor; <see cref="ReplacementEventType.Cancelled"/> (system only) is never listed. Pending T325 (the whole list).
+    /// </summary>
+    public IReadOnlyList<ReplacementEventType> AllowedEvents(StaffRole role)
+        => throw new NotImplementedException($"Pending T325 ({Status}, {role}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.LocationChanged"/>: <see cref="ReplacementStatus.AwaitingReturn"/> or
+    /// <see cref="ReplacementStatus.AwaitingUnit"/> stays; the staff-chosen location becomes the only active location
+    /// (<see cref="LocationAssignment.ChosenByStaff"/>, reason required). Whether the location is an eligible replacement
+    /// location of the tenant is checked by the use case. Pending T325.
+    /// </summary>
+    public ReplacementEvent ChangeLocation(Guid serviceCenterId, string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T325 ({serviceCenterId}, {reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.ReturnRecorded"/>: the faulty product was returned to the active location on
+    /// <paramref name="returnedOn"/> with <paramref name="serialSeen"/>; <paramref name="serialMatches"/> is the use case's
+    /// <c>EvidenceMatchRules</c> comparison with the claim's serial (001 FR-016, FR-019). From
+    /// <see cref="ReplacementStatus.AwaitingReturn"/> (<see cref="ReplacementReturnRule.BeforeReservation"/>) a match moves to
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>; from <see cref="ReplacementStatus.AwaitingUnit"/> or
+    /// <see cref="ReplacementStatus.ReadyForCollection"/> (<see cref="ReplacementReturnRule.AtCollection"/> only) the status stays.
+    /// A match sets <see cref="ReturnState.Returned"/>; a mismatch sets <see cref="ReturnState.Mismatch"/> and keeps the status.
+    /// The return is recorded once (corrections go through events). Pending T325 (<see cref="ReplacementReturnRule.AtCollection"/>)
+    /// and T336 (<see cref="ReplacementReturnRule.BeforeReservation"/> and the mismatch).
+    /// </summary>
+    public ReplacementEvent RecordReturn(DateOnly returnedOn, string serialSeen, bool serialMatches, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T325/T336 ({returnedOn}, {serialSeen}, {serialMatches}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.ReturnAccepted"/> (claims reviewer only): a reviewer accepts a returned product whose
+    /// serial did not match (<see cref="ReturnState.Mismatch"/> → <see cref="ReturnState.Accepted"/>, reason required);
+    /// <see cref="ReplacementStatus.AwaitingReturn"/> → <see cref="ReplacementStatus.AwaitingUnit"/>, any other status stays.
+    /// That the reviewer did not submit the claim is checked by the use case. Pending T336.
+    /// </summary>
+    public ReplacementEvent AcceptReturn(string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T336 ({reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.ModelProposed"/>: <see cref="ReplacementStatus.AwaitingUnit"/> stays; adds a pending
+    /// proposal of <paramref name="productId"/> (reason required). Needs the
+    /// <see cref="ReplacementProductRule.SameCategoryAtLeastClaimValue"/> rule and no pending proposal; the model check
+    /// (<c>ReplacementPolicy.CheckModel</c>) is done by the use case. Pending T343.
+    /// </summary>
+    public ReplacementEvent ProposeModel(Guid productId, string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T343 ({productId}, {reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.ModelApproved"/> (claims reviewer only): <see cref="ReplacementStatus.AwaitingUnit"/> stays;
+    /// the pending proposal is approved and its model becomes <see cref="ApprovedProductId"/>. That the reviewer did not submit
+    /// the claim is checked by the use case. Pending T343.
+    /// </summary>
+    public ReplacementEvent ApproveModel(ReplacementReport report)
+        => throw new NotImplementedException($"Pending T343 ({report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.ModelDeclined"/> (claims reviewer only): <see cref="ReplacementStatus.AwaitingUnit"/> stays;
+    /// the pending proposal is declined (reason required). Pending T343.
+    /// </summary>
+    public ReplacementEvent DeclineModel(string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T343 ({reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.UnitReserved"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
+    /// <see cref="ReplacementStatus.ReadyForCollection"/>; reserves the next <see cref="ReplacementUnit"/> of
+    /// <paramref name="productId"/> with <paramref name="serialNumber"/> at the active location and makes it current. Needs an
+    /// active location and no unresolved mismatch. The use case resolves the model (the claimed one or
+    /// <see cref="ApprovedProductId"/>), checks the serial rules (FR-022) and queues the ready notification once per unit.
+    /// Pending T325.
+    /// </summary>
+    public ReplacementEvent ReserveUnit(Guid productId, string serialNumber, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T325 ({productId}, {serialNumber}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.UnitRefused"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>; the current unit ends as <see cref="ReplacementUnitResult.Refused"/>
+    /// (reason required). The remedy is unchanged (FR-027). Pending T355.
+    /// </summary>
+    public ReplacementEvent RefuseUnit(string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T355 ({reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.Moved"/>: from <see cref="ReplacementStatus.AwaitingReturn"/> (stays),
+    /// <see cref="ReplacementStatus.AwaitingUnit"/> (stays) or <see cref="ReplacementStatus.ReadyForCollection"/> (→
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>); another location becomes the only active one
+    /// (<see cref="LocationAssignment.Moved"/>, reason required) and a reserved current unit ends as
+    /// <see cref="ReplacementUnitResult.Released"/>. Needs an active location. Pending T355.
+    /// </summary>
+    public ReplacementEvent Move(Guid serviceCenterId, string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T355 ({serviceCenterId}, {reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.HandedToCustomer"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
+    /// <see cref="ReplacementStatus.HandedToCustomer"/> (final); the current unit ends as
+    /// <see cref="ReplacementUnitResult.HandedOver"/> on <paramref name="handedOverOn"/>. Refused while the return state is
+    /// <see cref="ReturnState.Mismatch"/>. Under <see cref="ReplacementReturnRule.AtCollection"/>,
+    /// <paramref name="returnConfirmed"/> must be true unless the product was already returned or is held by a repair centre
+    /// (an <see cref="ArgumentException"/> otherwise, FR-021); a confirmation records the return
+    /// (<see cref="ReturnState.Returned"/>). The use case completes the remedy and registers the serial. Pending T325.
+    /// </summary>
+    public ReplacementEvent HandToCustomer(DateOnly handedOverOn, bool returnConfirmed, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T325 ({handedOverOn}, {returnConfirmed}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.NotAvailable"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
+    /// <see cref="ReplacementStatus.NotAvailable"/> (final for the replacement; reason required). The use case evaluates the
+    /// <c>ReplacementNotAvailable</c> row and moves the remedy to <c>AwaitingDecision</c>. Pending T343.
+    /// </summary>
+    public ReplacementEvent MarkNotAvailable(string reason, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T343 ({reason}, {report}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.Cancelled"/> (system only, from a reviewer's remedy change, research R13): any status
+    /// except <see cref="ReplacementStatus.HandedToCustomer"/> and <see cref="ReplacementStatus.Cancelled"/> →
+    /// <see cref="ReplacementStatus.Cancelled"/> (final) with a <see cref="ReportSource.System"/> event referring to the remedy
+    /// decision; a reserved current unit ends as <see cref="ReplacementUnitResult.Cancelled"/> and the return stays recorded.
+    /// Pending T345.
+    /// </summary>
+    public ReplacementEvent Cancel(Guid remedyDecisionId, DateTimeOffset cancelledAt)
+        => throw new NotImplementedException($"Pending T345 ({remedyDecisionId}, {cancelledAt}).");
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.Correction"/> of the staff entry with sequence number <paramref name="correctsSeq"/> (any
+    /// status except <see cref="ReplacementStatus.HandedToCustomer"/> and <see cref="ReplacementStatus.Cancelled"/>, reason
+    /// required): applies the one corrected value of <paramref name="correction"/> and appends a correction that references the
+    /// entry; the corrected entry itself is never changed and no second ready notification is queued for the same unit (FR-017).
+    /// Pending T355.
+    /// </summary>
+    public ReplacementEvent Correct(int correctsSeq, string reason, ReplacementCorrection correction, ReplacementReport report)
+        => throw new NotImplementedException($"Pending T355 ({correctsSeq}, {reason}, {correction}, {report}).");
+
     /// <summary>The next gap-free event sequence number.</summary>
     internal int NextEventSeq => _events.Count == 0 ? 1 : _events.Max(e => e.Seq) + 1;
 
