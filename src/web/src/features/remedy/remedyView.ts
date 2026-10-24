@@ -19,6 +19,7 @@ const scenarioLabels: Record<RemedyView['scenario'], string> = {
   ProtectionPlanDamage: 'Protection plan damage',
   RepairNotEconomical: 'Repair not economical',
   RepairFailed: 'Repair failed',
+  ReplacementNotAvailable: 'Replacement not available',
 }
 
 export const scenarioLabel = (scenario: RemedyView['scenario']) => scenarioLabels[scenario] ?? scenario
@@ -37,6 +38,7 @@ const pendingCauses: Record<NonNullable<RemedyView['pendingReason']>, string> = 
   NO_REMEDY_RULE: 'The policy has no remedy rule for this case. ',
   REPAIR_FAILED_LIMIT: 'The repair failed as many times as the policy allows. ',
   REPAIR_NOT_ECONOMICAL: 'The repair estimate is above the policy’s economic limit. ',
+  REPLACEMENT_NOT_AVAILABLE: 'The replacement is not available. ',
 }
 
 /** The pending reason in words (ui-screens.md §2): "The policy allows Refund or Replacement; a reviewer chooses." */
@@ -239,7 +241,10 @@ export function repairActions(repair: Pick<RepairView, 'allowedEvents'>): { type
   return order.filter((type) => allowed.includes(type)).map((type) => ({ type, primary: type === primary }))
 }
 
-/** Remedies completed by a recorded completion; a Repair completes through its Collected event. */
+/**
+ * Remedies with a completion card. Only a Refund is completed by a recorded completion; a Repair completes
+ * through its Collected event and a Replacement through its HandedToCustomer event (003 research R12).
+ */
 export type CompletableRemedy = 'Replacement' | 'Refund'
 
 export const isCompletableRemedy = (remedy: RemedyType | undefined): remedy is CompletableRemedy =>

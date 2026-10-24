@@ -29,9 +29,11 @@ const pad = (value: number) => String(value).padStart(2, '0')
 /** `date` input value of a local day. */
 const localDate = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
-function CompletionForm({ claimId, remedy, onReload, onRecorded }: Omit<CompletionCardProps, 'canAct'> & { onRecorded: () => void }) {
+type CompletionFormProps = Omit<CompletionCardProps, 'canAct' | 'remedy'> & { remedy: RemedyView & { remedy: 'Refund' }; onRecorded: () => void }
+
+/** Only a Refund completes through this form; a Replacement completes through its HandedToCustomer event (003 research R12). */
+function CompletionForm({ claimId, remedy, onReload, onRecorded }: CompletionFormProps) {
   const copy = completionCopy[remedy.remedy]
-  const refund = remedy.remedy === 'Refund'
   // Today, refreshed whenever the user acts: the bound for 'not in the future'.
   const [today, setToday] = useState(() => localDate(new Date()))
   const [completedOn, setCompletedOn] = useState(today)
@@ -42,15 +44,14 @@ function CompletionForm({ claimId, remedy, onReload, onRecorded }: Omit<Completi
 
   const trimmedReference = reference.trim()
   const dateInFuture = completedOn !== '' && completedOn > today
-  const valid = completedOn !== '' && !dateInFuture && (!refund || trimmedReference !== '')
+  const valid = completedOn !== '' && !dateInFuture && trimmedReference !== ''
 
   const errors = { completedOn: fieldError(problem, 'completedOn'), reference: fieldError(problem, 'reference') }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (!valid || record.isPending) return
-    const request: RemedyCompletionRequest = { remedy: remedy.remedy, completedOn }
-    if (trimmedReference) request.reference = trimmedReference
+    const request: RemedyCompletionRequest = { remedy: remedy.remedy, completedOn, reference: trimmedReference }
     setProblem(null)
     record.mutate(
       { claimId, etag: remedy.etag, request },
@@ -118,9 +119,9 @@ function CompletionForm({ claimId, remedy, onReload, onRecorded }: Omit<Completi
         }}
       />
       <TextInput
-        label={refund ? 'Refund reference' : 'Reference (optional)'}
-        hint={refund ? 'The reference the refund option gave for this refund.' : undefined}
-        required={refund}
+        label="Refund reference"
+        hint="The reference the refund option gave for this refund."
+        required
         value={reference}
         error={errors.reference}
         onChange={(event) => {
@@ -139,8 +140,9 @@ function CompletionForm({ claimId, remedy, onReload, onRecorded }: Omit<Completi
 
 /**
  * Left column of the Remedy tab when the remedy is Replacement or Refund (002 ui-screens.md §2,
- * FR-034, FR-035): while `InProgress`, claims agents and reviewers record the completion date (and the
- * refund reference); once `Completed`, a read-only summary. Submits with `If-Match` = the remedy ETag.
+ * FR-034, FR-035): while a Refund is `InProgress`, claims agents and reviewers record the completion date and the
+ * refund reference; once `Completed`, a read-only summary. Submits with `If-Match` = the remedy ETag. A Replacement
+ * completes through its HandedToCustomer replacement event (003 research R12), so its card has no form.
  */
 export function CompletionCard({ claimId, remedy, canAct, onReload }: CompletionCardProps) {
   const copy = completionCopy[remedy.remedy]
@@ -175,8 +177,8 @@ export function CompletionCard({ claimId, remedy, canAct, onReload }: Completion
                 </div>
               </dl>
             </>
-          ) : canAct ? (
-            <CompletionForm claimId={claimId} remedy={remedy} onReload={onReload} onRecorded={() => setRecorded(true)} />
+          ) : canAct && remedy.remedy === 'Refund' ? (
+            <CompletionForm claimId={claimId} remedy={{ ...remedy, remedy: remedy.remedy }} onReload={onReload} onRecorded={() => setRecorded(true)} />
           ) : (
             <p className={styles.muted}>{copy.pending}</p>
           )}
