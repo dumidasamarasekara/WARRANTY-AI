@@ -346,9 +346,9 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
     /// <summary>
     /// A new claim like X1: a copy of the seeded X1 claim row with its own ID, reference, serial and email, the remedy
     /// Replacement decided by a reviewer on X1's policy version, and a replacement with X1's rules and status at X1's
-    /// suggested location (its <c>LocationSuggested</c> event included), as the executor creates it.
+    /// suggested location (its <c>LocationSuggested</c> event included), as the executor creates it. Also used by the 003\n    /// hand-over test of <see cref="US4_RemedyCompletionTests"/>, so that no test changes the seeded X1 or X5.
     /// </summary>
-    private async Task<(Guid ClaimId, string Reference)> CopyOfX1Async()
+    internal async Task<(Guid ClaimId, string Reference)> CopyOfX1Async()
     {
         var claimId = Guid.CreateVersion7();
         var reference = ClaimReference.Generate();
