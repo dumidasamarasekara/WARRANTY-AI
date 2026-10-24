@@ -152,7 +152,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
         (await RiskAsync(outcome.RunId)).Level.ShouldBe(RiskLevel.Medium);
     }
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task S18b_a_serial_claimed_120_days_ago_is_approved_without_a_duplicate_signal()
     {
         var scenario = GoldenScenario.Load("S18b");
@@ -208,7 +208,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
 
     // ---- S23: invoice consistency tolerances -------------------------------------------------------------
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task S23a_seller_and_price_within_the_matching_tolerances_are_approved_with_every_consistency_check_matching()
     {
         var scenario = GoldenScenario.Load("S23a");

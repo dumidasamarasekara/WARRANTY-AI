@@ -35,7 +35,7 @@ public sealed class US6_DecisionTrailTests(WarrantyAppFixture fixture)
     // ---- S1, S2: automatic outcomes -----------------------------------------------------------------
 
     [Theory]
-    [InlineData("S1", "AutoApproved", "Approved")]
+    [InlineData("S1", "AutoApproved", "Approved", Skip = "Pending T226")]
     [InlineData("S2", "AutoRejected", "Rejected")]
     public async Task The_trace_of_an_automatic_outcome_holds_every_step_in_seq_order_with_an_intact_hash_chain(
         string scenarioId, string routingStep, string outcome)

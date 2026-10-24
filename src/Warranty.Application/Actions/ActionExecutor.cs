@@ -3,10 +3,14 @@ using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Application.Claims;
+using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
 using Warranty.Guardrails;
+using Warranty.Guardrails.Remedies;
 using Warranty.Guardrails.Rules;
 
 namespace Warranty.Application.Actions;
@@ -37,11 +41,15 @@ public sealed class ActionExecutor(
     IAdjudicationRepository adjudication,
     IReviewRepository reviews,
     ICatalogRepository catalog,
+    IPolicyRepository policies,
     IServiceNetwork serviceNetwork,
-    IRepairRequestService repairRequests,
+    IRemedyRepository remedies,
+    IRepairRepository repairs,
+    IRefundService refunds,
     INotificationService notifications,
     IDecisionTrailWriter trail,
     IUnitOfWork unitOfWork,
+    RemedyPolicyEvaluator remedyEvaluator,
     TimeProvider time) : IActionExecutor
 {
     /// <summary>Notification template for an approved claim.</summary>
@@ -123,7 +131,7 @@ public sealed class ActionExecutor(
                 await trail.AppendAsync(
                     claim.Id, TrailStep.AutoApproved, Actor, "Claim approved automatically: every guardrail check passed.",
                     new { run.runId, run.round, outcome = nameof(FinalOutcome.Approved), decidedBy = nameof(DecidedBy.System) }, ct);
-                await CreateRepairRequestAsync(claim, Actor, ct);
+                await SetRemedyAsync(claim, Actor, now, ct);
                 await NotifyAsync(claim.Id, ApprovedTemplate, Actor, ct);
                 break;
 
@@ -228,7 +236,7 @@ public sealed class ActionExecutor(
         switch (decision.Decision)
         {
             case ReviewDecisionKind.Approve:
-                await CreateRepairRequestAsync(claim, actor, ct);
+                await SetRemedyAsync(claim, actor, now, ct);
                 await NotifyAsync(claim.Id, ApprovedTemplate, actor, ct);
                 break;
             case ReviewDecisionKind.Reject:
@@ -245,29 +253,111 @@ public sealed class ActionExecutor(
     };
 
     /// <summary>
-    /// <c>service_network_lookup</c> → <c>create_repair_request</c>. The approval stands without a
-    /// matching service center; the trail then records that no repair request was created.
+    /// Sets the remedy of a just-approved claim in the approval transaction (002 research R3, FR-009 – FR-011):
+    /// the applicable policy version's remedy rules are evaluated for the initial scenario (research R13). One
+    /// remedy is set by policy — Repair creates a <see cref="Repair"/> at the first eligible centre serving the
+    /// claim (it replaces the 001 simulated repair request, research R8), Refund asks the refund port once for the
+    /// claim value. A choice, a missing rule or missing facts leave the remedy awaiting a reviewer; the claim's
+    /// Approved outcome is never held back.
     /// </summary>
-    private async Task CreateRepairRequestAsync(Claim claim, string actor, CancellationToken ct)
+    private async Task SetRemedyAsync(Claim claim, string actor, DateTimeOffset now, CancellationToken ct)
     {
         var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
-        var center = claim.Region is { } region && product is not null
-            ? await serviceNetwork.FindServiceCenterAsync(region, product.Category, ct)
-            : null;
-
-        if (center is null)
+        var applicable = claim.Region is { } region
+            ? (await policies.GetVersionsAsync(ct)).Where(v => v.AppliesTo(claim.PurchaseDate, region, product?.Category)).ToList()
+            : [];
+        if (applicable.Count != 1)
         {
+            // A remedy row needs its policy version; without exactly one the reviewers resolve it from the claim.
             await trail.AppendAsync(
-                claim.Id, TrailStep.ActionExecuted, actor,
-                "No service center matches the claim's region and product category; no repair request was created.",
-                new { action = "service_network_lookup", serviceCenterFound = false }, ct);
+                claim.Id, TrailStep.RemedyRecommended, actor,
+                "No single applicable policy version: the remedy awaits a reviewer.",
+                new { policyVersionId = (Guid?)null, pendingReason = WireName.Of(RemedyPendingReason.NoRemedyRule) }, ct);
             return;
         }
 
-        var repairRequestId = await repairRequests.CreateAsync(claim.Id, center.Id, ct);
+        var version = applicable[0];
+        const RemedyScenario scenario = RemedyScenario.CoveredDefect;
+        var evaluation = remedyEvaluator.Evaluate(version.RemedyRules, scenario, claimValue: product?.ClaimValue);
+        var seq = (await remedies.GetDecisionsAsync(claim.Id, ct)).Count;
+        remedies.AddDecision(RemedyDecision.Evaluated(
+            Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
+            evaluation.AllowedRemedies, failedAttempts: 0, estimateAmount: null, now));
         await trail.AppendAsync(
-            claim.Id, TrailStep.ActionExecuted, actor, $"Simulated repair request created at {center.Name}.",
-            new { action = "create_repair_request", repairRequestId, serviceCenterId = center.Id }, ct);
+            claim.Id, TrailStep.RemedyRecommended, actor, RecommendationSummary(evaluation, version),
+            new
+            {
+                policyVersionId = version.Id,
+                policyVersion = version.Version,
+                scenario = scenario.ToString(),
+                tableRow = evaluation.TableRow,
+                allowedRemedies = evaluation.AllowedRemedies.Select(r => r.ToString()).ToArray(),
+                recommendation = evaluation.SingleRemedy?.ToString(),
+                pendingReason = evaluation.PendingReason is { } reason ? WireName.Of(reason) : null,
+            },
+            ct);
+
+        if (evaluation.AutomaticRemedy is not { } remedy)
+        {
+            remedies.Add(ClaimRemedy.AwaitDecision(
+                Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, evaluation.AllowedRemedies,
+                evaluation.PendingReason ?? RemedyPendingReason.NoRemedyRule, now));
+            return;
+        }
+
+        remedies.Add(ClaimRemedy.SetByPolicy(
+            Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, scenario, remedy, evaluation.AllowedRemedies, now));
+        remedies.AddDecision(RemedyDecision.Decided(
+            Guid.CreateVersion7(), claim.TenantId, claim.Id, ++seq, scenario, version.Id, evaluation.TableRow,
+            evaluation.AllowedRemedies, remedy, RemedyDecidedBy.Policy, RemedyDecision.SystemActor, reason: null,
+            failedAttempts: 0, estimateAmount: null, now));
+        await trail.AppendAsync(
+            claim.Id, TrailStep.RemedyDecided, actor,
+            $"Remedy {remedy} set by policy (version {version.Version}, row {evaluation.TableRow}).",
+            new { remedy = remedy.ToString(), decidedBy = nameof(RemedyDecidedBy.Policy), policyVersionId = version.Id, tableRow = evaluation.TableRow },
+            ct);
+
+        switch (remedy)
+        {
+            case RemedyType.Repair:
+                await CreateRepairAsync(claim, product, actor, now, ct);
+                break;
+            case RemedyType.Refund:
+                var amount = product?.ClaimValue ?? claim.PurchasePrice;
+                var refundRequestId = await refunds.RequestRefundAsync(claim.Id, amount, ct);
+                await trail.AppendAsync(
+                    claim.Id, TrailStep.ActionExecuted, actor, "Simulated refund requested.",
+                    new { action = "request_refund", refundRequestId, amount }, ct);
+                break;
+        }
+    }
+
+    /// <summary>The repair, suggested to the first active centre (priority, then name) that serves the claim; staff choose one otherwise.</summary>
+    private async Task CreateRepairAsync(Claim claim, Product? product, string actor, DateTimeOffset now, CancellationToken ct)
+    {
+        var centre = claim.Region is { } region && product is not null
+            ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ct)).FirstOrDefault(c => c.ServesClaim)
+            : null;
+        var repair = Repair.Create(Guid.CreateVersion7(), claim.TenantId, claim.Id, centre?.Id, now);
+        repairs.Add(repair);
+        if (centre is not null)
+        {
+            await trail.AppendAsync(
+                claim.Id, TrailStep.RepairCentreAssigned, actor, $"Repair centre suggested: {centre.Name}.",
+                new { repairId = repair.Id, serviceCenterId = centre.Id, serviceCenterName = centre.Name, assignment = nameof(HandoverAssignment.Suggested) },
+                ct);
+        }
+    }
+
+    private static string RecommendationSummary(RemedyEvaluation evaluation, PolicyVersion version)
+    {
+        var basis = $"policy version {version.Version}, row {evaluation.TableRow}";
+        return evaluation switch
+        {
+            { AutomaticRemedy: { } remedy } => $"Remedy {remedy} from the policy ({basis}).",
+            { AllowedRemedies.Count: > 0 } => $"The policy allows {string.Join(" or ", evaluation.AllowedRemedies)} ({basis}): a reviewer decides.",
+            _ => $"The policy gives no remedy for this claim ({basis}): a reviewer decides.",
+        };
     }
 
     /// <summary><c>notify_customer</c>: a simulated outbox row naming the template, never the explanation text.</summary>

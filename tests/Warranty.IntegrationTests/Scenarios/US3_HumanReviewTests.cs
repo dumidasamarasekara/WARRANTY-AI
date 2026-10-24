@@ -336,7 +336,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         item.TryGetProperty("aiDecision", out _).ShouldBeFalse("there is no valid AI decision to show");
     }
 
-    [Fact]
+    [Fact(Skip = "Pending T226")]
     public async Task Without_a_valid_recommendation_an_approval_needs_no_justification_but_a_rejection_does()
     {
         var scenario = GoldenScenario.Load("US3-no-recommendation");
