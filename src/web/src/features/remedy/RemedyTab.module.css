@@ -154,3 +154,10 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
+
+/* Repair card */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
