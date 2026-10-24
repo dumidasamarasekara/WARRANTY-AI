@@ -136,28 +136,42 @@ const today = () => {
 }
 
 describe('CompletionCard', () => {
-  it('records a Replacement hand-over with today’s date and If-Match on the remedy ETag', async () => {
-    onCompletion(() => HttpResponse.json({ ...replacement, state: 'Completed' } as object, { status: 201 }))
+  it('shows an in-progress Replacement without a completion form: it completes through its hand-over event', async () => {
+    renderTab(['claims-agent'])
+
+    const card = await completionCard()
+    expect(card.getByText('The replacement has not been handed to the customer yet.')).toBeInTheDocument()
+    expect(card.queryByRole('button', { name: 'Record completion' })).not.toBeInTheDocument()
+    expect(card.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('shows a completed Replacement read-only', async () => {
+    detail = approvedClaim({ ...replacement, state: 'Completed', completion: { completedOn: '2026-10-20', recordedBy: '[AGENT]' }, etag: '"r-6"' })
+    renderTab(['claims-agent'])
+
+    const card = await completionCard()
+    expect(card.getByText('Replacement handed to customer')).toBeInTheDocument()
+    expect(card.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('records a Refund with today’s date, the reference and If-Match on the remedy ETag', async () => {
+    detail = approvedClaim(refund)
+    onCompletion(() => HttpResponse.json({ ...refund, state: 'Completed' } as object, { status: 201 }))
     const user = renderTab(['claims-agent'])
 
     const card = await completionCard()
-    const date = card.getByLabelText(/Handed to customer on/) as HTMLInputElement
+    const date = card.getByLabelText(/Refund completed on/) as HTMLInputElement
     expect(date.value).toBe(today())
     expect(date.max).toBe(today())
-    expect(card.getByRole('textbox', { name: 'Reference (optional)' })).not.toBeRequired()
+    await user.type(card.getByRole('textbox', { name: /Refund reference/ }), 'RF-20261024-2')
 
-    detail = approvedClaim({
-      ...replacement,
-      state: 'Completed',
-      completion: { completedOn: today(), recordedBy: '[AGENT]' },
-      etag: '"r-6"',
-    })
+    detail = approvedClaim({ ...refund, state: 'Completed', completion: { completedOn: today(), reference: 'RF-20261024-2', recordedBy: '[AGENT]' }, etag: '"r-6"' })
     await user.click(card.getByRole('button', { name: 'Record completion' }))
 
     expect(await screen.findByText('Completion recorded')).toBeInTheDocument()
-    expect(completions).toEqual([{ ifMatch: '"r-3"', body: { remedy: 'Replacement', completedOn: today() } }])
+    expect(completions).toEqual([{ ifMatch: '"r-4"', body: { remedy: 'Refund', completedOn: today(), reference: 'RF-20261024-2' } }])
     const updated = await completionCard()
-    expect(updated.getByText('Replacement handed to customer')).toBeInTheDocument()
+    expect(updated.getByText('Refund completed')).toBeInTheDocument()
     expect(updated.queryByRole('button', { name: 'Record completion' })).not.toBeInTheDocument()
   })
 
@@ -230,11 +244,13 @@ describe('CompletionCard', () => {
         ? HttpResponse.json({ title: 'Conflict', status: 409, detail: 'The remedy is already completed.' }, { status: 409 })
         : attempt === 2
           ? HttpResponse.json({ title: 'Precondition failed', status: 412 }, { status: 412 })
-          : HttpResponse.json({ ...replacement, state: 'Completed' } as object, { status: 201 }),
+          : HttpResponse.json({ ...refund, state: 'Completed' } as object, { status: 201 }),
     )
+    detail = approvedClaim(refund)
     const user = renderTab(['claims-agent'])
 
     const card = await completionCard()
+    await user.type(card.getByRole('textbox', { name: /Refund reference/ }), 'RF-1')
     const submit = card.getByRole('button', { name: 'Record completion' })
     await user.click(submit)
     const conflict = await card.findByRole('alert')
@@ -246,12 +262,12 @@ describe('CompletionCard', () => {
       expect(card.getByRole('alert')).toHaveTextContent('This remedy changed since you opened it. Reload to see the latest status.'),
     )
 
-    detail = approvedClaim({ ...replacement, etag: '"r-8"' })
+    detail = approvedClaim({ ...refund, etag: '"r-8"' })
     await user.click(within(card.getByRole('alert')).getByRole('button', { name: 'Reload' }))
     await vi.waitFor(() => expect(card.queryByRole('alert')).not.toBeInTheDocument())
 
     await user.click(card.getByRole('button', { name: 'Record completion' }))
-    await vi.waitFor(() => expect(completions.map((completion) => completion.ifMatch)).toEqual(['"r-3"', '"r-3"', '"r-8"']))
+    await vi.waitFor(() => expect(completions.map((completion) => completion.ifMatch)).toEqual(['"r-4"', '"r-4"', '"r-8"']))
   })
 
   it('attaches 400 field errors to the fields', async () => {
@@ -261,9 +277,11 @@ describe('CompletionCard', () => {
         { status: 400 },
       ),
     )
+    detail = approvedClaim(refund)
     const user = renderTab(['claims-agent'])
 
     const card = await completionCard()
+    await user.type(card.getByRole('textbox', { name: /Refund reference/ }), 'RF-1')
     await user.click(card.getByRole('button', { name: 'Record completion' }))
 
     expect(await card.findByText('The completion date cannot be in the future.')).toBeInTheDocument()
