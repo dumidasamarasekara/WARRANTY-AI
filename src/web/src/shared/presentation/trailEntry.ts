@@ -67,6 +67,9 @@ const stepLabels: Record<TrailStep, string> = {
 
 const agentActors = new Set(['intake', 'evidence', 'policy', 'decision'])
 
+// The background adjudication principal and the deterministic risk step act without a person.
+const serviceActors = new Set(['adjudication-service', 'risk'])
+
 /** The parts of a `TraceEntry` the presentation needs. */
 export interface TrailEntryLike {
   step: string
@@ -79,10 +82,14 @@ export function trailStepLabel(step: string): string {
   return stepLabels[step as TrailStep] ?? step
 }
 
-/** `system` → System; an agent name or an entry with AI calls → AI; anyone else (a staff `sub`) → Human. */
+/**
+ * `system` → System; an agent name or an entry with AI calls → AI; the adjudication service or the
+ * deterministic risk step → System; anyone else (a staff `sub`, the claimant) → Human.
+ */
 export function trailActorTone(entry: TrailEntryLike): Actor {
   if (entry.actor === 'system') return 'system'
   if (agentActors.has(entry.actor) || (entry.aiCalls?.length ?? 0) > 0) return 'ai'
+  if (serviceActors.has(entry.actor)) return 'system'
   return 'human'
 }
 

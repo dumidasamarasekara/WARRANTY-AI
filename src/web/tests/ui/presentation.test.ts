@@ -94,6 +94,14 @@ describe('decision trail entries (§4.3)', () => {
     expect(trailActorTone({ step: 'ReviewerDecided', actor: '7c1e5d2a-staff-sub' })).toBe('human')
   })
 
+  it('shows the adjudication service and the deterministic risk step as system, not human', () => {
+    expect(trailActorTone({ step: 'RiskEvaluated', actor: 'risk' })).toBe('system')
+    for (const step of ['AutoApproved', 'EscalatedToReview', 'ActionExecuted']) {
+      expect(trailActorTone({ step, actor: 'adjudication-service' })).toBe('system')
+    }
+    expect(trailActorTone({ step: 'SupplementReceived', actor: 'claimant:3f2a' })).toBe('human')
+  })
+
   it('overrides the dot for failed AI steps and escalations', () => {
     expect(trailDotTone({ step: 'AiStepFailed', actor: 'decision' })).toBe('err')
     expect(trailDotTone({ step: 'EscalatedToReview', actor: 'system' })).toBe('human')
