@@ -85,6 +85,22 @@ public sealed class RepairHandover
     /// <summary>Ends this assignment (a centre change or transfer replaces it).</summary>
     internal void Deactivate() => IsActive = false;
 
+    /// <summary>A correction of the recorded hand-over date (the original repair event keeps the reported date).</summary>
+    internal void CorrectHandedOverOn(DateOnly handedOverOn) => HandedOverOn = handedOverOn;
+
+    /// <summary>A correction of the centre's job reference; an empty value clears it.</summary>
+    internal void CorrectCentreReference(string? centreReference)
+    {
+        var reference = string.IsNullOrWhiteSpace(centreReference) ? null : centreReference.Trim();
+        if (reference is { Length: > MaxCentreReferenceLength })
+        {
+            throw new ArgumentException(
+                $"A centre reference has at most {MaxCentreReferenceLength} characters.", nameof(centreReference));
+        }
+
+        CentreReference = reference;
+    }
+
     /// <summary>Records that the product was handed over to the centre, with the centre's job reference and a note.</summary>
     internal void RecordHandedOver(DateOnly handedOverOn, string? centreReference, string? note)
     {

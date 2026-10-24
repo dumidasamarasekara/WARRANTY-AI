@@ -7,7 +7,7 @@ namespace Warranty.Domain.Fulfillment;
 /// <summary>
 /// The repair of an approved claim whose remedy is Repair (<c>claims.repairs</c>), one per claim. Owns
 /// its hand-overs, attempts and append-only events; status changes follow the repair state machine in
-/// data-model.md and go only through this aggregate (the US5 transitions are added in T256).
+/// data-model.md and go only through this aggregate.
 /// </summary>
 public sealed class Repair
 {
@@ -107,16 +107,23 @@ public sealed class Repair
 
     /// <summary>
     /// The event types allowed from the current status (drives <c>RepairView.allowedEvents</c> and the 409 detail).
-    /// US2 and US3 events; T256 adds the US5 events. A hand-over needs an active centre; a new attempt follows only a
-    /// failure (whether the attempt limit allows it is decided by the remedy evaluation of the use case).
+    /// A hand-over and a transfer need an active centre; a new attempt follows only a failure (whether the attempt limit allows it is
+    /// decided by the remedy evaluation of the use case); a correction is allowed in every status except the final Collected.
     /// </summary>
     public IReadOnlyList<RepairEventType> AllowedEvents() => Status switch
     {
-        RepairStatus.AwaitingHandover when ActiveHandoverId is not null => [RepairEventType.CentreChanged, RepairEventType.HandedOver],
-        RepairStatus.AwaitingHandover => [RepairEventType.CentreChanged],
-        RepairStatus.AtRepairCentre => [RepairEventType.EstimateReported, RepairEventType.MarkedReady, RepairEventType.RepairFailed],
-        RepairStatus.ReadyForCollection => [RepairEventType.Collected],
-        RepairStatus.RepairNotPossible when NotPossibleReason == RepairNotPossibleReason.Failed => [RepairEventType.NewAttemptStarted],
+        RepairStatus.AwaitingHandover when ActiveHandoverId is not null =>
+            [RepairEventType.CentreChanged, RepairEventType.HandedOver, RepairEventType.Transferred, RepairEventType.Correction],
+        RepairStatus.AwaitingHandover => [RepairEventType.CentreChanged, RepairEventType.Correction],
+        RepairStatus.AtRepairCentre =>
+        [
+            RepairEventType.EstimateReported, RepairEventType.MarkedReady, RepairEventType.RepairFailed, RepairEventType.Transferred,
+            RepairEventType.Correction,
+        ],
+        RepairStatus.ReadyForCollection => [RepairEventType.Collected, RepairEventType.Correction],
+        RepairStatus.RepairNotPossible when NotPossibleReason == RepairNotPossibleReason.Failed =>
+            [RepairEventType.NewAttemptStarted, RepairEventType.Correction],
+        RepairStatus.RepairNotPossible => [RepairEventType.Correction],
         _ => [],
     };
 
@@ -365,21 +372,156 @@ public sealed class Repair
 
     /// <summary>
     /// <see cref="RepairEventType.Transferred"/>: from <see cref="RepairStatus.AwaitingHandover"/> or
-    /// <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.AwaitingHandover"/> with a new active hand-over
-    /// (<see cref="HandoverAssignment.Transfer"/>, reason required); the attempt count is unchanged. Pending T256.
+    /// <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.AwaitingHandover"/> with a new active hand-over at another
+    /// centre (<see cref="HandoverAssignment.Transfer"/>, reason required). The old hand-over stays in the history; nothing ends: an
+    /// open attempt continues at the new centre, so the attempt count is unchanged (FR-026). Whether the centre is an eligible
+    /// centre of the tenant is checked by the use case.
     /// </summary>
     public RepairEvent Transfer(Guid serviceCenterId, string reason, RepairReport report)
-        => throw new NotImplementedException($"Pending T256 ({serviceCenterId}, {reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (serviceCenterId == Guid.Empty)
+        {
+            throw new ArgumentException("A repair centre ID is required.", nameof(serviceCenterId));
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to transfer the repair.", nameof(reason));
+        }
+
+        if (Status is not (RepairStatus.AwaitingHandover or RepairStatus.AtRepairCentre))
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.Transferred} on a repair in status {Status}; allowed events: {Describe(AllowedEvents())}.");
+        }
+
+        var previous = ActiveHandover
+            ?? throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.Transferred} on a repair in status {Status} without an active repair centre; "
+                + $"allowed events: {Describe(AllowedEvents())}.");
+        if (previous.ServiceCenterId == serviceCenterId)
+        {
+            throw new ArgumentException("A transfer needs another repair centre than the active one.", nameof(serviceCenterId));
+        }
+
+        var from = Status;
+        var handover = AddHandover(serviceCenterId, HandoverAssignment.Transfer, reason, report.Actor, report.RecordedAt);
+        var attempt = CurrentAttempt is { IsOpen: true } open ? open : null;
+        attempt?.MoveTo(serviceCenterId);
+        Status = RepairStatus.AwaitingHandover;
+        return Append(
+            RepairEventType.Transferred,
+            from,
+            RepairStatus.AwaitingHandover,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["serviceCenterId"] = serviceCenterId,
+                ["previousServiceCenterId"] = previous.ServiceCenterId,
+                ["handoverId"] = handover.Id,
+                ["reason"] = handover.Reason,
+                ["attemptId"] = attempt?.Id,
+                ["attemptSeq"] = attempt?.Seq,
+            });
+    }
 
     /// <summary>
-    /// <see cref="RepairEventType.Correction"/> of the entry with sequence number <paramref name="correctsSeq"/> (any status except
-    /// <see cref="RepairStatus.Collected"/>, reason required): applies the one corrected value of <paramref name="correction"/> and
-    /// appends a correction that references the entry; the corrected entry itself is never changed (FR-027). A status correction
-    /// sends the latest status change back to its previous status and reopens the attempt it ended, so a ready mark recorded
-    /// again keeps the same attempt (and the same ready notification). Pending T256.
+    /// <see cref="RepairEventType.Correction"/> of the staff entry with sequence number <paramref name="correctsSeq"/> (any status
+    /// except <see cref="RepairStatus.Collected"/>, reason required): applies the one corrected value of <paramref name="correction"/>
+    /// and appends a correction that references the entry; the corrected entry itself is never changed (FR-027). A hand-over date or
+    /// centre reference corrects a <see cref="RepairEventType.HandedOver"/> entry's hand-over, an amount corrects an
+    /// <see cref="RepairEventType.EstimateReported"/> entry's attempt. A status correction sends the latest status change
+    /// (<see cref="RepairEventType.MarkedReady"/>, <see cref="RepairEventType.RepairFailed"/> or an uneconomical estimate) back to its
+    /// previous status and reopens the attempt it ended (a corrected failure is no longer counted), so a ready mark recorded again
+    /// keeps the same attempt and the same ready notification. Whether the remedy allows sending a failure back is checked by the
+    /// use case. An invalid correction throws an <see cref="ArgumentException"/> naming the request field.
     /// </summary>
     public RepairEvent Correct(int correctsSeq, string reason, RepairCorrection correction, RepairReport report)
-        => throw new NotImplementedException($"Pending T256 ({correctsSeq}, {reason}, {correction}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(correction);
+        ArgumentNullException.ThrowIfNull(report);
+        if (Status == RepairStatus.Collected)
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.Correction} on a repair in status {Status}; allowed events: {Describe(AllowedEvents())}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required for a correction.", nameof(reason));
+        }
+
+        var corrected = _events.SingleOrDefault(e => e.Seq == correctsSeq)
+            ?? throw new ArgumentException($"The repair has no entry {correctsSeq}.", nameof(correctsSeq));
+        if (corrected.Actor == RepairEvent.SystemActor || corrected.Type == RepairEventType.Correction)
+        {
+            throw new ArgumentException(
+                "Only an entry recorded by staff can be corrected; to correct a correction, correct the original entry again.",
+                nameof(correctsSeq));
+        }
+
+        if (correction.ValueCount != 1)
+        {
+            throw new ArgumentException(
+                "A correction sets exactly one corrected value: handedOverOn, centreReference, estimateAmount or toStatus.",
+                nameof(correction));
+        }
+
+        var from = Status;
+        var payload = new Dictionary<string, object?>
+        {
+            ["correctsSeq"] = corrected.Seq,
+            ["correctedType"] = corrected.Type.ToString(),
+            ["reason"] = reason.Trim(),
+        };
+
+        if (correction.HandedOverOn is { } handedOverOn)
+        {
+            var handover = HandoverOf(corrected, nameof(RepairCorrection.HandedOverOn));
+            payload["previousHandedOverOn"] = handover.HandedOverOn;
+            payload["handedOverOn"] = handedOverOn;
+            handover.CorrectHandedOverOn(handedOverOn);
+        }
+        else if (correction.CentreReference is { } centreReference)
+        {
+            var handover = HandoverOf(corrected, nameof(RepairCorrection.CentreReference));
+            payload["previousCentreReference"] = handover.CentreReference;
+            handover.CorrectCentreReference(centreReference);
+            payload["centreReference"] = handover.CentreReference;
+        }
+        else if (correction.EstimateAmount is { } estimateAmount)
+        {
+            const string field = "estimateAmount";
+            if (corrected.Type != RepairEventType.EstimateReported)
+            {
+                throw new ArgumentException($"An amount corrects an {RepairEventType.EstimateReported} entry, not {corrected.Type}.", field);
+            }
+
+            if (estimateAmount < 0)
+            {
+                throw new ArgumentException("An estimate cannot be negative.", field);
+            }
+
+            var attempt = AttemptOf(corrected, field);
+            payload["previousEstimateAmount"] = attempt.EstimateAmount;
+            payload["estimateAmount"] = estimateAmount;
+            attempt.CorrectEstimate(estimateAmount);
+        }
+        else
+        {
+            SendBack(corrected, correction.ToStatus!.Value, payload);
+        }
+
+        if (!string.IsNullOrWhiteSpace(report.ActorName))
+        {
+            payload["actorName"] = report.ActorName;
+        }
+
+        return AppendEvent(
+            RepairEventType.Correction, from, Status, report.ReportedAt, report.RecordedAt, report.Source, report.Actor, report.Note,
+            JsonSerializer.Serialize(payload), corrected.Id);
+    }
 
     /// <summary>The next gap-free event sequence number.</summary>
     internal int NextEventSeq => _events.Count == 0 ? 1 : _events.Max(e => e.Seq) + 1;
@@ -436,6 +578,77 @@ public sealed class Repair
     /// <summary>The allowed events as listed in a refusal.</summary>
     internal static string Describe(IReadOnlyList<RepairEventType> events)
         => events.Count == 0 ? "none" : string.Join(", ", events);
+
+    /// <summary>
+    /// Sends the latest status change <paramref name="corrected"/> back to its previous status <paramref name="toStatus"/> and reopens
+    /// the attempt it ended; a corrected failure is no longer counted.
+    /// </summary>
+    private void SendBack(RepairEvent corrected, RepairStatus toStatus, Dictionary<string, object?> payload)
+    {
+        const string field = "toStatus";
+        var latest = _events.Where(e => e.FromStatus is not null && e.FromStatus != e.ToStatus).MaxBy(e => e.Seq);
+        if (latest is null || latest.Seq != corrected.Seq || corrected.ToStatus != Status || corrected.FromStatus != toStatus)
+        {
+            throw new ArgumentException(
+                "Only the latest status change can be corrected, and only back to the status before it.", field);
+        }
+
+        if (corrected.Type is not (RepairEventType.MarkedReady or RepairEventType.RepairFailed or RepairEventType.EstimateReported))
+        {
+            throw new ArgumentException($"A {corrected.Type} entry cannot be sent back; correct its values instead.", field);
+        }
+
+        var attempt = AttemptOf(corrected, field);
+        if (attempt.Id != CurrentAttemptId)
+        {
+            throw new ArgumentException("Only the current attempt can be reopened.", field);
+        }
+
+        if (attempt.Result == AttemptResult.Failed)
+        {
+            FailedAttempts--;
+        }
+
+        payload["previousStatus"] = Status.ToString();
+        payload["toStatus"] = toStatus.ToString();
+        payload["attemptId"] = attempt.Id;
+        attempt.Reopen();
+        Status = toStatus;
+        NotPossibleReason = null;
+    }
+
+    /// <summary>The hand-over a <see cref="RepairEventType.HandedOver"/> entry recorded (its payload's <c>handoverId</c>).</summary>
+    private RepairHandover HandoverOf(RepairEvent corrected, string field)
+    {
+        var name = JsonNamingPolicy.CamelCase.ConvertName(field);
+        if (corrected.Type != RepairEventType.HandedOver)
+        {
+            throw new ArgumentException($"A {name} corrects a {RepairEventType.HandedOver} entry, not {corrected.Type}.", name);
+        }
+
+        var id = PayloadGuid(corrected, "handoverId");
+        return _handovers.SingleOrDefault(h => h.Id == id)
+            ?? throw new ArgumentException($"The hand-over of entry {corrected.Seq} is not known.", name);
+    }
+
+    /// <summary>The attempt an entry recorded (its payload's <c>attemptId</c>).</summary>
+    private RepairAttempt AttemptOf(RepairEvent corrected, string field)
+    {
+        var id = PayloadGuid(corrected, "attemptId");
+        return _attempts.SingleOrDefault(a => a.Id == id)
+            ?? throw new ArgumentException($"The attempt of entry {corrected.Seq} is not known.", field);
+    }
+
+    private static Guid? PayloadGuid(RepairEvent repairEvent, string property)
+    {
+        using var payload = JsonDocument.Parse(repairEvent.PayloadJson);
+        return payload.RootElement.ValueKind == JsonValueKind.Object
+            && payload.RootElement.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && value.TryGetGuid(out var id)
+                ? id
+                : null;
+    }
 
     /// <summary>The open attempt of a repair at the centre; refuses <paramref name="type"/> when none is open.</summary>
     private RepairAttempt OpenAttempt(RepairEventType type)

@@ -25,7 +25,8 @@ namespace Warranty.UnitTests.Application;
 /// (412) and an event the current status does not allow (409 naming the status and the allowed events) — all without
 /// changing the repair. <c>MarkedReady</c> queues exactly one <c>RepairReadyForCollection</c> notification with the
 /// dedupe key <c>repair-ready:{attemptId}</c>; <c>Collected</c> completes the remedy. A failure or an uneconomical estimate
-/// re-evaluates the remedy with the claim's own rules (T248). T256 adds the US5 events. Implemented in T239.
+/// re-evaluates the remedy with the claim's own rules (T248); transfers and corrections follow FR-026 and FR-027 (T256).
+/// Implemented in T239.
 /// </summary>
 public sealed class RecordRepairEventTests
 {
@@ -492,6 +493,84 @@ public sealed class RecordRepairEventTests
         repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
         _remedy.ShouldNotBeNull().State.ShouldBe(RemedyState.InProgress);
     }
+    // ── Transfers and corrections (US5, T256; FR-026, FR-027) ──────────────────────────────────
+
+    [Fact]
+    public async Task A_transfer_to_an_eligible_centre_keeps_the_attempt_and_a_centre_of_another_tenant_is_not_found()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var attempt = repair.CurrentAttempt.ShouldNotBeNull();
+
+        (await Execute(claim, Transferred() with { RepairCentreId = ForeignCentre })).ShouldBeOfType<RecordRepairEventResult.NotFound>();
+        await _securityEvents.Received(1).RecordAsync(
+            SecurityEventKind.AccessDenied, AgentName, Arg.Any<string?>(), Arg.Any<object?>(), Arg.Any<CancellationToken>());
+        ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
+
+        (await Execute(claim, Transferred())).ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        repair.Status.ShouldBe(RepairStatus.AwaitingHandover);
+        repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(OtherCentre);
+        (repair.CurrentAttempt, attempt.ServiceCenterId).ShouldBe((attempt, OtherCentre));
+        var entry = _entries.ShouldHaveSingleItem();
+        entry.Step.ShouldBe(TrailStep.RepairCentreAssigned);
+        entry.Payload.GetProperty("reason").GetString().ShouldBe(Reason);
+    }
+
+    [Fact]
+    public async Task A_transfer_to_the_active_centre_is_refused_naming_the_centre()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+
+        ShouldBeInvalid(await Execute(claim, Transferred() with { RepairCentreId = SuggestedCentre }), "repairCentreId");
+        ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
+    }
+
+    [Fact]
+    public async Task A_corrected_ready_mark_queues_no_notification_and_the_next_ready_mark_reuses_the_attempt_key()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var attemptId = repair.CurrentAttempt.ShouldNotBeNull().Id;
+        var marked = repair.MarkReady(Report(1));
+
+        var result = await Execute(claim, Correction(marked.Seq) with { ToStatus = RepairStatus.AtRepairCentre });
+
+        result.ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
+        _notifications.ReceivedCalls().ShouldBeEmpty();
+        var entry = _entries.ShouldHaveSingleItem();
+        (entry.Step, entry.Payload.GetProperty("correctsSeq").GetInt32()).ShouldBe((TrailStep.RepairStatusUpdated, marked.Seq));
+
+        (await Execute(claim, MarkedReady() with { ReportedAt = ReportedOn(3) })).ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        await _notifications.Received(1).EnqueueAsync(
+            claim.Id, "RepairReadyForCollection", $"repair-ready:{attemptId}", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_correction_naming_an_unknown_entry_or_a_value_that_does_not_fit_it_is_refused_naming_the_field()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        var handedOver = repair.Events.Single(e => e.Type == RepairEventType.HandedOver);
+
+        ShouldBeInvalid(await Execute(claim, Correction(99) with { HandedOverOn = HandedOverOn }), "correctsSeq");
+        ShouldBeInvalid(await Execute(claim, Correction(handedOver.Seq)), "correction");
+        ShouldBeInvalid(await Execute(claim, Correction(handedOver.Seq) with { EstimateAmount = 10m }), "estimateAmount");
+        ShouldBeUnchanged(repair, RepairStatus.AtRepairCentre);
+    }
+
+    [Fact]
+    public async Task A_failure_that_sent_the_remedy_to_a_reviewer_cannot_be_sent_back()
+    {
+        var (claim, repair) = ArrangeAtRepairCentre();
+        repair.RecordFailure("The display flickers again after the panel was replaced.", Report(1));
+        repair.StartNewAttempt(ProductLocation.AtCentre, Report(1));
+        (await Execute(claim, Failed())).ShouldBeOfType<RecordRepairEventResult.Recorded>();
+        var failed = repair.Events[^1];
+        _entries.Clear();
+
+        var result = await Execute(claim, Correction(failed.Seq) with { ToStatus = RepairStatus.AtRepairCentre, ReportedAt = ReportedOn(3) });
+
+        result.ShouldBeOfType<RecordRepairEventResult.Conflict>().Status.ShouldBe(RepairStatus.RepairNotPossible);
+        (repair.Status, repair.FailedAttempts).ShouldBe((RepairStatus.RepairNotPossible, 2));
+    }
     [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
@@ -534,6 +613,14 @@ public sealed class RecordRepairEventTests
     private static RecordRepairEventCommand NewAttempt()
         => Command(RepairEventType.NewAttemptStarted, day: 2) with { ProductLocation = ProductLocation.AtCentre };
 
+    private static RecordRepairEventCommand Transferred()
+        => Command(RepairEventType.Transferred, day: 2) with { RepairCentreId = OtherCentre, Reason = Reason };
+
+    private static RecordRepairEventCommand Correction(int correctsSeq)
+        => Command(RepairEventType.Correction, day: 2) with
+        {
+            CorrectsSeq = correctsSeq, Reason = "The entry was recorded by mistake; the centre confirmed it.",
+        };
     /// <summary>The remedy's policy version (<see cref="VersionId"/>, policy <paramref name="code"/>) carries <paramref name="rules"/>.</summary>
     private void UseRules(RemedyRules rules, string code)
     {

@@ -25,8 +25,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US5_TransferCorrectionTests(WarrantyAppFixture fixture)
 {
-    private const string PendingTransferAndCorrection = "Pending T256";
-
     private const string ReadyTemplate = "RepairReadyForCollection";
     private const string TransferReason = "Springfield cannot get the replacement panel for three weeks.";
     private const string CorrectionReason = "The hand-over date was typed in wrongly; the centre confirmed the real date.";
@@ -54,7 +52,7 @@ public sealed class US5_TransferCorrectionTests(WarrantyAppFixture fixture)
 
     // ---- R12: transfer after one failure, then a hand-over date correction -----------------------------
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public async Task R12_a_transfer_after_one_failure_leaves_one_active_centre_and_a_date_correction_keeps_the_original_entry()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -126,7 +124,7 @@ public sealed class US5_TransferCorrectionTests(WarrantyAppFixture fixture)
 
     // ---- Refusals (on R1, unchanged) ----------------------------------------------------------------
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public async Task A_transfer_to_a_Borealis_centre_from_an_Aurora_claim_is_not_found_and_records_ACCESS_DENIED()
     {
         var before = await RepairAsync(TestStaffUsers.AgentAurora, R1);
@@ -147,7 +145,7 @@ public sealed class US5_TransferCorrectionTests(WarrantyAppFixture fixture)
         (await RepairAsync(TestStaffUsers.AgentAurora, R1)).GetProperty("etag").GetString().ShouldBe(ETagOf(before));
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public async Task Transfers_and_corrections_without_a_reason_or_an_entry_to_correct_are_refused_naming_the_field()
     {
         var before = await RepairAsync(TestStaffUsers.AgentAurora, R1);
