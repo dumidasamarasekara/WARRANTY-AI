@@ -123,7 +123,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Tests for User Story 2 ⚠️ write first, ensure they fail
 
-- [ ] T234 [P] [US2] Write `tests/Warranty.UnitTests/Fulfillment/RepairStateMachineTests.cs`: every pair of status × event of the data-model.md table is allowed or refused as listed (US3/US5 events skipped as `Pending T246`/`Pending T256`); `allowedEvents` per status; `Collected` is final
+- [X] T234 [P] [US2] Write `tests/Warranty.UnitTests/Fulfillment/RepairStateMachineTests.cs`: every pair of status × event of the data-model.md table is allowed or refused as listed (US3/US5 events skipped as `Pending T246`/`Pending T256`); `allowedEvents` per status; `Collected` is final
 - [ ] T235 [P] [US2] Write `tests/Warranty.UnitTests/Application/RecordRepairEventTests.cs`: `reportedAt` in the future or before the hand-over → 400; missing event fields → 400; other tenant's centre → not found + `ACCESS_DENIED`; stale `If-Match` → 412; refused transition → 409 naming status and allowed events; MarkedReady queues one notification with key `repair-ready:{attemptId}`; Collected completes the remedy
 - [ ] T236 [P] [US2] Write `tests/Warranty.UnitTests/Fulfillment/ClaimantRemedyProjectionTests.cs`: labels of data-model.md "Claimant projection" for each state; the projection never contains notes, centre references, failure reasons, contact details or staff names
 - [ ] T237 [P] [US2] Write `tests/Warranty.IntegrationTests/Fulfillment/US2_RepairHandoverTests.cs` for R5, R6, R7 (parallel requests prove one status change and one notification row), R16 and R17

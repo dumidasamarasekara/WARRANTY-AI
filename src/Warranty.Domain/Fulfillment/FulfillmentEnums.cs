@@ -108,6 +108,16 @@ public enum HandoverAssignment
     Transfer,
 }
 
+/// <summary>Where the product is when a new repair attempt starts after a failure (<c>NewAttemptStarted</c>).</summary>
+public enum ProductLocation
+{
+    /// <summary>The product stayed at the repair centre: the new attempt starts there.</summary>
+    AtCentre,
+
+    /// <summary>The product was returned to the customer: it must be handed over again.</summary>
+    ReturnedToCustomer,
+}
+
 /// <summary>Outcome of a repair attempt; <see cref="Open"/> until the attempt ends.</summary>
 public enum AttemptResult
 {
