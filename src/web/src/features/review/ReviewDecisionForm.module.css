@@ -56,3 +56,8 @@
   font: var(--text-small);
   color: var(--color-text-secondary);
 }
+
+.planCheck {
+  display: grid;
+  gap: var(--space-1);
+}

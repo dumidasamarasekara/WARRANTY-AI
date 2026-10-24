@@ -145,3 +145,72 @@ describe('ClaimForm validation', { timeout: 20_000 }, () => {
     expect(body.getAll('photos')).toHaveLength(2)
   })
 })
+
+describe('ClaimForm protection plan (002 FR-036)', { timeout: 20_000 }, () => {
+  const planCheckbox = () => screen.getByRole('checkbox', { name: 'I have an additional protection plan' })
+  const claimPart = async (body: FormData) => JSON.parse(await (body.get('claim') as Blob).text()) as Record<string, unknown>
+
+  it('sends no plan when the box is left unticked', async () => {
+    const { user, submit } = renderForm()
+    await fillDetails(user)
+    await user.click(continueButton())
+    await fillEvidence(user)
+
+    expect(planCheckbox()).not.toBeChecked()
+    expect(screen.queryByLabelText('Protection plan document')).not.toBeInTheDocument()
+    await user.click(submitButton())
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
+    const body = submit.mock.calls[0]![0]
+    expect(await claimPart(body)).toMatchObject({ hasProtectionPlan: false })
+    expect(body.has('protectionPlanDocument')).toBe(false)
+  })
+
+  it('reveals the plan document drop and sends the plan with its document', async () => {
+    const { user, submit } = renderForm()
+    await fillDetails(user)
+    await user.click(continueButton())
+    await fillEvidence(user)
+
+    await user.click(planCheckbox())
+    await user.upload(screen.getByLabelText('Protection plan document'), file('plan.webp', 'image/webp'))
+    expect(screen.getByText("plan.webp can't be used: send a PDF, JPG or PNG file")).toBeInTheDocument()
+    await user.upload(screen.getByLabelText('Protection plan document'), file('plan.pdf', 'application/pdf'))
+    expect(screen.queryByText("plan.webp can't be used: send a PDF, JPG or PNG file")).not.toBeInTheDocument()
+    await user.click(submitButton())
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
+    const body = submit.mock.calls[0]![0]
+    expect(await claimPart(body)).toMatchObject({ hasProtectionPlan: true })
+    expect((body.get('protectionPlanDocument') as File).name).toBe('plan.pdf')
+  })
+
+  it('lets the staff form submit a stated plan without its document', async () => {
+    const { user, submit } = renderForm('staff')
+    await fillDetails(user)
+    await user.click(continueButton())
+    await fillEvidence(user)
+
+    await user.click(planCheckbox())
+    expect(screen.getByText(/the claim asks for it later/)).toBeInTheDocument()
+    await user.click(submitButton())
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1))
+    const body = submit.mock.calls[0]![0]
+    expect(await claimPart(body)).toMatchObject({ hasProtectionPlan: true })
+    expect(body.has('protectionPlanDocument')).toBe(false)
+  })
+
+  it('drops the document when the box is unticked', async () => {
+    const { user } = renderForm()
+    await fillDetails(user)
+    await user.click(continueButton())
+
+    await user.click(planCheckbox())
+    await user.upload(screen.getByLabelText('Protection plan document'), file('plan.pdf', 'application/pdf'))
+    await user.click(planCheckbox())
+    await user.click(planCheckbox())
+
+    expect(screen.queryByText('plan.pdf')).not.toBeInTheDocument()
+  })
+})

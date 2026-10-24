@@ -24,7 +24,7 @@ export const detailFields = [
 
 export type DetailField = (typeof detailFields)[number]
 export type TextField = DetailField | 'problemDescription'
-export type FormField = TextField | 'invoice' | 'photos'
+export type FormField = TextField | 'invoice' | 'photos' | 'protectionPlanDocument'
 
 export type ClaimFormValues = Record<TextField, string>
 export type ClaimFormErrors = Partial<Record<FormField, string>>
@@ -66,6 +66,9 @@ export const maxPhotos = 8
 export const maxFileBytes = 15 * 1024 * 1024
 export const fileHint = 'PDF, JPG, PNG or WebP · up to 15 MB each'
 export const acceptedFiles = 'application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp'
+/** The protection plan document (002 FR-036, contracts/ui-screens.md §5): a PDF, JPG or PNG. */
+export const planFileHint = 'Optional · PDF, JPG or PNG · up to 15 MB'
+export const acceptedPlanFiles = 'application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png'
 
 const maxLengths: Partial<Record<TextField, number>> = {
   'customer.fullName': 200,
@@ -167,6 +170,19 @@ export function checkFile(file: File): string | undefined {
   return undefined
 }
 
+const webpType = /^image\/webp$/i
+const webpExtension = /\.webp$/i
+
+/** {@link checkFile} for the protection plan document, which is a PDF, JPG or PNG only. */
+export function checkPlanFile(file: File): string | undefined {
+  const problem = checkFile(file)
+  if (problem) return problem.replace('a PDF, JPG, PNG or WebP file', 'a PDF, JPG or PNG file')
+  if (webpType.test(file.type) || (!file.type && webpExtension.test(file.name))) {
+    return `${file.name} can't be used: send a PDF, JPG or PNG file`
+  }
+  return undefined
+}
+
 /** Step 2: the description, one invoice and 1–8 photos. */
 export function validateEvidence(values: ClaimFormValues, invoice: File | null, photos: readonly File[]): ClaimFormErrors {
   const errors: ClaimFormErrors = {}
@@ -185,8 +201,11 @@ export function validateEvidence(values: ClaimFormValues, invoice: File | null, 
 
 const optional = (value: string) => value.trim() || undefined
 
-/** The `claim` part: trimmed values, codes in upper case, optional fields left out when empty. */
-export function toSubmissionData(values: ClaimFormValues): ClaimSubmissionData {
+/**
+ * The `claim` part: trimmed values, codes in upper case, optional fields left out when empty, and
+ * whether the claimant states an additional protection plan (002 FR-036).
+ */
+export function toSubmissionData(values: ClaimFormValues, hasProtectionPlan = false): ClaimSubmissionData {
   return {
     customer: {
       fullName: values['customer.fullName'].trim(),
@@ -209,16 +228,27 @@ export function toSubmissionData(values: ClaimFormValues): ClaimSubmissionData {
       country: values['purchase.country'].trim().toUpperCase(),
     },
     problemDescription: values.problemDescription.trim(),
-    hasProtectionPlan: false,
+    hasProtectionPlan,
   }
 }
 
-/** `ClaimSubmissionForm`: part `claim` as JSON, one `invoice` part and one `photos` part per photo. */
-export function buildClaimFormData(claim: ClaimSubmissionData, invoice: File, photos: readonly File[]): FormData {
+/**
+ * `ClaimSubmissionForm`: part `claim` as JSON, one `invoice` part, one `photos` part per photo and,
+ * when the claim states a protection plan and the claimant added it, a `protectionPlanDocument` part.
+ */
+export function buildClaimFormData(
+  claim: ClaimSubmissionData,
+  invoice: File,
+  photos: readonly File[],
+  protectionPlanDocument: File | null = null,
+): FormData {
   const body = new FormData()
   body.append('claim', new Blob([JSON.stringify(claim)], { type: 'application/json' }), 'claim.json')
   body.append('invoice', invoice, invoice.name)
   for (const photo of photos) body.append('photos', photo, photo.name)
+  if (claim.hasProtectionPlan && protectionPlanDocument) {
+    body.append('protectionPlanDocument', protectionPlanDocument, protectionPlanDocument.name)
+  }
   return body
 }
 
@@ -233,6 +263,8 @@ const fieldAliases: Record<string, FormField> = {
   problemdescription: 'problemDescription',
   invoice: 'invoice',
   photos: 'photos',
+  protectionplandocument: 'protectionPlanDocument',
+  hasprotectionplan: 'protectionPlanDocument',
 }
 for (const field of detailFields) fieldAliases[field.toLowerCase()] = field
 

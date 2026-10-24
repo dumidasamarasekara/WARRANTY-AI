@@ -107,3 +107,18 @@ export function claimWithRemedyPreview(preview: Partial<RemedyPreview> = {}, ove
     },
   }
 }
+
+/**
+ * A claim under review that states a protection plan (002 FR-036): without the plan the policy sets
+ * Repair; a confirmed plan lets the reviewer choose Replacement or Refund. `withPlanPreview: false`
+ * leaves out the plan preview (the policy does not let a plan lift the exclusion).
+ */
+export function claimWithProtectionPlan({ withPlanPreview = true } = {}): ClaimDetail {
+  return {
+    ...claimWithRemedyPreview({ scenario: 'CoveredDefect', allowedRemedies: ['Repair'], recommendedRemedy: 'Repair', needsChoice: false, tableRow: 'coveredDefect' }),
+    hasProtectionPlan: true,
+    remedyPreviewWithProtectionPlan: withPlanPreview
+      ? { scenario: 'ProtectionPlanDamage', allowedRemedies: ['Replacement', 'Refund'], needsChoice: true, tableRow: 'protectionPlan' }
+      : undefined,
+  }
+}

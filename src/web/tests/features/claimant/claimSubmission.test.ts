@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildClaimFormData,
   checkFile,
+  checkPlanFile,
   emptyClaimFormValues,
   fieldForProblemKey,
   toSubmissionData,
@@ -133,5 +135,33 @@ describe('fieldForProblemKey', () => {
     expect(fieldForProblemKey('$.photos[2]')).toBe('photos')
     expect(fieldForProblemKey('claim.description')).toBe('problemDescription')
     expect(fieldForProblemKey('tenantId')).toBeUndefined()
+  })
+})
+
+describe('protection plan (002 FR-036)', () => {
+  it('states the plan in the claim part when the claimant ticks it', () => {
+    expect(toSubmissionData(valid, true).hasProtectionPlan).toBe(true)
+    expect(toSubmissionData(valid).hasProtectionPlan).toBe(false)
+  })
+
+  it('sends the plan document only with a stated plan', () => {
+    const invoice = photo('invoice.pdf', 'application/pdf')
+    const plan = photo('plan.pdf', 'application/pdf')
+    const withPlan = buildClaimFormData(toSubmissionData(valid, true), invoice, [], plan)
+    expect((withPlan.get('protectionPlanDocument') as File).name).toBe('plan.pdf')
+    expect(buildClaimFormData(toSubmissionData(valid, false), invoice, [], plan).has('protectionPlanDocument')).toBe(false)
+    expect(buildClaimFormData(toSubmissionData(valid, true), invoice, []).has('protectionPlanDocument')).toBe(false)
+  })
+
+  it('takes a PDF, JPG or PNG plan document only', () => {
+    expect(checkPlanFile(photo('plan.pdf', 'application/pdf'))).toBeUndefined()
+    expect(checkPlanFile(photo('plan.png', 'image/png'))).toBeUndefined()
+    expect(checkPlanFile(photo('plan.webp', 'image/webp'))).toBe("plan.webp can't be used: send a PDF, JPG or PNG file")
+    expect(checkPlanFile(photo('plan.txt', 'text/plain'))).toBe("plan.txt can't be used: send a PDF, JPG or PNG file")
+  })
+
+  it('attaches API errors about the plan document to its field', () => {
+    expect(fieldForProblemKey('protectionPlanDocument')).toBe('protectionPlanDocument')
+    expect(fieldForProblemKey('claim.hasProtectionPlan')).toBe('protectionPlanDocument')
   })
 })

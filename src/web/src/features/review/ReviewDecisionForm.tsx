@@ -9,6 +9,7 @@ import {
   claimantMessagePrefill,
   decidingAiDecision,
   initialRemedy,
+  offersProtectionPlanCheck,
   justificationLimits,
   overridesAi,
   remedyOptions,
@@ -88,8 +89,10 @@ export function ReviewDecisionForm({
   const needsJustification = requiresJustification(claim, decision)
   const requestsInformation = decision === 'RequestInformation'
   const approving = decision === 'Approve'
-  const remedies = approving ? remedyOptions(claim) : []
-  const needsRemedy = requiresRemedyChoice(claim, decision)
+  const offersPlanCheck = offersProtectionPlanCheck(claim, decision)
+  const [planConfirmed, setPlanConfirmed] = useState(false)
+  const remedies = approving ? remedyOptions(claim, planConfirmed) : []
+  const needsRemedy = requiresRemedyChoice(claim, decision, planConfirmed)
 
   const [message, setMessage] = useState(() => (needsMessage ? claimantMessagePrefill(claim, decision) : ''))
   const [justification, setJustification] = useState('')
@@ -128,6 +131,7 @@ export function ReviewDecisionForm({
           claimantExplanation: needsMessage ? message.trim() : undefined,
           requestedItems: requestsInformation ? buildRequestedItems(items, otherReason) : undefined,
           remedy: approving && remedy !== null ? remedy : undefined,
+          protectionPlanConfirmed: offersPlanCheck ? planConfirmed : undefined,
         },
       },
       {
@@ -250,6 +254,29 @@ export function ReviewDecisionForm({
           </>
         )}
 
+        {offersPlanCheck && (
+          <div className={styles.planCheck}>
+            <label className={styles.item}>
+              <input
+                type="checkbox"
+                checked={planConfirmed}
+                aria-describedby="protection-plan-hint"
+                onChange={(event) => {
+                  const confirmed = event.target.checked
+                  setPlanConfirmed(confirmed)
+                  // The plan may change which remedies the policy allows (research.md R9).
+                  setRemedy(initialRemedy(claim, confirmed))
+                }}
+              />
+              <span>Protection plan checked</span>
+            </label>
+            <p id="protection-plan-hint" className={styles.hint}>
+              The claimant states an additional protection plan. Tick this once you have checked the plan document in
+              the claim's evidence.
+            </p>
+          </div>
+        )}
+
         {remedies.length > 0 && (
           <fieldset
             className={styles.items}
@@ -283,7 +310,8 @@ export function ReviewDecisionForm({
           </fieldset>
         )}
 
-        {needsMessage && (          <TextArea
+        {needsMessage && (
+          <TextArea
             label="Message to the claimant"
             hint="Shown to the claimant. Don't mention risk or fraud checks."
             required

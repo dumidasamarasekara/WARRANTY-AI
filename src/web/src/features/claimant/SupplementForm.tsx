@@ -3,9 +3,19 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { ApiProblem } from '../../shared/api/client'
 import { requestedItemLabel } from '../../shared/presentation'
 import { Alert, Button, FileDrop, TextArea, type FileDropItem } from '../../shared/ui'
-import { acceptedFiles, checkFile, fileHint, maxPhotos, type SubmissionAccepted } from './claimSubmission'
+import {
+  acceptedFiles,
+  acceptedPlanFiles,
+  checkFile,
+  checkPlanFile,
+  fileHint,
+  maxPhotos,
+  planFileHint,
+  type SubmissionAccepted,
+} from './claimSubmission'
 import {
   buildSupplementFormData,
+  requestsProtectionPlanDocument,
   supplementFieldForProblemKey,
   supplementNoteMax,
   validateSupplement,
@@ -123,6 +133,8 @@ export function SupplementForm({ variant, requestedItems, submit, onSubmitted, o
   const [note, setNote] = useState('')
   const [invoice, setInvoice] = useState<PickedFile | null>(null)
   const [photos, setPhotos] = useState<PickedFile[]>([])
+  const [planDocument, setPlanDocument] = useState<PickedFile | null>(null)
+  const planRequested = requestsProtectionPlanDocument(requestedItems)
   const [errors, setErrors] = useState<SupplementErrors>({})
   const [focusRequest, setFocusRequest] = useState(0)
   const formRef = useRef<HTMLFormElement>(null)
@@ -153,6 +165,14 @@ export function SupplementForm({ variant, requestedItems, submit, onSubmitted, o
     setErrors((current) => withError(withError(current, 'invoice', problem), 'form', undefined))
   }
 
+  function pickPlanDocument(files: File[]) {
+    const file = files[0]
+    if (!file) return
+    const problem = checkPlanFile(file)
+    if (!problem) setPlanDocument(pick(file))
+    setErrors((current) => withError(withError(current, 'protectionPlanDocument', problem), 'form', undefined))
+  }
+
   function addPhotos(files: File[]) {
     const accepted: PickedFile[] = []
     let problem: string | undefined
@@ -174,13 +194,14 @@ export function SupplementForm({ variant, requestedItems, submit, onSubmitted, o
     event.preventDefault()
     if (pending) return
     const pickedPhotos = photos.map((photo) => photo.file)
-    const found = validateSupplement(note, invoice?.file ?? null, pickedPhotos)
+    const plan = planRequested ? (planDocument?.file ?? null) : null
+    const found = validateSupplement(note, invoice?.file ?? null, pickedPhotos, plan, planRequested)
     setErrors(found)
     if (Object.keys(found).length > 0) {
       setFocusRequest((previous) => previous + 1)
       return
     }
-    submission.mutate(buildSupplementFormData(note, invoice?.file ?? null, pickedPhotos))
+    submission.mutate(buildSupplementFormData(note, invoice?.file ?? null, pickedPhotos, plan))
   }
 
   return (
@@ -237,6 +258,18 @@ export function SupplementForm({ variant, requestedItems, submit, onSubmitted, o
         onFiles={addPhotos}
         onRemove={(key) => setPhotos(photos.filter((photo) => photo.key !== key))}
       />
+      {planRequested && (
+        <FileDrop
+          label="Protection plan document"
+          hint={planFileHint}
+          accept={acceptedPlanFiles}
+          files={planDocument ? [toItem(planDocument)] : []}
+          error={errors.protectionPlanDocument}
+          disabled={pending}
+          onFiles={pickPlanDocument}
+          onRemove={() => setPlanDocument(null)}
+        />
+      )}
       {variant === 'claimant' && (
         <p className={styles.note}>Your documents are stored securely and used only to process this claim.</p>
       )}
