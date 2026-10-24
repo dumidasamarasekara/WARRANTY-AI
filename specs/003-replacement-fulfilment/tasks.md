@@ -84,7 +84,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 
 - [ ] T314 [P] Extend `tests/Warranty.UnitTests/Domain/RemedyRulesTests.cs` (valid schema examples; defaults when `replacement` is absent; `minimumCoverMonths` −1 or 37, unknown rule values, `remedy` and `allowed` together in `replacementNotAvailable` all throw) and `tests/Warranty.UnitTests/Seed/SeedFilesTests.cs` / `SeedDataTests.cs` for the replacement rules, `issuesReplacements` and `AUR-TAB11`
 - [ ] T315 [P] Extend `tests/Warranty.IntegrationTests/Isolation/RowLevelSecurityTests.cs` with raw-SQL probes as the other tenant on every new table, add an append-only check for `audit.replacement_events`, and extend `tests/Warranty.IntegrationTests/Migration/MigrationServiceTests.cs` to assert seeded replacement rules per version and at least one replacement location per region and product category (FR-038)
-- [ ] T316 [P] Add architecture rules that only `ActionExecutor` creates or cancels a `Replacement` and that `Warranty.Guardrails/Remedies` references no AI project in `tests/Warranty.UnitTests/Architecture/DependencyRulesTests.cs`
+- [X] T316 [P] Add architecture rules that only `ActionExecutor` creates or cancels a `Replacement` and that `Warranty.Guardrails/Remedies` references no AI project in `tests/Warranty.UnitTests/Architecture/DependencyRulesTests.cs`
 
 **Checkpoint**: migration applies, seed loads replacement rules, locations and `AUR-TAB11`, RLS covers the new tables
 
