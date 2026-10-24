@@ -348,7 +348,7 @@ public sealed class ReplacementStateMachineTests
 
     // ── HandedToCustomer (and Cancelled) are final ─────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T325")]
+    [Fact]
     public void HandedToCustomer_is_final()
     {
         var replacement = ReplacementAt(Stage.HandedToCustomer);
@@ -381,7 +381,7 @@ public sealed class ReplacementStateMachineTests
 
     // ── Rules of the US1 transitions ───────────────────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T325")]
+    [Fact]
     public void A_location_change_makes_the_chosen_location_the_only_active_one()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnit);
@@ -396,7 +396,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Locations.Count(l => l.IsActive).ShouldBe(1);
     }
 
-    [Theory(Skip = "Pending T325")]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -410,7 +410,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Events.Count.ShouldBe(1);
     }
 
-    [Fact(Skip = "Pending T325")]
+    [Fact]
     public void A_reservation_needs_an_active_location()
     {
         var replacement = Create(ReplacementReturnRule.AtCollection, ReplacementStatus.AwaitingUnit, suggestedLocation: null);
@@ -425,7 +425,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Events.ShouldBeEmpty();
     }
 
-    [Fact(Skip = "Pending T325")]
+    [Fact]
     public void A_reservation_makes_the_unit_current_at_the_active_location_and_the_hand_over_ends_it_as_handed_over()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnit);
@@ -444,7 +444,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Events.Select(e => e.Seq).ShouldBe([1, 2, 3]);
     }
 
-    [Fact(Skip = "Pending T325")]
+    [Fact]
     public void Under_AtCollection_the_hand_over_needs_the_return_confirmed_unless_it_was_recorded()
     {
         var replacement = ReplacementAt(Stage.ReadyForCollection);
@@ -481,16 +481,13 @@ public sealed class ReplacementStateMachineTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). Every later story builds on
-    /// US1 (T325), and the cancellation (T345) on the US3 transitions (T343), so those are named only on their own.
+    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325) is implemented, and
+    /// the cancellation (T345) builds on the US3 transitions (T343), so T343 is named only on its own.
     /// </summary>
     private static string? Pending(string?[] tasks)
     {
         var pending = tasks.OfType<string>().Distinct().ToList();
-        if (pending.Count > 1)
-        {
-            pending.Remove(T325);
-        }
+        pending.Remove(T325);
 
         if (pending.Contains(T345))
         {
