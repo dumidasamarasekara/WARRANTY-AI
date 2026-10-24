@@ -33,7 +33,6 @@ namespace Warranty.UnitTests.Application;
 /// </summary>
 public sealed class RecordReplacementEventTests
 {
-    private const string Pending = "Pending T326";
     private const string AgentSub = "agent-sub-t319";
     private const string AgentName = "Aurora Agent";
     private const uint RowVersion = 8312;
@@ -128,7 +127,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Reported time (FR-015) ─────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_in_the_future_is_refused()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -139,7 +138,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_before_the_replacement_was_set_up_is_refused()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -150,7 +149,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_before_the_step_it_follows_is_refused()
     {
         var (claim, replacement) = ArrangeReadyForCollection();
@@ -162,7 +161,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.ReadyForCollection);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_reportedAt_at_the_step_it_follows_or_now_is_accepted()
     {
         var (claim, _) = ArrangeReadyForCollection();
@@ -197,7 +196,7 @@ public sealed class RecordReplacementEventTests
         { "handOverInTheFuture", "handedOverOn" },
     };
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [MemberData(nameof(MissingOrInvalidFields))]
     public async Task Missing_or_invalid_event_fields_are_refused_naming_the_field(string request, string field)
     {
@@ -233,7 +232,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Serial rules of a reserved unit (FR-022) ───────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(ClaimSerial)]
     [InlineData(" sn-2035 ")]
     public async Task A_unit_serial_equal_to_the_claims_serial_is_refused(string serial)
@@ -246,7 +245,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_unit_serial_already_handed_out_or_of_another_claim_is_refused()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -258,7 +257,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_catalog_serial_of_another_model_is_refused()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -270,7 +269,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_catalog_serial_of_the_claimed_model_is_accepted()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -285,7 +284,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Return confirmation at collection (FR-021) ─────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData(false)]
     public async Task A_hand_over_at_collection_without_the_return_confirmed_is_refused(bool? returnConfirmed)
@@ -299,7 +298,7 @@ public sealed class RecordReplacementEventTests
         _remedy.ShouldNotBeNull().State.ShouldBe(RemedyState.InProgress);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_hand_over_after_the_return_was_recorded_needs_no_confirmation()
     {
         var (claim, replacement) = ArrangeReadyForCollection();
@@ -313,7 +312,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Roles (FR-016) ─────────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_auditor_records_nothing()
     {
         UseRole(Principals.AuditorRole);
@@ -326,7 +325,7 @@ public sealed class RecordReplacementEventTests
         await _unitOfWork.DidNotReceiveWithAnyArgs().ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(Principals.ClaimsAgentRole)]
     [InlineData(Principals.ClaimsReviewerRole)]
     public async Task Claims_agents_and_reviewers_record_replacement_updates(string role)
@@ -341,7 +340,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Tenant isolation (FR-011) ──────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_location_of_another_tenant_is_not_found_and_records_ACCESS_DENIED()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -355,7 +354,7 @@ public sealed class RecordReplacementEventTests
         replacement.ActiveLocation.ShouldNotBeNull().ServiceCenterId.ShouldBe(SuggestedLocation);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_centre_that_issues_no_replacements_is_not_an_eligible_location()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -368,7 +367,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_unknown_claim_or_a_claim_of_another_tenant_is_not_found()
     {
         (await UseCase().ExecuteAsync(UnitReserved() with { ClaimId = Guid.NewGuid() }, Ct))
@@ -384,7 +383,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Concurrency (FR-018) ───────────────────────────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("*")]
@@ -401,7 +400,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task The_remedy_ETag_is_not_the_replacement_ETag()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -412,7 +411,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_concurrent_change_detected_on_save_conflicts()
     {
         var (claim, _) = ArrangeAwaitingUnit();
@@ -425,7 +424,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Refused transitions (FR-012 – FR-014) ──────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_event_the_status_does_not_allow_conflicts_naming_the_status_and_the_allowed_events()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -442,7 +441,7 @@ public sealed class RecordReplacementEventTests
         ShouldBeUnchanged(replacement, ReplacementStatus.AwaitingUnit);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_claim_without_a_replacement_conflicts()
     {
         var claim = NewClaim();
@@ -456,7 +455,7 @@ public sealed class RecordReplacementEventTests
 
     // ── Recorded events ────────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_location_change_to_an_eligible_location_is_recorded_with_one_event_and_one_trail_entry_in_one_transaction()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -479,7 +478,7 @@ public sealed class RecordReplacementEventTests
         _notifications.ReceivedCalls().ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task Reserving_a_unit_queues_one_ready_notification_keyed_by_the_unit()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -502,7 +501,7 @@ public sealed class RecordReplacementEventTests
         _registered.ShouldBeEmpty();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_ready_notification_already_queued_for_the_unit_still_records_the_event()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -514,7 +513,7 @@ public sealed class RecordReplacementEventTests
         replacement.Status.ShouldBe(ReplacementStatus.ReadyForCollection);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_return_recorded_at_collection_keeps_the_status_and_records_the_return()
     {
         var (claim, replacement) = ArrangeAwaitingUnit();
@@ -532,7 +531,7 @@ public sealed class RecordReplacementEventTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData(0)]
     [InlineData(6)]
     public async Task The_hand_over_completes_the_remedy_and_registers_the_serial_with_its_cover_end(int minimumCoverMonths)
@@ -557,6 +556,10 @@ public sealed class RecordReplacementEventTests
         registered.CoverEndDate.ShouldBe(expectedCoverEnd);
         registered.CoverEndDate.ShouldBe(RegisteredReplacementSerial.CoverEndOf(OriginalCoverageEnd, handedOverOn, minimumCoverMonths));
 
+        // The handed-out serial is not in the catalog yet: it is added for the replacement product (research R10).
+        _catalog.Received(1).AddSerial(Arg.Is<ProductSerial>(s =>
+            s.TenantId == Tenant && s.SerialNumber == UnitSerial && s.ProductId == ProductId));
+
         events.ShouldHaveSingleItem().Type.ShouldBe(ReplacementEventType.HandedToCustomer);
         _entries.Select(e => e.Step).ShouldContain(TrailStep.RemedyCompleted);
         _entries.Select(e => e.Step).ShouldContain(TrailStep.ReplacementUnitRegistered);
@@ -565,7 +568,20 @@ public sealed class RecordReplacementEventTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
+    public async Task A_handed_out_serial_already_in_the_catalog_is_registered_but_not_added_to_the_catalog_again()
+    {
+        var (claim, _) = ArrangeReadyForCollection();
+        _catalog.FindSerialAsync(UnitSerial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(Tenant, UnitSerial, ProductId));
+
+        var result = await Execute(claim, HandedToCustomer());
+
+        result.ShouldBeOfType<RecordReplacementEventResult.Recorded>();
+        _registered.ShouldHaveSingleItem().SerialNumber.ShouldBe(UnitSerial);
+        _catalog.DidNotReceiveWithAnyArgs().AddSerial(default!);
+    }
+
+    [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
         var services = new ServiceCollection();

@@ -166,6 +166,36 @@ public sealed class ReplacementPersistenceTests(WarrantyAppFixture fixture)
     }
 
     [Fact]
+    public async Task A_handed_out_serial_added_to_the_catalog_is_found_in_its_tenant_only()
+    {
+        var productId = await AuroraProductIdAsync();
+        var serial = $"REPL-{Guid.CreateVersion7():N}".ToUpperInvariant();
+
+        using (TenantContextScope.Begin(Aurora, "aurora"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var catalog = scope.ServiceProvider.GetRequiredService<ICatalogRepository>();
+            (await catalog.FindSerialAsync(serial, Ct)).ShouldBeNull();
+
+            catalog.AddSerial(ProductSerial.Create(Aurora, $" {serial.ToLowerInvariant()} ", productId));
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(Ct);
+        }
+
+        using (TenantContextScope.Begin(Aurora, "aurora"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var found = (await scope.ServiceProvider.GetRequiredService<ICatalogRepository>().FindSerialAsync(serial, Ct)).ShouldNotBeNull();
+            (found.SerialNumber, found.ProductId).ShouldBe((serial, productId));
+        }
+
+        using (TenantContextScope.Begin(Borealis, "borealis"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            (await scope.ServiceProvider.GetRequiredService<ICatalogRepository>().FindSerialAsync(serial, Ct)).ShouldBeNull();
+        }
+    }
+
+    [Fact]
     public async Task Another_tenant_sees_neither_the_replacement_nor_the_registered_serials()
     {
         var (claimId, claimSerial) = await CopyFinalizedClaimAsync();
