@@ -443,7 +443,8 @@ public sealed class ActionExecutorTests
 
     private ActionExecutor Executor(FakeTenantContext? tenant = null) => new(
         tenant ?? new FakeTenantContext(Tenant), _claims, _adjudication, Substitute.For<IReviewRepository>(), _catalog, _policies, _network,
-        _remedies, _repairRecords, _refunds, _notifications, _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
+        _remedies, _repairRecords, Substitute.For<IReplacementRepository>(), _refunds, _notifications, _trail, _unitOfWork,
+        new RemedyPolicyEvaluator(), new ReplacementPolicy(), _time);
 
     private int IntegrationCallCount()
         => _network.ReceivedCalls().Count() + _repairs.ReceivedCalls().Count() + _notifications.ReceivedCalls().Count()

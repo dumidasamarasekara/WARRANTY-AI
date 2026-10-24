@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
@@ -46,11 +47,13 @@ public sealed class ActionExecutor(
     IServiceNetwork serviceNetwork,
     IRemedyRepository remedies,
     IRepairRepository repairs,
+    IReplacementRepository replacements,
     IRefundService refunds,
     INotificationService notifications,
     IDecisionTrailWriter trail,
     IUnitOfWork unitOfWork,
     RemedyPolicyEvaluator remedyEvaluator,
+    ReplacementPolicy replacementPolicy,
     TimeProvider time) : IActionExecutor
 {
     /// <summary>Notification template for an approved claim.</summary>
@@ -212,6 +215,9 @@ public sealed class ActionExecutor(
         {
             case RemedyType.Repair when repair is null:
                 await CreateRepairAsync(claim, product, actor, now, ct);
+                break;
+            case RemedyType.Replacement when await replacements.GetByClaimAsync(claim.Id, ct) is null:
+                await CreateReplacementAsync(claim, product, version, repair, actor, now, ct);
                 break;
             case RemedyType.Refund:
                 await RequestRefundAsync(claim, product, actor, ct);
@@ -392,7 +398,8 @@ public sealed class ActionExecutor(
     /// the applicable policy version's remedy rules are evaluated for the initial scenario (research R13). One
     /// remedy is set by policy — Repair creates a <see cref="Repair"/> at the first eligible centre serving the
     /// claim (it replaces the 001 simulated repair request, research R8), Refund asks the refund port once for the
-    /// claim value. A choice, a missing rule or missing facts leave the remedy awaiting a reviewer; the claim's
+    /// claim value, Replacement creates a <see cref="Replacement"/> (003 research R3). A choice, a missing rule or missing
+    /// facts leave the remedy awaiting a reviewer; the claim's
     /// Approved outcome is never held back. A reviewer approving the claim may choose the remedy in the same request
     /// (FR-013, research R4): it must be one the evaluation allows, and a choice between remedies is then decided by the
     /// reviewer as the remedy's first decision.
@@ -499,6 +506,10 @@ public sealed class ActionExecutor(
             case RemedyType.Repair:
                 await CreateRepairAsync(claim, product, actor, now, ct);
                 break;
+            case RemedyType.Replacement:
+                // A just-approved claim has no 002 repair yet; the lookup keeps the held-product rule in one place.
+                await CreateReplacementAsync(claim, product, version, await repairs.GetByClaimAsync(claim.Id, ct), actor, now, ct);
+                break;
             case RemedyType.Refund:
                 await RequestRefundAsync(claim, product, actor, ct);
                 break;
@@ -530,6 +541,64 @@ public sealed class ActionExecutor(
                 new { repairId = repair.Id, serviceCenterId = centre.Id, serviceCenterName = centre.Name, assignment = nameof(HandoverAssignment.Suggested) },
                 ct);
         }
+    }
+
+    /// <summary>
+    /// The replacement of a claim whose remedy just became Replacement (003 research R3), in the same transaction: the
+    /// <c>replacement</c> rules of <paramref name="version"/> (<see cref="ReplacementRules.Default"/> when absent) are
+    /// copied, the initial status comes from <see cref="ReplacementPolicy.InitialStatus"/> (research R9) and the first
+    /// active replacement location serving the claim is suggested; staff choose one otherwise.
+    /// </summary>
+    private async Task CreateReplacementAsync(
+        Claim claim, Product? product, PolicyVersion version, Repair? repair, string actor, DateTimeOffset now, CancellationToken ct)
+    {
+        var rules = version.RemedyRules?.Replacement ?? ReplacementRules.Default;
+        var status = replacementPolicy.InitialStatus(rules, HoldsFaultyProduct(repair));
+        var location = claim.Region is { } region && product is not null
+            ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ServiceCenterPurpose.Replacement, ct)).FirstOrDefault(c => c.ServesClaim)
+            : null;
+        var replacement = Replacement.Create(
+            Guid.CreateVersion7(), claim.TenantId, claim.Id, version.Id, rules.ProductRule, rules.ReturnRule, rules.MinimumCoverMonths,
+            status, location?.Id, now);
+        replacements.Add(replacement);
+        if (location is not null)
+        {
+            await trail.AppendAsync(
+                claim.Id, TrailStep.ReplacementLocationAssigned, actor, $"Replacement location suggested: {location.Name}.",
+                new
+                {
+                    replacementId = replacement.Id,
+                    serviceCenterId = location.Id,
+                    serviceCenterName = location.Name,
+                    assignment = nameof(LocationAssignment.Suggested),
+                    status = status.ToString(),
+                },
+                ct);
+        }
+    }
+
+    /// <summary>
+    /// Whether the claim's 002 repair holds the faulty product (003 research R9): the repair is at the centre or ended
+    /// there as not possible, its active hand-over has a hand-over date, and the product was not returned to the customer
+    /// by a <see cref="RepairEventType.NewAttemptStarted"/> after that hand-over.
+    /// </summary>
+    private static bool HoldsFaultyProduct(Repair? repair)
+    {
+        if (repair is not { Status: RepairStatus.AtRepairCentre or RepairStatus.RepairNotPossible }
+            || repair.ActiveHandover?.HandedOverOn is null)
+        {
+            return false;
+        }
+
+        var lastMove = repair.Events.LastOrDefault(e => e.Type is RepairEventType.HandedOver or RepairEventType.NewAttemptStarted);
+        if (lastMove is not { Type: RepairEventType.NewAttemptStarted })
+        {
+            return true;
+        }
+
+        using var payload = JsonDocument.Parse(lastMove.PayloadJson);
+        return !(payload.RootElement.TryGetProperty("productLocation", out var productLocation)
+            && productLocation.GetString() == nameof(ProductLocation.ReturnedToCustomer));
     }
 
     private static string RecommendationSummary(RemedyEvaluation evaluation, PolicyVersion version)

@@ -365,8 +365,9 @@ public sealed class RecordRemedyDecisionTests
 
     /// <summary>The real executor with the remedy ports (T225, T227).</summary>
     private ActionExecutor RealExecutor() => new(
-        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairs, _refunds, _notifications,
-        _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
+        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairs,
+        Substitute.For<IReplacementRepository>(), _refunds, _notifications,
+        _trail, _unitOfWork, new RemedyPolicyEvaluator(), new ReplacementPolicy(), _time);
 
     private static Claim NewClaim(string submittedBy, Guid? tenantId = null) => Claim.Submit(
         Guid.CreateVersion7(), tenantId ?? Tenant, ClaimReference.Generate(), ClaimChannel.AgentPortal, submittedBy, CustomerId,
