@@ -128,6 +128,56 @@ public sealed class RemedyRulesTests
         => Should.Throw<ArgumentException>(() => RemedyRulesContract.Deserialize(JsonDocument.Parse(json).RootElement).Validate())
             .Message.ShouldContain("ReplacementNotAvailable");
 
+    [Theory]
+    [InlineData("""{ "replacement": { "minimumCoverMonths": -1 } }""", "minimum cover -1")]
+    [InlineData("""{ "replacement": { "minimumCoverMonths": 37 } }""", "minimum cover 37")]
+    [InlineData("""{ "replacementNotAvailable": { "remedy": "Refund", "allowed": ["Repair", "Refund"] } }""", "remedy and allowed together")]
+    [InlineData("""{ "replacementNotAvailable": { "allowed": ["Refund"] } }""", "one-item allowed list")]
+    [InlineData("""{ "replacementNotAvailable": { "allowed": ["Refund", "Refund"] } }""", "the same remedy twice")]
+    [InlineData("""{ "replacementNotAvailable": { } }""", "a row with neither remedy nor allowed")]
+    public void Inconsistent_replacement_members_are_rejected_by_the_schema_and_the_domain(string json, string reason)
+    {
+        var element = JsonDocument.Parse(json).RootElement;
+
+        RemedyRulesContract.SchemaErrors(element).ShouldNotBeEmpty(reason);
+        Should.Throw<ArgumentException>(() => RemedyRulesContract.Deserialize(element).Validate(), reason);
+    }
+
+    [Theory]
+    [InlineData("""{ "replacement": { "productRule": "AnyModel" } }""")]
+    [InlineData("""{ "replacement": { "returnRule": "Never" } }""")]
+    public void Unknown_replacement_rule_values_are_rejected_by_the_schema_and_cannot_be_read(string json)
+    {
+        var element = JsonDocument.Parse(json).RootElement;
+
+        RemedyRulesContract.SchemaErrors(element).ShouldNotBeEmpty();
+        Should.Throw<JsonException>(() => RemedyRulesContract.Deserialize(element));
+    }
+
+    [Theory]
+    [InlineData("""{ "replacement": { } }""")]
+    [InlineData("""{ "replacement": { "productRule": "SameCategoryAtLeastClaimValue", "returnRule": "BeforeReservation", "minimumCoverMonths": 0 } }""")]
+    [InlineData("""{ "replacement": { "minimumCoverMonths": 36 } }""")]
+    [InlineData("""{ "replacementNotAvailable": { "remedy": "Refund" } }""")]
+    [InlineData("""{ "replacementNotAvailable": { "allowed": ["Repair", "Refund", "Replacement"] } }""")]
+    public void Replacement_boundary_values_are_accepted_by_the_schema_and_the_domain(string json)
+    {
+        var element = JsonDocument.Parse(json).RootElement;
+
+        RemedyRulesContract.SchemaErrors(element).ShouldBeEmpty();
+        Should.NotThrow(() => RemedyRulesContract.Deserialize(element).Validate());
+    }
+
+    [Fact]
+    public void A_version_without_replacement_members_has_no_replacement_rules_and_no_not_available_row()
+    {
+        var rules = RemedyRulesContract.Deserialize(JsonDocument.Parse("""{ "coveredDefect": { "remedy": "Repair" } }""").RootElement);
+
+        rules.Replacement.ShouldBeNull("ReplacementRules.Default applies");
+        rules.ReplacementNotAvailable.ShouldBeNull("the remedy goes to manual review");
+        Should.NotThrow(rules.Validate);
+    }
+
     [Fact]
     public void The_replacement_defaults_are_same_model_at_collection_and_no_extra_cover()
     {

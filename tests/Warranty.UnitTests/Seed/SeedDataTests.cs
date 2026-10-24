@@ -130,9 +130,9 @@ public sealed class SeedDataTests
 
     public static TheoryData<string, string, string> PolicyRemedyRules => new()
     {
-        { "aurora", "AUR-WP-v1.md", nameof(RemedyRulesContract.Aurora) },
-        { "aurora", "AUR-WP-v2.md", nameof(RemedyRulesContract.Aurora) },
-        { "borealis", "BOR-WP-v1.md", nameof(RemedyRulesContract.Borealis) },
+        { "aurora", "AUR-WP-v1.md", nameof(RemedyRulesContract.AuroraWithReplacement) },
+        { "aurora", "AUR-WP-v2.md", nameof(RemedyRulesContract.AuroraWithReplacement) },
+        { "borealis", "BOR-WP-v1.md", nameof(RemedyRulesContract.BorealisWithReplacement) },
     };
 
     [Theory]
@@ -147,7 +147,52 @@ public sealed class SeedDataTests
         var rules = RemedyRulesContract.Deserialize(json);
         Should.NotThrow(rules.Validate, file);
         RemedyRulesContract.ShouldBeSameRules(
-            rules, expected == nameof(RemedyRulesContract.Aurora) ? RemedyRulesContract.Aurora : RemedyRulesContract.Borealis);
+            rules,
+            expected == nameof(RemedyRulesContract.AuroraWithReplacement)
+                ? RemedyRulesContract.AuroraWithReplacement
+                : RemedyRulesContract.BorealisWithReplacement);
+    }
+
+    /// <summary>
+    /// Feature 003 FR-038 (research R14): every active centre issues replacement units, so each region has a
+    /// replacement location for every product category the tenant sells.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Tenants))]
+    public void Every_region_has_a_replacement_location_for_each_product_category(string slug)
+    {
+        var categories = Json(slug, "products.json").EnumerateArray().Select(p => p.GetProperty("category").GetString()!).ToHashSet();
+        var centers = Json(slug, "service-centers.json").EnumerateArray().ToList();
+        var active = centers.Where(c => !c.TryGetProperty("isActive", out var flag) || flag.GetBoolean()).ToList();
+
+        foreach (var center in active)
+        {
+            (center.TryGetProperty("issuesReplacements", out var issues) && issues.GetBoolean())
+                .ShouldBeTrue($"{center.GetProperty("name").GetString()} does not issue replacements");
+        }
+
+        foreach (var region in centers.Select(c => c.GetProperty("region").GetString()!).Distinct())
+        {
+            var served = active.Where(c => c.GetProperty("region").GetString() == region)
+                .SelectMany(c => c.GetProperty("capabilities").EnumerateArray().Select(x => x.GetString()!))
+                .ToHashSet();
+            categories.ShouldBeSubsetOf(served, $"{slug} {region}");
+        }
+    }
+
+    [Fact]
+    public void Aurora_sells_AUR_TAB11_as_a_tablet_of_higher_claim_value_than_AUR_TAB10()
+    {
+        var products = Json("aurora", "products.json").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("modelCode").GetString()!, p => p);
+        var tab11 = products["AUR-TAB11"];
+        var tab10 = products["AUR-TAB10"];
+
+        (tab11.GetProperty("name").GetString(), tab11.GetProperty("category").GetString(), tab11.GetProperty("claimValue").GetDecimal())
+            .ShouldBe(("Aurora Tab 11", "tablet", 520m));
+        tab11.GetProperty("category").GetString().ShouldBe(tab10.GetProperty("category").GetString());
+        tab11.GetProperty("claimValue").GetDecimal().ShouldBeGreaterThan(tab10.GetProperty("claimValue").GetDecimal());
+        Json("borealis", "products.json").EnumerateArray().ShouldNotContain(p => p.GetProperty("modelCode").GetString() == "AUR-TAB11");
     }
 
     [Theory]
@@ -265,6 +310,19 @@ public sealed class SeedDataTests
         public RemedyRowYaml? RepairFailed { get; set; }
 
         public RemedyRowYaml? ProtectionPlan { get; set; }
+
+        public ReplacementYaml? Replacement { get; set; }
+
+        public RemedyRowYaml? ReplacementNotAvailable { get; set; }
+    }
+
+    private sealed class ReplacementYaml
+    {
+        public string? ProductRule { get; set; }
+
+        public string? ReturnRule { get; set; }
+
+        public int? MinimumCoverMonths { get; set; }
     }
 
     private sealed class RemedyRowYaml
