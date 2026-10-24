@@ -4,6 +4,7 @@ using Warranty.Application.Actions;
 using Warranty.Application.Adjudication;
 using Warranty.Application.Audit;
 using Warranty.Application.Claims;
+using Warranty.Application.Fulfillment;
 using Warranty.Application.Policies;
 using Warranty.Application.Review;
 using Warranty.Application.Trace;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<SupplementClaim>();
         services.AddScoped<ClaimantAccess>();
         services.AddScoped<ClaimQueries>();
+        services.AddScoped<RemedyQueries>();
         services.AddScoped<IActionExecutor, ActionExecutor>();
         services.AddScoped<DecisionTraceQuery>();
         services.AddScoped<PolicyVersionsQuery>();
