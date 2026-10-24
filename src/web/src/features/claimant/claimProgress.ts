@@ -109,3 +109,23 @@ export function remedyStepPresentation(state: ClaimantRemedyStepState): { state:
 export function isReadyForCollection(remedy: ClaimantRemedyView): boolean {
   return remedy.steps.some((step) => step.title === 'Ready for collection' && step.state === 'current')
 }
+const fulfilmentLabels: Record<'Replacement' | 'Refund', { inProgress: string; completed: string }> = {
+  Replacement: { inProgress: 'Replacement on its way', completed: 'Replacement handed over' },
+  Refund: { inProgress: 'Refund being processed', completed: 'Refund completed' },
+}
+
+/**
+ * The claimant label of a remedy (002 data-model.md "Claimant projection"): Replacement and Refund read
+ * from `completed`; every other remedy shows the label the API computed.
+ */
+export function claimantRemedyLabel(remedy: ClaimantRemedyView): string {
+  if (remedy.remedy === 'Replacement' || remedy.remedy === 'Refund') {
+    const labels = fulfilmentLabels[remedy.remedy]
+    return remedy.completed ? labels.completed : labels.inProgress
+  }
+  return remedy.label
+}
+
+/** A Replacement or Refund that is done: the label becomes an `ok` callout. */
+export const isFulfilmentCompleted = (remedy: ClaimantRemedyView) =>
+  (remedy.remedy === 'Replacement' || remedy.remedy === 'Refund') && remedy.completed === true

@@ -19,7 +19,9 @@ import {
 } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
 import {
+  claimantRemedyLabel,
   claimProgressSteps,
+  isFulfilmentCompleted,
   isReadyForCollection,
   isTransientStatus,
   nextSteps,
@@ -142,7 +144,11 @@ function RemedySection({ remedy }: { remedy: ClaimantRemedyView }) {
     <Card title="Your remedy" titleAs="h2" padding="lg">
       <div className={styles.remedy} aria-label="Remedy" role="region">
         <p className={styles.remedyLine}>Remedy: {remedy.remedy}</p>
-        <p className={styles.stepText}>{remedy.label}</p>
+        {isFulfilmentCompleted(remedy) ? (
+          <Alert tone="ok" title={claimantRemedyLabel(remedy)} />
+        ) : (
+          <p className={styles.stepText}>{claimantRemedyLabel(remedy)}</p>
+        )}
         {remedy.steps.length > 0 && (
           <Timeline label="Repair progress">
             {remedy.steps.map((step) => {

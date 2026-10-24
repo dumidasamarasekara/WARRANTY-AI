@@ -86,3 +86,31 @@ export function useRecordRepairEvent() {
     onSuccess: (_repair, { claimId }) => queryClient.invalidateQueries({ queryKey: claimQueryKey(claimId) }),
   })
 }
+export type RemedyCompletionRequest = Schemas['RemedyCompletionRequest']
+
+export type RemedyCompletion = NonNullable<RemedyView['completion']>
+
+export interface RecordRemedyCompletionInput {
+  claimId: string
+  /** `RemedyView.etag`, sent as `If-Match`. */
+  etag: string
+  request: RemedyCompletionRequest
+}
+
+/**
+ * `POST /api/claims/{claimId}/remedy-completions` with `If-Match`; failures throw an `ApiProblem` (409 when
+ * the remedy is no longer in progress, 412 when it changed). A recorded completion reloads the claim.
+ */
+export function useRecordRemedyCompletion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ claimId, etag, request }: RecordRemedyCompletionInput) =>
+      unwrap(
+        api.POST('/api/claims/{claimId}/remedy-completions', {
+          params: { path: { claimId }, header: { 'If-Match': etag } },
+          body: request,
+        }),
+      ),
+    onSuccess: (_remedy, { claimId }) => queryClient.invalidateQueries({ queryKey: claimQueryKey(claimId) }),
+  })
+}
