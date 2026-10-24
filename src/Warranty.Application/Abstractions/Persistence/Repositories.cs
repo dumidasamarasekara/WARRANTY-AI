@@ -199,6 +199,9 @@ public interface IRemedyRepository
     /// <summary>The claim's current remedy (tracked), or null when none has been set.</summary>
     Task<ClaimRemedy?> GetAsync(Guid claimId, CancellationToken ct);
 
+    /// <summary>The claim's remedy row version (PostgreSQL <c>xmin</c>), used as the remedy ETag; null when the claim has no remedy.</summary>
+    Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct);
+
     void Add(ClaimRemedy remedy);
 
     /// <summary>Remedy decisions are append-only: there is no update or delete.</summary>
