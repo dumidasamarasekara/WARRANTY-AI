@@ -29,8 +29,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
 {
-    private const string PendingClaimDetailRemedy = "Pending T229/T230";
-    private const string PendingRemedyDecisions = "Pending T227/T230";
 
     /// <summary>Seeded R1: Aurora AUR-TAB10, North America, approved by the system.</summary>
     private static readonly Guid R1 = Guid.Parse("11111111-0005-7000-8000-000000000001");
@@ -97,7 +95,7 @@ public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
         steps.Take(5).ShouldBe(["ClaimSubmitted", "AutoApproved", "RemedyRecommended", "RemedyDecided", "RepairCentreAssigned"]);
     }
 
-    [Theory(Skip = PendingClaimDetailRemedy)]
+    [Theory]
     [MemberData(nameof(SeededClaims))]
     public async Task R1_R2_the_claim_detail_shows_the_remedy_its_policy_row_and_its_history(
         string scenario, string policyCode, int version, string centreName)
@@ -173,7 +171,7 @@ public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
         await ShouldBeApprovedByTheReviewerWithRemedyRepairAsync(claimId);
     }
 
-    [Fact(Skip = PendingRemedyDecisions)]
+    [Fact]
     public async Task R3_changing_the_remedy_of_an_approved_Aurora_claim_to_Refund_is_refused_naming_Repair()
     {
         var reviewer = TestStaffUsers.ReviewerAurora;

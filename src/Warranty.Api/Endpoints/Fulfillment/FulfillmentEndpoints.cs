@@ -23,6 +23,19 @@ public static class FulfillmentEndpoints
             .Produces<IReadOnlyList<RepairCentreView>>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        // POST /api/claims/{claimId}/remedy-decisions: a reviewer decides or changes the remedy (FR-011, FR-013, FR-015).
+        group.MapPost("/{claimId:guid}/remedy-decisions", RecordRemedyDecisionAsync)
+            .WithName("RecordRemedyDecision")
+            .WithSummary("Decide or change the remedy of an approved claim (FR-011, FR-013, FR-015)")
+            .RequireAuthorization(AuthPolicies.ClaimsReviewer)
+            .Accepts<RemedyDecisionRequest>("application/json")
+            .Produces<RemedyView>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed);
+
         // POST /api/claims/{claimId}/repair/events: one repair-centre update reported to staff (FR-019 – FR-028).
         group.MapPost("/{claimId:guid}/repair/events", RecordRepairEventAsync)
             .WithName("RecordRepairEvent")
@@ -52,6 +65,49 @@ public static class FulfillmentEndpoints
 
     private static async Task<IResult> GetRepairCentresAsync(Guid claimId, RepairQueries query, CancellationToken ct)
         => await query.GetRepairCentresAsync(claimId, ct) is { } centres ? Results.Ok(centres) : CrossTenantGuard.NotFound();
+
+    /// <summary>
+    /// <c>POST /api/claims/{claimId}/remedy-decisions</c>: claims reviewers only. The reviewer comes from the access token,
+    /// the expected remedy version from <c>If-Match</c> (the remedy's ETag in the claim detail); the decision is applied
+    /// through the ActionExecutor (research R4). Errors as in plan.md "Error mapping".
+    /// </summary>
+    private static async Task<IResult> RecordRemedyDecisionAsync(
+        Guid claimId,
+        [FromHeader(Name = "If-Match")] string? ifMatch,
+        RemedyDecisionRequest request,
+        RecordRemedyDecision recordDecision,
+        RemedyQueries queries,
+        CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var remedy = Parse<RemedyType>(request.Remedy, "remedy", errors);
+        if (errors.Count == 0 && remedy is null)
+        {
+            errors["remedy"] = [$"remedy is required: one of {string.Join(", ", Enum.GetNames<RemedyType>())}."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var command = new RecordRemedyDecisionCommand(claimId, ifMatch, remedy!.Value, request.Reason);
+        return await recordDecision.ExecuteAsync(command, ct) switch
+        {
+            RecordRemedyDecisionResult.Recorded => await queries.GetRemedyAsync(claimId, ct) is { } view
+                ? Results.Created($"/api/claims/{claimId}", view)
+                : throw new InvalidOperationException($"The remedy of claim {claimId} was decided but cannot be read back."),
+            RecordRemedyDecisionResult.NotFound => CrossTenantGuard.NotFound(),
+            RecordRemedyDecisionResult.SelfReviewRefused refused
+                => Results.Problem(statusCode: StatusCodes.Status403Forbidden, detail: refused.Detail),
+            RecordRemedyDecisionResult.PreconditionFailed failed
+                => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, detail: failed.Detail),
+            RecordRemedyDecisionResult.Conflict conflict
+                => Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: conflict.Detail),
+            RecordRemedyDecisionResult.Invalid invalid => Results.ValidationProblem(new Dictionary<string, string[]>(invalid.Errors)),
+            var other => throw new InvalidOperationException($"Unhandled remedy decision result {other.GetType().Name}."),
+        };
+    }
 
     /// <summary>
     /// <c>POST /api/claims/{claimId}/repair/events</c>: claims agents and reviewers. The staff member comes from the
@@ -206,6 +262,13 @@ public sealed record RepairEventRequest(
     string? ProductLocation,
     int? CorrectsSeq,
     string? ToStatus);
+
+/// <summary>
+/// <c>RemedyDecisionRequest</c> (002 contracts). Unknown members are rejected (<c>additionalProperties: false</c>), so
+/// no reviewer or tenant field can be smuggled in.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RemedyDecisionRequest(string? Remedy, string? Reason);
 
 /// <summary>
 /// <c>RemedyCompletionRequest</c> (002 contracts). Unknown members are rejected (<c>additionalProperties: false</c>), so
