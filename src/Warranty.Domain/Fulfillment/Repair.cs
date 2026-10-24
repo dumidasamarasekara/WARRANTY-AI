@@ -371,6 +371,16 @@ public sealed class Repair
     public RepairEvent Transfer(Guid serviceCenterId, string reason, RepairReport report)
         => throw new NotImplementedException($"Pending T256 ({serviceCenterId}, {reason}, {report}).");
 
+    /// <summary>
+    /// <see cref="RepairEventType.Correction"/> of the entry with sequence number <paramref name="correctsSeq"/> (any status except
+    /// <see cref="RepairStatus.Collected"/>, reason required): applies the one corrected value of <paramref name="correction"/> and
+    /// appends a correction that references the entry; the corrected entry itself is never changed (FR-027). A status correction
+    /// sends the latest status change back to its previous status and reopens the attempt it ended, so a ready mark recorded
+    /// again keeps the same attempt (and the same ready notification). Pending T256.
+    /// </summary>
+    public RepairEvent Correct(int correctsSeq, string reason, RepairCorrection correction, RepairReport report)
+        => throw new NotImplementedException($"Pending T256 ({correctsSeq}, {reason}, {correction}, {report}).");
+
     /// <summary>The next gap-free event sequence number.</summary>
     internal int NextEventSeq => _events.Count == 0 ? 1 : _events.Max(e => e.Seq) + 1;
 

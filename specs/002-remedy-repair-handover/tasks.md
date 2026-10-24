@@ -191,7 +191,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Tests for User Story 5 ⚠️ write first, ensure they fail
 
-- [ ] T254 [P] [US5] Write `tests/Warranty.UnitTests/Fulfillment/RepairTransferCorrectionTests.cs` (one active hand-over after a transfer, attempt count unchanged, correction keeps the original event, no second ready notification for a corrected attempt) and unskip the US5 cases of `RepairStateMachineTests.cs`
+- [X] T254 [P] [US5] Write `tests/Warranty.UnitTests/Fulfillment/RepairTransferCorrectionTests.cs` (one active hand-over after a transfer, attempt count unchanged, correction keeps the original event, no second ready notification for a corrected attempt) and unskip the US5 cases of `RepairStateMachineTests.cs`
 - [ ] T255 [P] [US5] Write `tests/Warranty.IntegrationTests/Fulfillment/US5_TransferCorrectionTests.cs` for R12 and a transfer to a Borealis centre from an Aurora claim (404 + `ACCESS_DENIED`)
 
 ### Implementation for User Story 5
