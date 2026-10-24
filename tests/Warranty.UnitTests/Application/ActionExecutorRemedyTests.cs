@@ -347,10 +347,7 @@ public sealed class ActionExecutorRemedyTests
         justification: null, claimantExplanation: "Your tablet is covered and will be repaired.", requestedItems: null,
         latestRecommendation: null, Now);
 
-    /// <summary>
-    /// The executor with the remedy ports. Pending T225, which adds the policy repository, the remedy and repair
-    /// repositories, the refund port and the <see cref="RemedyPolicyEvaluator"/> to its constructor.
-    /// </summary>
+    /// <summary>The executor with the remedy ports (T225).</summary>
     private ActionExecutor Executor() => new(
         new FakeTenantContext(Tenant), _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairs, _refunds,
         _notifications, _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);

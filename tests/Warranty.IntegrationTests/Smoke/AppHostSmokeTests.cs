@@ -68,7 +68,10 @@ public sealed class AppHostSmokeTests
         (await ScalarAsync<string>(
                 owner, "select disposition from adjudication.adjudication_runs where claim_id = @value order by round desc limit 1", claimId, Ct))
             .ShouldBe(WireName.Of(Disposition.AutoApprove));
-        (await ScalarAsync<long>(owner, "select count(*) from integration.repair_requests where claim_id = @value", claimId, Ct)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await ScalarAsync<long>(owner, "select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId, Ct)).ShouldBe(1);
+        (await ScalarAsync<long>(owner, "select count(*) from claims.repairs where claim_id = @value", claimId, Ct)).ShouldBe(1);
+        (await ScalarAsync<long>(owner, "select count(*) from integration.repair_requests where claim_id = @value", claimId, Ct)).ShouldBe(0);
 
         // The claimant sees the approval through the channel.
         var view = await ClaimantViewAsync(api, scenario, reference);

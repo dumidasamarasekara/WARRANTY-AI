@@ -29,7 +29,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
 {
-    private const string PendingRemedyAtApproval = "Pending T225";
     private const string PendingClaimDetailRemedy = "Pending T229/T230";
     private const string PendingReviewDecisionRemedy = "Pending T228/T230";
     private const string PendingRemedyDecisions = "Pending T227/T230";
@@ -197,7 +196,7 @@ public sealed class US1_RemedyDecisionTests(WarrantyAppFixture fixture)
 
     // ---- R13: S1 end to end on its recordings ------------------------------------------------------
 
-    [Fact(Skip = PendingRemedyAtApproval)]
+    [Fact]
     public async Task R13_S1_is_approved_by_the_system_as_in_001_and_then_gets_remedy_Repair_with_a_suggested_centre()
     {
         var scenario = GoldenScenario.Load("S1");

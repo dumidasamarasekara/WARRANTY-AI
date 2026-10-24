@@ -152,7 +152,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
         (await RiskAsync(outcome.RunId)).Level.ShouldBe(RiskLevel.Medium);
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S18b_a_serial_claimed_120_days_ago_is_approved_without_a_duplicate_signal()
     {
         var scenario = GoldenScenario.Load("S18b");
@@ -162,7 +162,10 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
         await ShouldMatchExpectedOutcomeAsync(scenario, outcome);
         outcome.Status.ShouldBe(ClaimStatus.Approved);
         (await RiskSignalCodesAsync(outcome.RunId)).ShouldNotContain("DUPLICATE_SERIAL_CLAIM");
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", outcome.ClaimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", outcome.ClaimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", outcome.ClaimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", outcome.ClaimId)).ShouldBe(0);
     }
 
     // ---- S19: the computed risk, not the model's ---------------------------------------------------------
@@ -208,7 +211,7 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
 
     // ---- S23: invoice consistency tolerances -------------------------------------------------------------
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task S23a_seller_and_price_within_the_matching_tolerances_are_approved_with_every_consistency_check_matching()
     {
         var scenario = GoldenScenario.Load("S23a");
@@ -356,8 +359,8 @@ public sealed class US4_GuardrailSafetyTests(WarrantyAppFixture fixture)
             (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", outcome.ClaimId)).ShouldBe(0, id);
         }
 
-        // The trail ends with the guardrail evaluation and its outcome; only executed actions may follow.
-        var steps = trail.Select(e => e.Step).Where(s => s != "ActionExecuted").ToList();
+        // The trail ends with the guardrail evaluation and its outcome; only executed actions and the remedy steps may follow.
+        var steps = trail.Select(e => e.Step).Where(s => !GoldenScenario.FollowsTheOutcome(s)).ToList();
         steps.TakeLast(scenario.ExpectedLastTrailEntries.Count).ShouldBe(scenario.ExpectedLastTrailEntries, id);
 
         if (scenario.ExpectedClaimantStatus is not null || scenario.ClaimantViewHidesRisk)

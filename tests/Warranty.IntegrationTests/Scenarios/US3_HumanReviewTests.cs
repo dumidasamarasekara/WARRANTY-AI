@@ -336,7 +336,7 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         item.TryGetProperty("aiDecision", out _).ShouldBeFalse("there is no valid AI decision to show");
     }
 
-    [Fact(Skip = "Pending T226")]
+    [Fact]
     public async Task Without_a_valid_recommendation_an_approval_needs_no_justification_but_a_rejection_does()
     {
         var scenario = GoldenScenario.Load("US3-no-recommendation");
@@ -364,7 +364,10 @@ public sealed class US3_HumanReviewTests(WarrantyAppFixture fixture)
         row.Justification.ShouldBeNull();
 
         // The approval is executed through the simulated integrations.
-        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(1);
+        // 002 research R8: the remedy Repair and its repair record replace the 001 simulated repair request.
+        (await CountAsync("select count(*) from claims.claim_remedies where claim_id = @value and remedy = 'Repair'", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from claims.repairs where claim_id = @value", claimId)).ShouldBe(1);
+        (await CountAsync("select count(*) from integration.repair_requests where claim_id = @value", claimId)).ShouldBe(0);
     }
 
     // ---- S20: separation of duties -------------------------------------------------------------------

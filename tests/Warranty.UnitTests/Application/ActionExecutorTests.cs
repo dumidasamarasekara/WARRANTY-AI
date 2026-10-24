@@ -12,7 +12,11 @@ using Warranty.Domain.Adjudication;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
 using Warranty.Guardrails;
+using Warranty.Guardrails.Remedies;
+using Warranty.UnitTests.Domain;
 using Warranty.UnitTests.Guardrails;
 using Warranty.UnitTests.Infrastructure;
 
@@ -36,12 +40,20 @@ public sealed class ActionExecutorTests
     private readonly ICatalogRepository _catalog = Substitute.For<ICatalogRepository>();
     private readonly IServiceNetwork _network = Substitute.For<IServiceNetwork>();
     private readonly IRepairRequestService _repairs = Substitute.For<IRepairRequestService>();
+    private readonly IPolicyRepository _policies = Substitute.For<IPolicyRepository>();
+    private readonly IRemedyRepository _remedies = Substitute.For<IRemedyRepository>();
+    private readonly IRepairRepository _repairRecords = Substitute.For<IRepairRepository>();
+    private readonly IRefundService _refunds = Substitute.For<IRefundService>();
+    private readonly List<ClaimRemedy> _addedRemedies = [];
+    private readonly List<Repair> _addedRepairs = [];
     private readonly INotificationService _notifications = Substitute.For<INotificationService>();
     private readonly IDecisionTrailWriter _trail = Substitute.For<IDecisionTrailWriter>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly FakeTimeProvider _time = new(Now);
     private readonly List<TrailRecord> _entries = [];
     private readonly ServiceCenterInfo _center = new(Guid.Parse("0199b000-0000-7000-8000-0000000000f1"), "Aurora Service North", Region.NA);
+    private readonly EligibleServiceCenter _eligible = new(
+        Guid.Parse("0199b000-0000-7000-8000-0000000000f1"), "Aurora Service North", Region.NA, "1 Example Road", "Mon–Fri", null, 10, ServesClaim: true);
     private readonly Guid _repairRequestId = Guid.Parse("0199b000-0000-7000-8000-0000000000a1");
     private readonly Guid _notificationId = Guid.Parse("0199b000-0000-7000-8000-0000000000a2");
 
@@ -56,6 +68,18 @@ public sealed class ActionExecutorTests
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", 349m, "EUR"));
         _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns(_center);
+        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_eligible]);
+        _remedies.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRemedies.Add(call.Arg<ClaimRemedy>()));
+        _repairRecords.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRepairs.Add(call.Arg<Repair>()));
+        // The applicable version (AUR-WP v2-like) sets Repair by policy for a covered defect (002 research R3, R13).
+        var version = PolicyVersion.Create(
+            Guid.Parse("0199b000-0000-7000-8000-0000000000b2"), Tenant, Guid.Parse("0199b000-0000-7000-8000-0000000000b1"), 2,
+            new DateOnly(2025, 1, 1), null, [Region.NA, Region.EU], [],
+            new CoverageTerms(
+                new Dictionary<Region, int> { [Region.NA] = 12, [Region.EU] = 24 }, new Dictionary<string, int>(),
+                AccidentalDamageTerms.NotCovered, [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage]),
+            "tenant-aurora/policies/AUR-WP-v2.md", "checksum", RemedyRulesContract.Aurora);
+        _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns([version]);
         _repairs.CreateAsync(default, default, default).ReturnsForAnyArgs(_repairRequestId);
         _notifications.EnqueueAsync(default, default!, default).ReturnsForAnyArgs(_notificationId);
     }
@@ -64,8 +88,8 @@ public sealed class ActionExecutorTests
 
     // ── Each action kind ───────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T226")]
-    public async Task FinalizeApproved_approves_as_the_system_with_the_run_explanation_then_creates_a_repair_request_and_notifies()
+    [Fact]
+    public async Task FinalizeApproved_approves_as_the_system_with_the_run_explanation_then_sets_the_remedy_and_notifies()
     {
         var scenario = GuardrailScenario.ClearApprove();
         var (claim, action) = Arrange(scenario);
@@ -80,20 +104,28 @@ public sealed class ActionExecutorTests
         claim.FinalExplanation.ShouldBe(GuardrailScenario.SafeApproveText);
         claim.FinalizedAt.ShouldBe(Now);
 
+        // 002 research R8: the remedy Repair and a repair at the suggested centre replace the 001 repair request.
+        _addedRemedies.ShouldHaveSingleItem().Remedy.ShouldBe(RemedyType.Repair);
+        var repair = _addedRepairs.ShouldHaveSingleItem();
+        repair.ClaimId.ShouldBe(claim.Id);
+        repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(_eligible.Id);
+        await _repairs.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
         Received.InOrder(() =>
         {
-            _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>());
-            _repairs.CreateAsync(claim.Id, _center.Id, Arg.Any<CancellationToken>());
+            _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>());
             _notifications.EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
         });
 
-        _entries.Select(e => e.Step).ShouldBe([TrailStep.AutoApproved, TrailStep.ActionExecuted, TrailStep.ActionExecuted]);
+        _entries.Select(e => e.Step).ShouldBe(
+        [
+            TrailStep.AutoApproved, TrailStep.RemedyRecommended, TrailStep.RemedyDecided, TrailStep.RepairCentreAssigned,
+            TrailStep.ActionExecuted,
+        ]);
         _entries.ShouldAllBe(e => e.ClaimId == claim.Id && e.Actor == "adjudication-service");
         _entries[0].Payload.GetProperty("runId").GetGuid().ShouldBe(scenario.RunId);
-        _entries[1].Payload.GetProperty("action").GetString().ShouldBe("create_repair_request");
-        _entries[1].Payload.GetProperty("repairRequestId").GetGuid().ShouldBe(_repairRequestId);
-        _entries[2].Payload.GetProperty("action").GetString().ShouldBe("notify_customer");
-        _entries[2].Payload.GetProperty("notificationId").GetGuid().ShouldBe(_notificationId);
+        _entries[3].Payload.GetProperty("repairId").GetGuid().ShouldBe(repair.Id);
+        _entries[4].Payload.GetProperty("action").GetString().ShouldBe("notify_customer");
+        _entries[4].Payload.GetProperty("notificationId").GetGuid().ShouldBe(_notificationId);
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
@@ -198,19 +230,21 @@ public sealed class ActionExecutorTests
         ShouldNotHaveCalledIntegrations();
     }
 
-    [Fact(Skip = "Pending T226")]
-    public async Task Without_a_service_center_the_approval_stands_and_the_trail_records_that_no_repair_request_was_created()
+    [Fact]
+    public async Task Without_a_service_center_the_approval_stands_and_the_repair_waits_for_staff_to_choose_a_centre()
     {
-        _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns((ServiceCenterInfo?)null);
+        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([]);
         var (claim, action) = Arrange(GuardrailScenario.ClearApprove());
 
         await Executor().ExecuteAsync(action, Ct);
 
         claim.Status.ShouldBe(ClaimStatus.Approved);
         await _repairs.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
+        _addedRepairs.ShouldHaveSingleItem().ActiveHandover.ShouldBeNull();
         await _notifications.Received(1).EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
-        _entries.Select(e => e.Payload.TryGetProperty("action", out var a) ? a.GetString() : null)
-            .ShouldBe([null, "service_network_lookup", "notify_customer"]);
+        _entries.Select(e => e.Step).ShouldBe(
+            [TrailStep.AutoApproved, TrailStep.RemedyRecommended, TrailStep.RemedyDecided, TrailStep.ActionExecuted]);
+        _entries[^1].Payload.GetProperty("action").GetString().ShouldBe("notify_customer");
     }
 
     // ── Refusals (fail closed) ─────────────────────────────────────────────────────────────────
@@ -330,8 +364,8 @@ public sealed class ActionExecutorTests
         IntegrationCallCount().ShouldBe(integrationCalls);
     }
 
-    [Fact(Skip = "Pending T226")]
-    public async Task A_retried_approval_creates_exactly_one_repair_request_and_one_notification()
+    [Fact]
+    public async Task A_retried_approval_creates_exactly_one_remedy_one_repair_and_one_notification()
     {
         var (_, action) = Arrange(GuardrailScenario.ClearApprove());
         var executor = Executor();
@@ -339,7 +373,9 @@ public sealed class ActionExecutorTests
         await executor.ExecuteAsync(action, Ct);
         await executor.ExecuteAsync(action, Ct);
 
-        await _repairs.ReceivedWithAnyArgs(1).CreateAsync(default, default, Ct);
+        _addedRemedies.ShouldHaveSingleItem();
+        _addedRepairs.ShouldHaveSingleItem();
+        await _repairs.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
         await _notifications.ReceivedWithAnyArgs(1).EnqueueAsync(default, default!, Ct);
     }
 
@@ -406,11 +442,12 @@ public sealed class ActionExecutorTests
     }
 
     private ActionExecutor Executor(FakeTenantContext? tenant = null) => new(
-        tenant ?? new FakeTenantContext(Tenant), _claims, _adjudication, Substitute.For<IReviewRepository>(), _catalog, Substitute.For<IPolicyRepository>(), _network, Substitute.For<IRemedyRepository>(), Substitute.For<IRepairRepository>(), Substitute.For<IRefundService>(), _notifications, _trail, _unitOfWork, new Warranty.Guardrails.Remedies.RemedyPolicyEvaluator(),
-        _time);
+        tenant ?? new FakeTenantContext(Tenant), _claims, _adjudication, Substitute.For<IReviewRepository>(), _catalog, _policies, _network,
+        _remedies, _repairRecords, _refunds, _notifications, _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
 
     private int IntegrationCallCount()
-        => _network.ReceivedCalls().Count() + _repairs.ReceivedCalls().Count() + _notifications.ReceivedCalls().Count();
+        => _network.ReceivedCalls().Count() + _repairs.ReceivedCalls().Count() + _notifications.ReceivedCalls().Count()
+            + _refunds.ReceivedCalls().Count() + _addedRepairs.Count;
 
     private void ShouldNotHaveCalledIntegrations() => IntegrationCallCount().ShouldBe(0);
 
