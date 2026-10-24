@@ -725,8 +725,9 @@ public sealed class RecordReviewDecisionTests
         _tenant, _claims, _adjudication, _catalog, _policies, new RemedyPolicyEvaluator(), _securityEvents, Executor(), _time);
 
     private ActionExecutor Executor() => new(
-        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairRecords, _refunds, _notifications,
-        _trail, _unitOfWork, new RemedyPolicyEvaluator(), _time);
+        _tenant, _claims, _adjudication, _reviews, _catalog, _policies, _network, _remedies, _repairRecords,
+        Substitute.For<IReplacementRepository>(), _refunds, _notifications,
+        _trail, _unitOfWork, new RemedyPolicyEvaluator(), new ReplacementPolicy(), _time);
 
     private static Claim NewClaim(string submittedBy, Guid? tenantId = null)
     {
