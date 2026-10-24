@@ -334,7 +334,7 @@ public sealed class IntakeAgentTests : IAsyncDisposable
 
     // ---- Protection plan (002 FR-036, FR-037, research R9) --------------------------------------------
 
-    [Fact(Skip = "Pending T260")]
+    [Fact]
     public void A_stated_protection_plan_without_its_document_asks_for_the_PROTECTION_PLAN_DOCUMENT()
     {
         var (validation, missing) = IntakeAgent.Validate(Case() with { HasProtectionPlan = true }, Customer(), Today);
@@ -344,7 +344,7 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         validation.Where(v => v.Check != ProtectionPlanCheck).ShouldAllBe(v => v.Passed);
     }
 
-    [Theory(Skip = "Pending T260")]
+    [Theory]
     [InlineData("application/pdf")]
     [InlineData("image/jpeg")]
     public void A_stated_protection_plan_with_its_document_needs_nothing_more(string contentType)
@@ -358,7 +358,7 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         missing.ShouldBeEmpty();
     }
 
-    [Fact(Skip = "Pending T260")]
+    [Fact]
     public void A_plan_document_of_an_unsupported_type_fails_FILE_TYPES_and_asks_for_the_document_again()
     {
         var input = Case(evidence: [Invoice(), Photo(), PlanDocument("text/html")]) with { HasProtectionPlan = true };
@@ -369,7 +369,7 @@ public sealed class IntakeAgentTests : IAsyncDisposable
         missing.ShouldHaveSingleItem().Item.ShouldBe("PROTECTION_PLAN_DOCUMENT");
     }
 
-    [Fact(Skip = "Pending T260")]
+    [Fact]
     public void A_plan_document_without_a_stated_plan_is_an_accepted_file_and_requests_nothing()
     {
         var (validation, missing) = IntakeAgent.Validate(Case(evidence: [Invoice(), Photo(), PlanDocument("application/pdf")]), Customer(), Today);

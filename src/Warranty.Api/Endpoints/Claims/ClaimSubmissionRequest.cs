@@ -16,13 +16,14 @@ public sealed record SubmissionAccepted(
 /// <summary>
 /// Reads the multipart <c>ClaimSubmissionForm</c> shared by <c>POST /api/public/claims</c> and
 /// <c>POST /api/claims</c> (part <c>claim</c> as JSON — a form field or a file part — one <c>invoice</c>
-/// part and one <c>photos</c> part per photo) and maps the use case's result to HTTP: 202
+/// part, one <c>photos</c> part per photo and an optional <c>protectionPlanDocument</c> part, 002 FR-036)
+/// and maps the use case's result to HTTP: 202
 /// <c>SubmissionAccepted</c>, 400 ValidationProblem, 413 or 415 ProblemDetails.
 /// </summary>
 internal static class ClaimSubmissionRequest
 {
-    /// <summary>One invoice and eight photos of 15 MB each, plus the claim JSON and multipart framing.</summary>
-    public const long MaxRequestBytes = 140L * 1024 * 1024;
+    /// <summary>One invoice, eight photos and a protection plan document of 15 MB each, plus the claim JSON and multipart framing.</summary>
+    public const long MaxRequestBytes = 155L * 1024 * 1024;
 
     public const string ClaimPart = "claim";
 
@@ -31,6 +32,9 @@ internal static class ClaimSubmissionRequest
     public const string PhotosPart = "photos";
 
     public const string NotePart = "note";
+
+    /// <summary>The protection plan document (002 FR-036): a PDF or an image, sanitized like the invoice.</summary>
+    public const string ProtectionPlanDocumentPart = "protectionPlanDocument";
 
     private const int MaxClaimJsonBytes = 64 * 1024;
 
@@ -61,7 +65,8 @@ internal static class ClaimSubmissionRequest
             channel,
             await ReadClaimAsync(form, ct),
             form.Files.GetFiles(InvoicePart).Select(ToUpload).ToList(),
-            form.Files.GetFiles(PhotosPart).Select(ToUpload).ToList());
+            form.Files.GetFiles(PhotosPart).Select(ToUpload).ToList(),
+            form.Files.GetFiles(ProtectionPlanDocumentPart).Select(ToUpload).ToList());
 
         return await submitClaim.ExecuteAsync(command, ct) switch
         {
@@ -76,7 +81,8 @@ internal static class ClaimSubmissionRequest
 
     /// <summary>
     /// Supplements a claim through <see cref="SupplementClaim"/> from the multipart <c>SupplementForm</c>
-    /// (<c>note</c>, one <c>invoice</c> part, one <c>photos</c> part per photo) and maps the result to
+    /// (<c>note</c>, one <c>invoice</c> part, one <c>photos</c> part per photo, an optional
+    /// <c>protectionPlanDocument</c> part) and maps the result to
     /// HTTP: 202 <c>SubmissionAccepted</c>, 404, 409, 400 ValidationProblem, 413 or 415 ProblemDetails.
     /// </summary>
     public static async Task<IResult> SupplementAsync(
@@ -100,7 +106,8 @@ internal static class ClaimSubmissionRequest
             reference,
             form[NotePart].ToString(),
             form.Files.GetFiles(InvoicePart).Select(ToUpload).ToList(),
-            form.Files.GetFiles(PhotosPart).Select(ToUpload).ToList());
+            form.Files.GetFiles(PhotosPart).Select(ToUpload).ToList(),
+            form.Files.GetFiles(ProtectionPlanDocumentPart).Select(ToUpload).ToList());
 
         return await supplementClaim.ExecuteAsync(command, ct) switch
         {

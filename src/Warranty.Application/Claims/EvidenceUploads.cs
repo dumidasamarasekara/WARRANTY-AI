@@ -12,7 +12,7 @@ internal sealed record SanitizedEvidence(InspectedEvidence File, UploadSanitizer
 /// <summary>
 /// File handling shared by <see cref="SubmitClaim"/> and <see cref="SupplementClaim"/> (FR-009, research R11):
 /// the type of every file is judged by its magic bytes, never by its name or declared type; per-file
-/// errors are keyed <c>invoice</c> or <c>photos</c>; every file is cleaned by <see cref="IUploadSanitizer"/>
+/// errors are keyed <c>invoice</c>, <c>photos</c> or <c>protectionPlanDocument</c>; every file is cleaned by <see cref="IUploadSanitizer"/>
 /// (T110: metadata stripped, dangerous PDFs refused) between inspection and <see cref="IDocumentStore"/>,
 /// and only the sanitized bytes are stored under the claim's round.
 /// </summary>
@@ -22,12 +22,23 @@ internal static class EvidenceUploads
 
     public const string PhotosKey = "photos";
 
+    /// <summary>The multipart part and error key of the protection plan document (002 FR-036).</summary>
+    public const string ProtectionPlanDocumentKey = "protectionPlanDocument";
+
+    /// <summary>
+    /// Judges every file by its content. A protection plan document (002 FR-036) is a PDF or an image, like an
+    /// invoice, and goes through the same checks and sanitizing.
+    /// </summary>
     public static async Task<List<InspectedEvidence>> InspectAsync(
-        IReadOnlyList<EvidenceUpload> invoices, IReadOnlyList<EvidenceUpload> photos, CancellationToken ct)
+        IReadOnlyList<EvidenceUpload> invoices,
+        IReadOnlyList<EvidenceUpload> photos,
+        IReadOnlyList<EvidenceUpload> protectionPlanDocuments,
+        CancellationToken ct)
     {
-        var files = new List<InspectedEvidence>(invoices.Count + photos.Count);
+        var files = new List<InspectedEvidence>(invoices.Count + photos.Count + protectionPlanDocuments.Count);
         foreach (var (upload, kind) in invoices.Select(u => (u, EvidenceKind.Invoice))
-                     .Concat(photos.Select(u => (u, EvidenceKind.Photo))))
+                     .Concat(photos.Select(u => (u, EvidenceKind.Photo)))
+                     .Concat(protectionPlanDocuments.Select(u => (u, EvidenceKind.ProtectionPlanDocument))))
         {
             var type = EvidenceFileType.Unknown;
             if (upload.Length > 0)
@@ -108,7 +119,37 @@ internal static class EvidenceUploads
             : null;
     }
 
-    private static string KeyOf(InspectedEvidence file) => file.Kind == EvidenceKind.Invoice ? InvoiceKey : PhotosKey;
+    private static string KeyOf(InspectedEvidence file) => file.Kind switch
+    {
+        EvidenceKind.Invoice => InvoiceKey,
+        EvidenceKind.ProtectionPlanDocument => ProtectionPlanDocumentKey,
+        _ => PhotosKey,
+    };
+
+    /// <summary>The "1 invoice, 2 photos and the protection plan document" part of a trail summary; empty kinds are left out.</summary>
+    public static List<string> DescribeStored(IReadOnlyCollection<ClaimEvidence> evidence)
+    {
+        var invoices = evidence.Count(e => e.Kind == EvidenceKind.Invoice);
+        var photos = evidence.Count(e => e.Kind == EvidenceKind.Photo);
+        var plans = evidence.Count(e => e.Kind == EvidenceKind.ProtectionPlanDocument);
+        var parts = new List<string>(3);
+        if (invoices > 0)
+        {
+            parts.Add($"{invoices} invoice{(invoices == 1 ? string.Empty : "s")}");
+        }
+
+        if (photos > 0)
+        {
+            parts.Add($"{photos} photo{(photos == 1 ? string.Empty : "s")}");
+        }
+
+        if (plans > 0)
+        {
+            parts.Add("the protection plan document");
+        }
+
+        return parts;
+    }
 
     /// <summary>Trail payload of stored evidence (no file names: they are claimant-supplied).</summary>
     public static object TrailPayload(ClaimEvidence evidence) => new

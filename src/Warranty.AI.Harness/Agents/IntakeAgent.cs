@@ -149,11 +149,14 @@ public sealed class IntakeAgent(
             missing.Add(RequestedItem.Create(RequestedItemCodes.Invoice, "Please add the invoice or receipt of the purchase."));
         }
 
-        // FILE_TYPES — the stored content type was detected from the file content at upload.
+        // FILE_TYPES — the stored content type was detected from the file content at upload. A protection plan
+        // document (002 FR-036) may be any type an invoice may be.
+        var plans = input.Evidence.Where(e => e.Kind == EvidenceKind.ProtectionPlanDocument).ToList();
         var badInvoices = invoices.Where(e => !IsSupported(e, InvoiceTypes)).ToList();
         var badPhotos = photos.Where(e => !IsSupported(e, PhotoTypes)).ToList();
-        var badOthers = input.Evidence.Where(e => e.Kind is not (EvidenceKind.Invoice or EvidenceKind.Photo)).ToList();
-        var unsupported = badInvoices.Concat(badPhotos).Concat(badOthers).ToList();
+        var badPlans = plans.Where(e => !IsSupported(e, InvoiceTypes)).ToList();
+        var badOthers = input.Evidence.Where(e => e.Kind is not (EvidenceKind.Invoice or EvidenceKind.Photo or EvidenceKind.ProtectionPlanDocument)).ToList();
+        var unsupported = badInvoices.Concat(badPhotos).Concat(badPlans).Concat(badOthers).ToList();
         checks.Add(Check(
             ValidationCheckCodes.FileTypes,
             unsupported.Count == 0,
@@ -188,6 +191,24 @@ public sealed class IntakeAgent(
         if (region is null)
         {
             missing.Add(RequestedItem.Create(RequestedItemCodes.Other, "Please tell us the country where you bought the product."));
+        }
+
+        // PROTECTION_PLAN_DOCUMENT_PRESENT — only for a claim that states an additional protection plan (002 FR-037):
+        // the plan can only be checked by a reviewer with its document, so a missing one is requested first.
+        if (input.HasProtectionPlan)
+        {
+            checks.Add(Check(ValidationCheckCodes.ProtectionPlanDocumentPresent, plans.Count > 0, Count(plans.Count, "protection plan document")));
+            if (plans.Count == 0)
+            {
+                missing.Add(RequestedItem.Create(
+                    RequestedItemCodes.ProtectionPlanDocument,
+                    "Please add your protection plan document, for example the plan certificate or its purchase receipt."));
+            }
+            else if (badPlans.Count == plans.Count)
+            {
+                missing.Add(RequestedItem.Create(
+                    RequestedItemCodes.ProtectionPlanDocument, "Please add your protection plan document as a PDF, JPEG, PNG or WebP file."));
+            }
         }
 
         return (checks, missing.Distinct().ToList());

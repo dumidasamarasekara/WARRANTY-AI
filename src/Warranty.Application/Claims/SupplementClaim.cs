@@ -13,7 +13,8 @@ namespace Warranty.Application.Claims;
 /// <paramref name="ClaimId"/> is the claim the caller may act on: the claimant token's claim on the
 /// claimant channel, the path's claim ID for a claims agent. <paramref name="Reference"/> is the path
 /// reference of the claimant route and must name the same claim; it is null for staff. The tenant comes
-/// from <see cref="ITenantContext"/> only.
+/// from <see cref="ITenantContext"/> only. <paramref name="ProtectionPlanDocuments"/> holds the
+/// <c>protectionPlanDocument</c> parts (at most one; 002 FR-036, requested as <c>PROTECTION_PLAN_DOCUMENT</c>).
 /// </summary>
 public sealed record SupplementClaimCommand(
     ClaimChannel Channel,
@@ -21,7 +22,8 @@ public sealed record SupplementClaimCommand(
     string? Reference,
     string? Note,
     IReadOnlyList<EvidenceUpload> Invoices,
-    IReadOnlyList<EvidenceUpload> Photos);
+    IReadOnlyList<EvidenceUpload> Photos,
+    IReadOnlyList<EvidenceUpload>? ProtectionPlanDocuments = null);
 
 /// <summary>Outcome of <see cref="SupplementClaim.ExecuteAsync"/>.</summary>
 public abstract record SupplementClaimResult
@@ -96,7 +98,7 @@ public sealed class SupplementClaim(
             return new SupplementClaimResult.Conflict(NotPendingDetail);
         }
 
-        var files = await EvidenceUploads.InspectAsync(command.Invoices, command.Photos, ct);
+        var files = await EvidenceUploads.InspectAsync(command.Invoices, command.Photos, command.ProtectionPlanDocuments ?? [], ct);
         if (EvidenceUploads.HasHeic(files))
         {
             return new SupplementClaimResult.UnsupportedMediaType(SubmitClaim.HeicMessage);
@@ -165,6 +167,11 @@ public sealed class SupplementClaim(
             EvidenceUploads.AddError(errors, EvidenceUploads.PhotosKey, $"Add at most {SubmitClaim.MaxPhotos} photos.");
         }
 
+        if (command.ProtectionPlanDocuments is { Count: > 1 })
+        {
+            EvidenceUploads.AddError(errors, EvidenceUploads.ProtectionPlanDocumentKey, "Add one protection plan document.");
+        }
+
         if (note is { Length: > MaxNoteLength })
         {
             EvidenceUploads.AddError(errors, NoteKey, $"Use at most {MaxNoteLength} characters.");
@@ -183,19 +190,7 @@ public sealed class SupplementClaim(
         Claim claim, ClaimChannel channel, string[] requestedItems, IReadOnlyList<ClaimEvidence> evidence, string? note, CancellationToken ct)
     {
         var claimant = channel == ClaimChannel.ClaimantPortal;
-        var invoices = evidence.Count(e => e.Kind == EvidenceKind.Invoice);
-        var photos = evidence.Count(e => e.Kind == EvidenceKind.Photo);
-        var parts = new List<string>(3);
-        if (invoices > 0)
-        {
-            parts.Add($"{invoices} invoice{(invoices == 1 ? string.Empty : "s")}");
-        }
-
-        if (photos > 0)
-        {
-            parts.Add($"{photos} photo{(photos == 1 ? string.Empty : "s")}");
-        }
-
+        var parts = EvidenceUploads.DescribeStored(evidence);
         if (note is not null)
         {
             parts.Add("a note");
