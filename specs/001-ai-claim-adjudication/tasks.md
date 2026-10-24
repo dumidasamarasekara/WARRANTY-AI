@@ -306,7 +306,7 @@ an increment. Scenario IDs (S1–S23) refer to [quickstart.md §4](./quickstart.
 - [X] T113 [P] Add an Aspire smoke test in `tests/Warranty.IntegrationTests/Smoke/AppHostSmokeTests.cs` (trait `Category=Smoke`) that boots the AppHost in replay mode and completes S1
 - [ ] T114 Run S1 with live models five times, record p50/p95 time-to-decision against SC-001 (< 2 minutes) and cache-read tokens in `artifacts/validation/performance.md`; tune route effort or parallelism if the target is missed
 - [X] T115 Update `CLAUDE.md` and `specs/001-ai-claim-adjudication/quickstart.md` with the verified build, run, test and evaluation commands
-- [ ] T116 Run the full quickstart validation S1–S23 (UI and headless) and record results in `artifacts/validation/quickstart-results.md`; include a timed walkthrough per tenant: a reviewer who has not seen the claim opens S5 from the queue and records a decision (SC-008, target < 5 minutes), and an auditor who has not seen the claims explains S1, S2 and S11 from the decision trace alone (SC-007, target < 5 minutes each); record the times and any screen that slowed them down
+- [X] T116 Run the full quickstart validation S1–S23 (UI and headless) and record results in `artifacts/validation/quickstart-results.md`; include a timed walkthrough per tenant: a reviewer who has not seen the claim opens S5 from the queue and records a decision (SC-008, target < 5 minutes), and an auditor who has not seen the claims explains S1, S2 and S11 from the decision trace alone (SC-007, target < 5 minutes each); record the times and any screen that slowed them down
 
 ---
 
