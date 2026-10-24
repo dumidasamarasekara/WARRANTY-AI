@@ -6,6 +6,7 @@ namespace Warranty.Application.Abstractions.Knowledge;
 /// <summary>
 /// Everything the harness knows about one claim round. The customer appears only as a redacted view:
 /// identifiers are placeholders and never reach a prompt (FR-006a, research R28).
+/// <see cref="HasProtectionPlan"/> is the claim's stated additional protection plan (002 FR-036).
 /// </summary>
 public sealed record CaseContext(
     Guid ClaimId,
@@ -26,7 +27,8 @@ public sealed record CaseContext(
     IReadOnlyList<CaseEvidence> Evidence,
     ClaimHistoryCounts History,
     bool ReviewerInfoRequested,
-    int AutoInfoRequestCount);
+    int AutoInfoRequestCount,
+    bool HasProtectionPlan = false);
 
 /// <summary>The catalog product, when the product/serial pair is in the tenant's catalog.</summary>
 public sealed record CaseProduct(Guid ProductId, string ModelCode, string Name, string Category, decimal ClaimValue);

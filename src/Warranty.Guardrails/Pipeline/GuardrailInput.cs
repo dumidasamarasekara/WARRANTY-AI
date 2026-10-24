@@ -29,7 +29,8 @@ public sealed record GuardrailInput(
 /// the catalog value of the product model; it and the category are null when the product is not in
 /// the tenant's catalog. <see cref="PriorApprovedAccidental"/> is <c>claim_history_lookup</c>'s all-time
 /// count of approved accidental-damage claims for the serial (same tenant), read by
-/// <see cref="AccidentalDamageRule"/>.
+/// <see cref="AccidentalDamageRule"/>. <see cref="HasProtectionPlan"/> is the claim's stated additional protection plan
+/// (002 FR-036), read by the protection-plan check (002 research R9).
 /// </summary>
 public sealed record CaseFacts(
     Guid TenantId,
@@ -41,7 +42,8 @@ public sealed record CaseFacts(
     bool ReviewerInfoRequested,
     int AutoInfoRequestCount,
     DateOnly PurchaseDate,
-    int PriorApprovedAccidental);
+    int PriorApprovedAccidental,
+    bool HasProtectionPlan = false);
 
 /// <summary>Evidence step facts: claim-vs-evidence consistency checks (FR-016), photo findings and missing items.</summary>
 public sealed record EvidenceFacts(
