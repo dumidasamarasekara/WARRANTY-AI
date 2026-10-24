@@ -94,6 +94,38 @@ public sealed class RepairAttempt
         Result = AttemptResult.Collected;
     }
 
+    /// <summary>A transfer moves the open attempt to the new centre; the attempt continues there.</summary>
+    internal void MoveTo(Guid serviceCenterId)
+    {
+        RequireOpen();
+        if (serviceCenterId == Guid.Empty)
+        {
+            throw new ArgumentException("A repair centre ID is required.", nameof(serviceCenterId));
+        }
+
+        ServiceCenterId = serviceCenterId;
+    }
+
+    /// <summary>A correction of the reported estimate (the original repair event keeps the reported amount).</summary>
+    internal void CorrectEstimate(decimal estimateAmount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(estimateAmount);
+        EstimateAmount = estimateAmount;
+    }
+
+    /// <summary>A correction sends the status change that ended this attempt back: the attempt is open again.</summary>
+    internal void Reopen()
+    {
+        if (Result is not (AttemptResult.Ready or AttemptResult.Failed or AttemptResult.NotEconomical))
+        {
+            throw new InvalidOperationException($"Repair attempt {Seq} cannot be reopened ({Result}).");
+        }
+
+        Result = AttemptResult.Open;
+        FailureReason = null;
+        EndedAt = null;
+    }
+
     private void End(AttemptResult result, string reason, DateTimeOffset endedAt)
     {
         RequireOpen();

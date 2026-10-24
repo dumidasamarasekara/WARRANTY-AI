@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
@@ -72,8 +73,10 @@ public abstract record RecordRepairEventResult
 /// <c>RepairAttemptEnded</c>) and re-evaluates the remedy with the claim's own policy version
 /// (<see cref="RemedyPolicyEvaluator"/>, an <c>Evaluated</c> remedy decision): below the attempt limit a new attempt is
 /// allowed, otherwise the remedy goes back to a reviewer (<c>REPAIR_FAILED_LIMIT</c>, <c>REPAIR_NOT_ECONOMICAL</c>) and
-/// no new attempt can start. A concurrent change detected on save is a 409. The roles (claims-agent, claims-reviewer)
-/// are enforced by the endpoint. T256 adds the US5 events.
+/// no new attempt can start. A transfer moves the repair to another eligible centre of the tenant (404 + <c>ACCESS_DENIED</c>
+/// otherwise) and a correction applies one corrected value while the corrected entry stays unchanged (FR-026, FR-027); a
+/// corrected ready mark reopens the same attempt, so its ready notification is never queued twice. A concurrent change
+/// detected on save is a 409. The roles (claims-agent, claims-reviewer) are enforced by the endpoint.
 /// </summary>
 public sealed class RecordRepairEvent(
     ITenantContext tenant,
@@ -107,6 +110,9 @@ public sealed class RecordRepairEvent(
     public const string PreconditionDetail = "The repair has changed since it was loaded; reload it and record the update again.";
 
     public const string ConcurrentChangeDetail = "The repair was changed by another request; reload it and record the update again.";
+
+    public const string SentBackAfterReEvaluationDetail =
+        "The remedy already waits for a reviewer's decision after this entry, so the entry cannot be sent back.";
 
     public const string RemedyNotInProgressDetail =
         "The claim's remedy is not a repair in progress, so the repair cannot be updated this way.";
@@ -165,7 +171,8 @@ public sealed class RecordRepairEvent(
         }
 
         var type = command.Type!.Value;
-        if (type == RepairEventType.CentreChanged && !await IsEligibleCentreAsync(claim, command.RepairCentreId!.Value, ct))
+        if (type is RepairEventType.CentreChanged or RepairEventType.Transferred
+            && !await IsEligibleCentreAsync(claim, command.RepairCentreId!.Value, ct))
         {
             await securityEvents.RecordAsync(
                 SecurityEventKind.AccessDenied, tenant.PrincipalName, command.RepairCentreId.Value.ToString(),
@@ -184,6 +191,15 @@ public sealed class RecordRepairEvent(
             && !IsRepairInProgress(remedy))
         {
             return new RecordRepairEventResult.Conflict(RemedyNotInProgressDetail, repair.Status, AllowedEvents(repair, remedy));
+        }
+
+        // Sending a failure or an uneconomical estimate back would need the remedy still to be the repair in progress.
+        if (type == RepairEventType.Correction
+            && command.ToStatus is not null
+            && repair.Events.SingleOrDefault(e => e.Seq == command.CorrectsSeq) is { Type: RepairEventType.RepairFailed or RepairEventType.EstimateReported }
+            && !IsRepairInProgress(remedy))
+        {
+            return new RecordRepairEventResult.Conflict(SentBackAfterReEvaluationDetail, repair.Status, AllowedEvents(repair, remedy));
         }
 
         var basis = type is RepairEventType.EstimateReported or RepairEventType.RepairFailed
@@ -231,6 +247,20 @@ public sealed class RecordRepairEvent(
         {
             return NotAllowed(repair, remedy, type);
         }
+        catch (ArgumentException ex) when (type is RepairEventType.Transferred or RepairEventType.Correction)
+        {
+            // The repair refuses the transfer or correction before changing anything (another centre, an entry that fits the value).
+            var field = ex.ParamName switch
+            {
+                null => "correctsSeq",
+                "serviceCenterId" => "repairCentreId",
+                var name => name,
+            };
+            return new RecordRepairEventResult.Invalid(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                [field] = [ex.Message.Replace($" (Parameter '{ex.ParamName}')", string.Empty, StringComparison.Ordinal)],
+            });
+        }
 
         return new RecordRepairEventResult.Recorded(repair);
     }
@@ -254,6 +284,11 @@ public sealed class RecordRepairEvent(
                 return (repair.RecordCollection(report), null);
             case RepairEventType.NewAttemptStarted:
                 return (repair.StartNewAttempt(command.ProductLocation!.Value, report), null);
+            case RepairEventType.Transferred:
+                return (repair.Transfer(command.RepairCentreId!.Value, command.Reason!.Trim(), report), null);
+            case RepairEventType.Correction:
+                var correction = new RepairCorrection(command.HandedOverOn, command.CentreReference, command.EstimateAmount, command.ToStatus);
+                return (repair.Correct(command.CorrectsSeq!.Value, command.Reason!.Trim(), correction, report), null);
             case RepairEventType.EstimateReported:
             {
                 var estimate = command.EstimateAmount!.Value;
@@ -310,6 +345,8 @@ public sealed class RecordRepairEvent(
             RepairEventType.EstimateReported => (TrailStep.RepairStatusUpdated, "Repair estimate reported by the repair centre."),
             RepairEventType.RepairFailed => (TrailStep.RepairAttemptEnded, AttemptEndedSummary(evaluation!)),
             RepairEventType.NewAttemptStarted => (TrailStep.RepairStatusUpdated, "New repair attempt started."),
+            RepairEventType.Transferred => (TrailStep.RepairCentreAssigned, "Repair transferred to another repair centre."),
+            RepairEventType.Correction => (TrailStep.RepairStatusUpdated, "A repair entry was corrected; the original entry is kept."),
             var other => (TrailStep.RepairStatusUpdated, $"Repair update recorded: {other}."),
         };
 
@@ -328,8 +365,14 @@ public sealed class RecordRepairEvent(
             ["serviceCenterId"] = handover?.ServiceCenterId,
             ["handedOverOn"] = recorded.Type == RepairEventType.HandedOver ? handover?.HandedOverOn : null,
             ["attemptId"] = repair.CurrentAttemptId,
-            ["reason"] = recorded.Type == RepairEventType.CentreChanged ? handover?.Reason : null,
+            ["reason"] = recorded.Type is RepairEventType.CentreChanged or RepairEventType.Transferred ? handover?.Reason : null,
         };
+
+        if (recorded.Type == RepairEventType.Correction)
+        {
+            payload["correctsSeq"] = CorrectsSeqOf(recorded);
+            payload["reason"] = CorrectionReasonOf(recorded);
+        }
 
         if (recorded.Type is RepairEventType.EstimateReported or RepairEventType.RepairFailed)
         {
@@ -356,6 +399,18 @@ public sealed class RecordRepairEvent(
         }
 
         return trail.AppendAsync(claimId, step, tenant.PrincipalId, summary, payload, ct);
+    }
+
+    private static int? CorrectsSeqOf(RepairEvent correction) => PayloadValue(correction, "correctsSeq")?.GetInt32();
+
+    private static string? CorrectionReasonOf(RepairEvent correction) => PayloadValue(correction, "reason")?.GetString();
+
+    private static JsonElement? PayloadValue(RepairEvent repairEvent, string property)
+    {
+        using var payload = JsonDocument.Parse(repairEvent.PayloadJson);
+        return payload.RootElement.ValueKind == JsonValueKind.Object && payload.RootElement.TryGetProperty(property, out var value)
+            ? value.Clone()
+            : null;
     }
 
     private static string AttemptEndedSummary(RemedyEvaluation evaluation)
@@ -464,6 +519,19 @@ public sealed class RecordRepairEvent(
                 }
 
                 break;
+
+            case RepairEventType.Transferred:
+                if (command.RepairCentreId is null || command.RepairCentreId == Guid.Empty)
+                {
+                    Add("repairCentreId", "The repair centre is required.");
+                }
+
+                ValidateReason(command.Reason, Add);
+                break;
+
+            case RepairEventType.Correction:
+                ValidateCorrection(command, today, Add);
+                break;
         }
 
         if (command.ReportedAt is not { } reportedAt)
@@ -496,6 +564,43 @@ public sealed class RecordRepairEvent(
         else if (length < MinReasonLength || length > MaxReasonLength)
         {
             add("reason", $"A reason has {MinReasonLength} to {MaxReasonLength} characters.");
+        }
+    }
+
+    /// <summary>A correction names the corrected entry, a reason and exactly one corrected value (contracts <c>RepairEventRequest</c>).</summary>
+    private static void ValidateCorrection(RecordRepairEventCommand command, DateOnly today, Action<string, string> add)
+    {
+        if (command.CorrectsSeq is not > 0)
+        {
+            add("correctsSeq", "The sequence number of the corrected entry is required.");
+        }
+
+        ValidateReason(command.Reason, add);
+        var correction = new RepairCorrection(command.HandedOverOn, command.CentreReference, command.EstimateAmount, command.ToStatus);
+        if (correction.ValueCount != 1)
+        {
+            add("correction", "A correction sets exactly one corrected value: handedOverOn, centreReference, estimateAmount or toStatus.");
+            return;
+        }
+
+        if (command.HandedOverOn > today)
+        {
+            add("handedOverOn", "The hand-over date must not be in the future.");
+        }
+
+        if (command.CentreReference is { } reference && reference.Trim().Length > RepairHandover.MaxCentreReferenceLength)
+        {
+            add("centreReference", $"A centre reference has at most {RepairHandover.MaxCentreReferenceLength} characters.");
+        }
+
+        if (command.EstimateAmount is not null)
+        {
+            ValidateEstimate(command.EstimateAmount, add);
+        }
+
+        if (command.ToStatus is { } toStatus && !Enum.IsDefined(toStatus))
+        {
+            add("toStatus", "The status is not a repair status.");
         }
     }
 

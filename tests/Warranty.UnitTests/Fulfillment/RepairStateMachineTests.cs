@@ -16,7 +16,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class RepairStateMachineTests
 {
-    private const string PendingUs5 = "Pending T256";
 
     private const string Actor = "agent-sub-t234";
     private const string Reason = "The customer asked for a centre closer to home.";
@@ -73,14 +72,11 @@ public sealed class RepairStateMachineTests
         [(Stage.NotPossibleFailed, RepairEventType.NewAttemptStarted)] = RepairStatus.AtRepairCentre,
     };
 
-    /// <summary>Every status × event pair, skipped until the tasks it needs are merged.</summary>
+    /// <summary>Every status × event pair.</summary>
     public static IEnumerable<TheoryDataRow<Stage, RepairEventType, bool>> Pairs =>
         from stage in Enum.GetValues<Stage>()
         from type in AppliedEvents
-        select new TheoryDataRow<Stage, RepairEventType, bool>(stage, type, Allowed.ContainsKey((stage, type)))
-        {
-            Skip = SkipFor(type),
-        };
+        select new TheoryDataRow<Stage, RepairEventType, bool>(stage, type, Allowed.ContainsKey((stage, type)));
 
     /// <summary>The full list per status of the table (all stories), including Correction everywhere except Collected.</summary>
     public static TheoryData<Stage, RepairEventType[]> FullAllowedEvents => new()
@@ -152,7 +148,7 @@ public sealed class RepairStateMachineTests
         RepairAt(stage).AllowedEvents().Where(known.Contains).ShouldBe(expected.Where(known.Contains), ignoreOrder: true);
     }
 
-    [Theory(Skip = PendingUs5)]
+    [Theory]
     [MemberData(nameof(FullAllowedEvents))]
     public void Allowed_events_list_every_event_of_the_table_for_each_status(Stage stage, RepairEventType[] expected)
     {
@@ -258,11 +254,6 @@ public sealed class RepairStateMachineTests
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
-
-    private static string? SkipFor(RepairEventType type)
-    {
-        return type is RepairEventType.Transferred or RepairEventType.Correction ? PendingUs5 : null;
-    }
 
     /// <summary>A report by <see cref="Actor"/> by phone, <paramref name="day"/> days after the hand-over.</summary>
     private static RepairReport Report(int day)

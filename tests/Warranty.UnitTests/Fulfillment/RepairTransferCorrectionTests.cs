@@ -13,8 +13,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class RepairTransferCorrectionTests
 {
-    private const string PendingTransferAndCorrection = "Pending T256";
-
     private const string Actor = "agent-sub-t254";
     private const string TransferReason = "The first centre cannot get the replacement panel for weeks.";
     private const string CorrectionReason = "The hand-over date was typed in wrongly; the centre confirmed it.";
@@ -29,7 +27,7 @@ public sealed class RepairTransferCorrectionTests
 
     // ── Transfer (FR-026) ──────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_transfer_after_a_failure_leaves_one_active_hand_over_at_the_new_centre_and_the_attempt_count_unchanged()
     {
         var repair = AtCentreAfterOneFailure();
@@ -60,7 +58,7 @@ public sealed class RepairTransferCorrectionTests
         payload.GetProperty("previousServiceCenterId").GetGuid().ShouldBe(FirstCentre);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void The_hand_over_at_the_new_centre_continues_the_same_attempt()
     {
         var repair = AtCentreAfterOneFailure();
@@ -75,7 +73,7 @@ public sealed class RepairTransferCorrectionTests
         repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(SecondCentre);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_transfer_before_the_hand_over_only_changes_the_active_centre()
     {
         var repair = Repair.Create(Guid.CreateVersion7(), Tenant, ClaimId, FirstCentre, CreatedAt);
@@ -86,7 +84,7 @@ public sealed class RepairTransferCorrectionTests
         repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(SecondCentre);
     }
 
-    [Theory(Skip = PendingTransferAndCorrection)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -101,7 +99,7 @@ public sealed class RepairTransferCorrectionTests
         repair.ActiveHandover.ShouldNotBeNull().ServiceCenterId.ShouldBe(FirstCentre);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_transfer_needs_another_centre()
     {
         var repair = AtCentreAfterOneFailure();
@@ -112,7 +110,7 @@ public sealed class RepairTransferCorrectionTests
         repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_ready_or_not_possible_repair_cannot_be_transferred()
     {
         var ready = AtCentre();
@@ -128,7 +126,7 @@ public sealed class RepairTransferCorrectionTests
 
     // ── Correction (FR-027) ────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_hand_over_date_correction_applies_the_corrected_date_and_keeps_the_original_entry()
     {
         var repair = AtCentre();
@@ -152,7 +150,7 @@ public sealed class RepairTransferCorrectionTests
         repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_correction_of_an_old_hand_over_after_a_transfer_corrects_that_hand_over()
     {
         var repair = AtCentreAfterOneFailure();
@@ -167,7 +165,7 @@ public sealed class RepairTransferCorrectionTests
         (repair.Status, repair.FailedAttempts, repair.Handovers.Count(h => h.IsActive)).ShouldBe((RepairStatus.AwaitingHandover, 1, 1));
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void Centre_reference_and_estimate_corrections_apply_the_corrected_values()
     {
         var repair = AtCentre();
@@ -183,7 +181,7 @@ public sealed class RepairTransferCorrectionTests
         repair.Events.Count(e => e.Type == RepairEventType.Correction).ShouldBe(2);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_corrected_ready_mark_reopens_the_same_attempt_so_a_second_ready_mark_has_the_same_notification_key()
     {
         var repair = AtCentre();
@@ -205,7 +203,7 @@ public sealed class RepairTransferCorrectionTests
         repair.Events.Count(e => e.Type == RepairEventType.MarkedReady).ShouldBe(2);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_corrected_failure_reopens_the_attempt_and_is_no_longer_counted()
     {
         var repair = AtCentre();
@@ -218,7 +216,7 @@ public sealed class RepairTransferCorrectionTests
         (attempt.Result, attempt.FailureReason).ShouldBe((AttemptResult.Open, (string?)null));
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void Only_the_latest_status_change_can_be_sent_back_and_only_to_its_previous_status()
     {
         var repair = AtCentre();
@@ -234,7 +232,7 @@ public sealed class RepairTransferCorrectionTests
         repair.Status.ShouldBe(RepairStatus.ReadyForCollection);
     }
 
-    [Theory(Skip = PendingTransferAndCorrection)]
+    [Theory]
     [InlineData("noReason", "reason")]
     [InlineData("unknownEntry", "correctsSeq")]
     [InlineData("systemEntry", "correctsSeq")]
@@ -269,7 +267,7 @@ public sealed class RepairTransferCorrectionTests
         repair.ActiveHandover.ShouldNotBeNull().HandedOverOn.ShouldBe(HandedOverOn);
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void A_collected_repair_cannot_be_corrected()
     {
         var repair = AtCentre();
@@ -283,7 +281,7 @@ public sealed class RepairTransferCorrectionTests
             .ShouldContain(nameof(RepairStatus.Collected));
     }
 
-    [Fact(Skip = PendingTransferAndCorrection)]
+    [Fact]
     public void Transfer_and_correction_are_allowed_where_the_table_lists_them()
     {
         var awaiting = Repair.Create(Guid.CreateVersion7(), Tenant, ClaimId, FirstCentre, CreatedAt);

@@ -196,7 +196,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Implementation for User Story 5
 
-- [ ] T256 [US5] Implement `Transfer` and `Correct` on `Repair` in `src/Warranty.Domain/Fulfillment/Repair.cs` and the `Transferred` and `Correction` events in `src/Warranty.Application/Fulfillment/RecordRepairEvent.cs` (reason required; correction references `correctsSeq`; corrected values applied; original event untouched)
+- [X] T256 [US5] Implement `Transfer` and `Correct` on `Repair` in `src/Warranty.Domain/Fulfillment/Repair.cs` and the `Transferred` and `Correction` events in `src/Warranty.Application/Fulfillment/RecordRepairEvent.cs` (reason required; correction references `correctsSeq`; corrected values applied; original event untouched)
 - [X] T257 [US5] Add the Transfer and Correct an entry dialogs and the struck-through corrected entries in `src/web/src/features/remedy/RepairEventDialog.tsx` and `RepairEventsTimeline.tsx`; the claimant page shows the new centre; Vitest tests
 
 **Checkpoint**: validate R12
