@@ -48,5 +48,15 @@
     "city": "Springfield",
     "postalCode": "00005",
     "country": "US"
+  },
+  {
+    "id": "11111111-0002-7000-8000-000000000006",
+    "fullName": "Sample Customer Remedy",
+    "email": "remedy.customer@aurora.example.com",
+    "phone": "+1 555 010 0006",
+    "addressLine": "600 Example Boulevard",
+    "city": "Springfield",
+    "postalCode": "00006",
+    "country": "US"
   }
 ]

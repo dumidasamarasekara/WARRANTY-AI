@@ -38,5 +38,15 @@
     "city": "Madrid",
     "postalCode": "28001",
     "country": "ES"
+  },
+  {
+    "id": "22222222-0002-7000-8000-000000000005",
+    "fullName": "Sample Customer Remedy",
+    "email": "remedy.customer@borealis.example.com",
+    "phone": "+33 1 55 50 00 05",
+    "addressLine": "5 Rue Exemple",
+    "city": "Lyon",
+    "postalCode": "69005",
+    "country": "FR"
   }
 ]

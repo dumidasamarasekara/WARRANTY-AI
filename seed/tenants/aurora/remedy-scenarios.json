@@ -1,0 +1,39 @@
+{
+  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase, region, price, problem and dates); T245 completes it.",
+  "claims": [
+    {
+      "scenario": "R1",
+      "id": "11111111-0005-7000-8000-000000000001",
+      "reference": "RMDYR1A001",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0035",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The tablet no longer charges: the battery indicator stays at zero with the original charger.",
+      "purchasedDaysAgo": -60,
+      "submittedDaysAgo": -3,
+      "approvedDaysAgo": -3,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the charging fault is a manufacturing defect."
+    },
+    {
+      "scenario": "R4-aurora",
+      "id": "11111111-0005-7000-8000-000000000002",
+      "reference": "RMDYR4A001",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0036",
+      "region": "EU",
+      "purchasePlace": "Online shop",
+      "purchasePrice": 450.00,
+      "problemDescription": "The screen flickers and goes black a few minutes after the tablet is switched on.",
+      "purchasedDaysAgo": -90,
+      "submittedDaysAgo": -7,
+      "approvedDaysAgo": -7,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the display fault is a manufacturing defect."
+    }
+  ]
+}

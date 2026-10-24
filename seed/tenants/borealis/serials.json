@@ -14,6 +14,8 @@
   { "serialNumber": "BS11-24-0013", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-15", "reservedFor": "golden G-BOR-21" },
   { "serialNumber": "BS11-24-0014", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-15", "reservedFor": "golden G-BOR-01" },
   { "serialNumber": "BS11-24-0015", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-22" },
+  { "serialNumber": "BS11-24-0016", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-29", "reservedFor": "R2 (remedy-scenarios.json)" },
+  { "serialNumber": "BS11-24-0017", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-29", "reservedFor": "R4-borealis (remedy-scenarios.json, same facts as R4-aurora)" },
 
   { "serialNumber": "BH2-24-0001", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-02" },
   { "serialNumber": "BH2-24-0002", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-04" },

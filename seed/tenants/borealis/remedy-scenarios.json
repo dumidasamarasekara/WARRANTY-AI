@@ -1,0 +1,39 @@
+{
+  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase, region, price, problem and dates); T245 completes it.",
+  "claims": [
+    {
+      "scenario": "R2",
+      "id": "22222222-0005-7000-8000-000000000001",
+      "reference": "RMDYR2B001",
+      "customerEmail": "remedy.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0016",
+      "region": "EU",
+      "purchasePlace": "Borealis Store Lyon",
+      "purchasePrice": 480.00,
+      "problemDescription": "The tablet restarts by itself several times an hour, even when it is not in use.",
+      "purchasedDaysAgo": -120,
+      "submittedDaysAgo": -4,
+      "approvedDaysAgo": -4,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the Borealis Care Warranty: the restart fault is a manufacturing defect."
+    },
+    {
+      "scenario": "R4-borealis",
+      "id": "22222222-0005-7000-8000-000000000002",
+      "reference": "RMDYR4B001",
+      "customerEmail": "remedy.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0017",
+      "region": "EU",
+      "purchasePlace": "Online shop",
+      "purchasePrice": 450.00,
+      "problemDescription": "The screen flickers and goes black a few minutes after the tablet is switched on.",
+      "purchasedDaysAgo": -90,
+      "submittedDaysAgo": -7,
+      "approvedDaysAgo": -7,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the Borealis Care Warranty: the display fault is a manufacturing defect."
+    }
+  ]
+}
