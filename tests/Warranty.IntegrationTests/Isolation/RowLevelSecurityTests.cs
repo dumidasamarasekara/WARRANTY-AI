@@ -31,6 +31,17 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
         "claims.repair_handovers", "claims.repair_attempts", "audit.repair_events",
     ];
 
+    /// <summary>
+    /// Tables of feature 003 (AddReplacements), likewise in existing schemas: 001_roles_and_rls.sql isolates them and
+    /// makes audit.replacement_events append-only without new SQL (T309).
+    /// </summary>
+    private static readonly string[] ReplacementTables =
+    [
+        "claims.replacements", "claims.replacement_locations", "claims.faulty_product_returns",
+        "claims.replacement_model_proposals", "claims.replacement_units", "audit.replacement_events",
+        "catalog.replacement_serials",
+    ];
+
     [Fact]
     public async Task Every_tenant_owned_table_shows_only_the_current_tenants_rows()
     {
@@ -41,6 +52,7 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
         tables.ShouldContain("audit.security_events");
         tables.ShouldNotContain("tenancy.tenant_channels");
         RemedyAndRepairTables.Except(tables).ShouldBeEmpty("remedy and repair tables without the tenant policy");
+        ReplacementTables.Except(tables).ShouldBeEmpty("replacement tables without the tenant policy");
 
         await using var owner = await OpenOwnerAsync();
         foreach (var table in SeededForBothTenants)
@@ -157,45 +169,101 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
 
     /// <summary>
     /// Feature 002 tables are empty until remedies are seeded, so the generic checks above would pass
-    /// vacuously. This probe writes a row of every new table for both tenants inside one rolled-back
-    /// transaction: as <c>warranty_app</c> with tenant Aurora it inserts Aurora's rows (positive control:
-    /// the grants and the WITH CHECK policy let them through), sees no Borealis row, and is refused a
-    /// Borealis row in every table; with tenant Borealis it sees the mirror image.
+    /// vacuously. This probe writes a row of every new table for both tenants (see <see cref="ShouldIsolateProbesAsync"/>).
     /// </summary>
     [Fact]
     [Trait("Feature", "002")]
-    public async Task Rows_of_every_remedy_and_repair_table_are_visible_and_writable_only_for_their_own_tenant()
+    public Task Rows_of_every_remedy_and_repair_table_are_visible_and_writable_only_for_their_own_tenant()
+        => ShouldIsolateProbesAsync(RemedyAndRepairProbes, RemedyAndRepairTables);
+
+    /// <summary>Feature 003 tables are empty until replacements exist, so they get the same raw-SQL probe as 002.</summary>
+    [Fact]
+    [Trait("Feature", "003")]
+    public Task Rows_of_every_replacement_table_are_visible_and_writable_only_for_their_own_tenant()
+        => ShouldIsolateProbesAsync(ReplacementProbes, ReplacementTables);
+
+    [Fact]
+    [Trait("Feature", "003")]
+    public async Task A_replacement_event_cannot_be_updated_or_deleted_by_the_app_or_the_owner()
+    {
+        await using var owner = await OpenOwnerAsync();
+        (await ScalarAsync<long>(
+                owner,
+                "select count(*) from pg_trigger where tgrelid = 'audit.replacement_events'::regclass and tgname = 'append_only'"))
+            .ShouldBe(1);
+        (await ScalarAsync<bool>(
+                owner,
+                "select has_table_privilege('warranty_app', 'audit.replacement_events', 'UPDATE') or " +
+                "has_table_privilege('warranty_app', 'audit.replacement_events', 'DELETE')"))
+            .ShouldBeFalse();
+
+        await using var transaction = await owner.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        var probe = await CreateProbeClaimAsync(owner, Aurora);
+        var events = ReplacementProbes.Single(t => t.Name == "audit.replacement_events");
+        foreach (var table in ReplacementProbes.Where(t => t.Name is "claims.replacements" or "audit.replacement_events"))
+        {
+            await ExecuteAsync(owner, table.Insert, probe.Parameters(table));
+        }
+
+        var scope = probe.Parameters(events);
+        (await ScalarAsync<long>(owner, events.Count, scope)).ShouldBe(1);
+
+        // The append-only trigger stops even the owner.
+        (await SqlStateInSavepointAsync(owner, transaction, "update audit.replacement_events set note = 'changed' where replacement_id = @replacement", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+        (await SqlStateInSavepointAsync(owner, transaction, "delete from audit.replacement_events where replacement_id = @replacement", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        await ExecuteAsync(owner, "set local role warranty_app");
+        await SetLocalTenantAsync(owner, Aurora);
+        (await ScalarAsync<long>(owner, events.Count, scope)).ShouldBe(1, "the app sees its tenant's event");
+        (await SqlStateInSavepointAsync(owner, transaction, "update audit.replacement_events set note = 'changed' where replacement_id = @replacement", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+        (await SqlStateInSavepointAsync(owner, transaction, "delete from audit.replacement_events where replacement_id = @replacement", scope))
+            .ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Writes a row of every probed table for both tenants inside one rolled-back transaction: as <c>warranty_app</c>
+    /// with tenant Aurora it inserts Aurora's rows (positive control: the grants and the WITH CHECK policy let them
+    /// through), sees no Borealis row, and is refused a Borealis row in every table; with tenant Borealis it sees the
+    /// mirror image.
+    /// </summary>
+    private async Task ShouldIsolateProbesAsync(ProbeTable[] probes, string[] tables)
     {
         await using var owner = await OpenOwnerAsync();
         await using var transaction = await owner.BeginTransactionAsync(TestContext.Current.CancellationToken);
         var aurora = await CreateProbeClaimAsync(owner, Aurora);
         var borealis = await CreateProbeClaimAsync(owner, Borealis);
-        foreach (var table in RemedyAndRepairProbes)
+        foreach (var table in probes)
         {
-            await ExecuteAsync(owner, table.Insert, borealis.Parameters(table, newRepair: borealis.RepairId));
+            await ExecuteAsync(owner, table.Insert, borealis.Parameters(table));
         }
 
         await ExecuteAsync(owner, "set local role warranty_app");
         await SetLocalTenantAsync(owner, Aurora);
-        foreach (var table in RemedyAndRepairProbes)
+        foreach (var table in probes)
         {
-            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, aurora.Parameters(table, newRepair: aurora.RepairId)))
+            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, aurora.Parameters(table)))
                 .ShouldBeNull($"{table.Name}: the app may write a row of its own tenant");
         }
 
-        RemedyAndRepairProbes.Select(t => t.Name).ShouldBe(RemedyAndRepairTables, ignoreOrder: true);
-        foreach (var table in RemedyAndRepairProbes)
+        probes.Select(t => t.Name).ShouldBe(tables, ignoreOrder: true);
+        foreach (var table in probes)
         {
             (await ScalarAsync<long>(owner, table.Count, aurora.Parameters(table))).ShouldBe(1, $"{table.Name}: own row");
             (await ScalarAsync<long>(owner, table.Count, borealis.Parameters(table))).ShouldBe(0, $"{table.Name}: Borealis row");
             (await ScalarAsync<long>(owner, $"select count(*) from {table.Name} where tenant_id is distinct from @aurora"))
                 .ShouldBe(0, $"{table.Name}: rows of other tenants");
-            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, borealis.Parameters(table, newRepair: Guid.CreateVersion7())))
+            var fresh = borealis.Parameters(table, newRepair: Guid.CreateVersion7(), newReplacement: Guid.CreateVersion7());
+            (await SqlStateInSavepointAsync(owner, transaction, table.Insert, fresh))
                 .ShouldBe(PostgresErrorCodes.InsufficientPrivilege, $"{table.Name}: writing a Borealis row");
         }
 
         await SetLocalTenantAsync(owner, Borealis);
-        foreach (var table in RemedyAndRepairProbes)
+        foreach (var table in probes)
         {
             (await ScalarAsync<long>(owner, table.Count, borealis.Parameters(table))).ShouldBe(1, $"{table.Name}: own row");
             (await ScalarAsync<long>(owner, table.Count, aurora.Parameters(table))).ShouldBe(0, $"{table.Name}: Aurora row");
@@ -363,16 +431,54 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             "values (@tenant, @repair, @claim, 1, 'CentreChanged', now(), now(), 'Phone', 'rls-test-002', '{}'::jsonb)"),
     ];
 
+    /// <summary>
+    /// One row of each feature-003 table, parameterised like <see cref="RemedyAndRepairProbes"/> plus the claim's
+    /// product (<c>@product</c>) and replacement (<c>@replacement</c>; the replacement row itself uses
+    /// <c>@newReplacement</c>). The serial numbers are unique per tenant only, so both tenants may use the same.
+    /// </summary>
+    private static readonly ProbeTable[] ReplacementProbes =
+    [
+        new("claims.replacements", "claim_id = @claim",
+            "insert into claims.replacements (id, tenant_id, claim_id, policy_version_id, product_rule, return_rule, minimum_cover_months, " +
+            "status, return_state, created_at, updated_at) values (@newReplacement, @tenant, @claim, @pv, 'SameModel', 'AtCollection', 0, " +
+            "'AwaitingUnit', 'NotYetReturned', now(), now())"),
+        new("claims.replacement_locations", "replacement_id = @replacement",
+            "insert into claims.replacement_locations (id, tenant_id, replacement_id, service_center_id, assignment, is_active, recorded_by, recorded_at) " +
+            "values (gen_random_uuid(), @tenant, @replacement, @centre, 'Suggested', false, 'rls-test-003', now())"),
+        new("claims.faulty_product_returns", "replacement_id = @replacement",
+            "insert into claims.faulty_product_returns (id, tenant_id, replacement_id, returned_on, serial_matches, recorded_by, recorded_at) " +
+            "values (gen_random_uuid(), @tenant, @replacement, current_date, true, 'rls-test-003', now())"),
+        new("claims.replacement_model_proposals", "replacement_id = @replacement",
+            "insert into claims.replacement_model_proposals (id, tenant_id, replacement_id, product_id, reason, state, proposed_by, proposed_at) " +
+            "values (gen_random_uuid(), @tenant, @replacement, @product, 'RLS probe', 'Declined', 'rls-test-003', now())"),
+        new("claims.replacement_units", "replacement_id = @replacement",
+            "insert into claims.replacement_units (id, tenant_id, replacement_id, seq, service_center_id, product_id, serial_number, result, reserved_at) " +
+            "values (gen_random_uuid(), @tenant, @replacement, 1, @centre, @product, 'RLS-003-UNIT', 'Released', now())"),
+        new("audit.replacement_events", "replacement_id = @replacement",
+            "insert into audit.replacement_events (tenant_id, replacement_id, claim_id, seq, type, reported_at, recorded_at, source, actor, payload) " +
+            "values (@tenant, @replacement, @claim, 1, 'LocationSuggested', now(), now(), 'Phone', 'rls-test-003', '{}'::jsonb)"),
+        new("catalog.replacement_serials", "claim_id = @claim",
+            "insert into catalog.replacement_serials (id, tenant_id, serial_number, product_id, original_serial, claim_id, original_purchase_date, " +
+            "handed_over_on, cover_end_date, created_at) values (gen_random_uuid(), @tenant, 'RLS-003-UNIT', @product, 'RLS-002-PROBE', @claim, " +
+            "current_date - 30, current_date, current_date + 365, now())"),
+    ];
+
     private sealed record ProbeTable(string Name, string Scope, string Insert)
     {
         public string Count => $"select count(*) from {Name} where {Scope}";
     }
 
-    /// <summary>The parent rows a probe needs in one tenant: a new claim, and a seeded policy version and centre.</summary>
-    private sealed record ProbeClaim(Guid TenantId, Guid ClaimId, Guid PolicyVersionId, Guid CentreId, Guid RepairId)
+    /// <summary>
+    /// The parent rows a probe needs in one tenant: a new claim (with its product), a seeded policy version and centre,
+    /// and the ids its repair and replacement rows use.
+    /// </summary>
+    private sealed record ProbeClaim(Guid TenantId, Guid ClaimId, Guid ProductId, Guid PolicyVersionId, Guid CentreId, Guid RepairId, Guid ReplacementId)
     {
-        /// <summary>Parameters for <paramref name="table"/>; <paramref name="newRepair"/> is the id a repair insert uses.</summary>
-        public (string Name, object Value)[] Parameters(ProbeTable table, Guid? newRepair = null)
+        /// <summary>
+        /// Parameters for <paramref name="table"/>; <paramref name="newRepair"/> and <paramref name="newReplacement"/> are the
+        /// ids a repair or replacement insert uses (the probe's own ids by default).
+        /// </summary>
+        public (string Name, object Value)[] Parameters(ProbeTable table, Guid? newRepair = null, Guid? newReplacement = null)
         {
             var parameters = new List<(string, object)>();
             void Add(string name, object value)
@@ -389,6 +495,9 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             Add("centre", CentreId);
             Add("repair", RepairId);
             Add("newRepair", newRepair ?? RepairId);
+            Add("product", ProductId);
+            Add("replacement", ReplacementId);
+            Add("newReplacement", newReplacement ?? ReplacementId);
             return [.. parameters];
         }
     }
@@ -413,9 +522,10 @@ public sealed class RowLevelSecurityTests(WarrantyAppFixture fixture)
             """,
             ("claim", claimId), ("tenant", tenant), ("reference", reference));
 
+        var product = await ScalarAsync<Guid>(owner, "select product_id from claims.claims where id = @claim", ("claim", claimId));
         var policyVersion = await ScalarAsync<Guid>(owner, "select id from policy.policy_versions where tenant_id = @tenant limit 1", ("tenant", tenant));
         var centre = await ScalarAsync<Guid>(owner, "select id from integration.service_centers where tenant_id = @tenant limit 1", ("tenant", tenant));
-        return new ProbeClaim(tenant, claimId, policyVersion, centre, Guid.CreateVersion7());
+        return new ProbeClaim(tenant, claimId, product, policyVersion, centre, Guid.CreateVersion7(), Guid.CreateVersion7());
     }
 
     private static Task SetLocalTenantAsync(NpgsqlConnection connection, Guid tenant)

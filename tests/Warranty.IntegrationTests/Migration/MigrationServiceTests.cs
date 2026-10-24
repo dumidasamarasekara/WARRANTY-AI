@@ -150,6 +150,78 @@ public sealed class MigrationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Feature 003 (T313, FR-037): every seeded policy version stores the replacement rules and the
+    /// "replacement not available" row of its tenant (tasks.md "Fixed identifiers").
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "003")]
+    public async Task Seeds_the_replacement_rules_of_each_policy_version()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+
+        await using var command = new NpgsqlCommand(
+            """
+            select p.code || ' v' || v.version,
+                   v.remedy_rules -> 'replacement' ->> 'productRule',
+                   v.remedy_rules -> 'replacement' ->> 'returnRule',
+                   (v.remedy_rules -> 'replacement' ->> 'minimumCoverMonths')::int,
+                   v.remedy_rules -> 'replacementNotAvailable' ->> 'remedy'
+            from policy.policy_versions v join policy.warranty_policies p on p.id = v.policy_id
+            order by 1
+            """,
+            warranty);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var rows = new List<(string, string, string, int, string)>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3), reader.GetString(4)));
+        }
+
+        rows.ShouldBe(
+        [
+            ("AUR-WP v1", "SameCategoryAtLeastClaimValue", "AtCollection", 0, "Refund"),
+            ("AUR-WP v2", "SameCategoryAtLeastClaimValue", "AtCollection", 0, "Refund"),
+            ("BOR-WP v1", "SameModel", "BeforeReservation", 6, "Refund"),
+        ]);
+    }
+
+    /// <summary>
+    /// Feature 003 (FR-038, research R14): each region of each tenant has an active centre that issues replacement
+    /// units for every product category the tenant sells, and the seeded catalog holds Aurora's AUR-TAB11.
+    /// </summary>
+    [Fact(Skip = "Pending T312")]
+    [Trait("Feature", "003")]
+    public async Task Seeds_a_replacement_location_for_every_region_and_product_category()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+
+        (await ScalarAsync(warranty, "select count(*) from integration.service_centers where is_active and issues_replacements"))
+            .ShouldBeGreaterThan(0, "no active centre issues replacements");
+        (await ScalarAsync(
+                warranty,
+                """
+                select count(*) from (
+                    select distinct s.tenant_id, s.region, p.category
+                    from integration.service_centers s
+                    join catalog.products p on p.tenant_id = s.tenant_id
+                    where not exists (
+                        select 1 from integration.service_centers l
+                        where l.tenant_id = s.tenant_id and l.region = s.region
+                          and l.is_active and l.issues_replacements and p.category = any (l.capabilities))) uncovered
+                """))
+            .ShouldBe(0, "tenant regions and product categories without a replacement location");
+        (await ScalarAsync(
+                warranty,
+                """
+                select count(*) from catalog.products p join tenancy.tenants t on t.id = p.tenant_id
+                where t.slug = 'aurora' and p.model_code = 'AUR-TAB11' and p.category = 'tablet' and p.claim_value = 520
+                """))
+            .ShouldBe(1, "Aurora's equivalent tablet AUR-TAB11");
+    }
+
+    /// <summary>
     /// Feature 002 (T222): the remedy scenario claims are Approved by the system at their historical time, and their
     /// remedy is the one the evaluator derives from the claim's own policy version — Repair set by policy from row
     /// <c>coveredDefect</c>, with an evaluation and a policy decision row — and a repair awaiting hand-over at the
