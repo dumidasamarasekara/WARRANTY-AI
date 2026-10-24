@@ -37,19 +37,30 @@ internal sealed class RemedyScenarioSeeder(
     /// <summary>The initial scenario of an approved claim without a confirmed protection plan (research R13).</summary>
     private const RemedyScenario InitialScenario = RemedyScenario.CoveredDefect;
 
-    public async Task SeedAsync(TenantSeedSet seed, CancellationToken ct)
+    public Task SeedAsync(TenantSeedSet seed, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(seed);
-        if (seed.RemedyScenarios.Count == 0)
+        return SeedClaimsAsync(seed.Tenant, seed.RemedyScenarios, "remedy scenario", onRemedy: null, ct);
+    }
+
+    /// <summary>
+    /// Seeds <paramref name="scenarios"/> of <paramref name="tenant"/> (claims whose reference exists are skipped).
+    /// <paramref name="onRemedy"/> runs inside each claim's transaction once its remedy is set, so a remedy's
+    /// fulfilment record (003's <see cref="Replacement"/>) is written with it, as the executor does (003 research R3).
+    /// </summary>
+    internal async Task SeedClaimsAsync(
+        TenantSeed tenant, IReadOnlyList<RemedyScenarioClaimSeed> scenarios, string kind, SeededRemedyHandler? onRemedy, CancellationToken ct)
+    {
+        if (scenarios.Count == 0)
         {
             return;
         }
 
         var now = time.GetUtcNow();
-        using var scope = TenantContextScope.Begin(seed.Tenant.Id, seed.Tenant.Slug, SeedingPipeline.Principal);
+        using var scope = TenantContextScope.Begin(tenant.Id, tenant.Slug, SeedingPipeline.Principal);
         var versions = await db.PolicyVersions.AsNoTracking().ToListAsync(ct);
         var added = 0;
-        foreach (var scenario in seed.RemedyScenarios)
+        foreach (var scenario in scenarios)
         {
             var reference = ClaimReference.Normalize(scenario.Reference);
             if (await db.Claims.AnyAsync(c => c.Reference == reference, ct))
@@ -57,16 +68,21 @@ internal sealed class RemedyScenarioSeeder(
                 continue;
             }
 
-            await SeedClaimAsync(scenario, reference, versions, now, ct);
+            await SeedClaimAsync(scenario, reference, versions, now, onRemedy, ct);
             added++;
         }
 
         logger.LogInformation(
-            "Seeded tenant {Tenant}: {Added} new remedy scenario claims of {Total}", seed.Tenant.Slug, added, seed.RemedyScenarios.Count);
+            "Seeded tenant {Tenant}: {Added} new {Kind} claims of {Total}", tenant.Slug, added, kind, scenarios.Count);
     }
 
     private async Task SeedClaimAsync(
-        RemedyScenarioClaimSeed scenario, string reference, IReadOnlyList<PolicyVersion> versions, DateTimeOffset now, CancellationToken ct)
+        RemedyScenarioClaimSeed scenario,
+        string reference,
+        IReadOnlyList<PolicyVersion> versions,
+        DateTimeOffset now,
+        SeededRemedyHandler? onRemedy,
+        CancellationToken ct)
     {
         var email = ContactNormalizer.NormalizeEmail(scenario.CustomerEmail);
         var customer = await db.Customers.SingleAsync(c => c.Email == email, ct);
@@ -98,7 +114,7 @@ internal sealed class RemedyScenarioSeeder(
         var version = applicable[0];
         if (scenario.DecidedRemedy is { } decided)
         {
-            await SeedDecidedRemedyAsync(claim, scenario, decided, version, product.ClaimValue, approvedAt, decided.DecidedAt(now), ct);
+            await SeedDecidedRemedyAsync(claim, product, scenario, decided, version, approvedAt, decided.DecidedAt(now), onRemedy, ct);
             return;
         }
 
@@ -164,21 +180,29 @@ internal sealed class RemedyScenarioSeeder(
                     new { seededHistory = true, remedy = remedy.ToString(), decidedBy = nameof(RemedyDecidedBy.Policy), policyVersionId = version.Id, tableRow = evaluation.TableRow },
                     token);
 
-                var repair = Repair.Create(Guid.CreateVersion7(), tenantId, claim.Id, centre?.Id, approvedAt);
-                db.Repairs.Add(repair);
-                if (centre is not null)
+                if (remedy == RemedyType.Repair)
                 {
-                    await AppendAsync(
-                        claim.Id, approvedAt, TrailStep.RepairCentreAssigned, $"Seeded history: repair centre suggested: {centre.Name}.",
-                        new
-                        {
-                            seededHistory = true,
-                            repairId = repair.Id,
-                            serviceCenterId = centre.Id,
-                            serviceCenterName = centre.Name,
-                            assignment = nameof(HandoverAssignment.Suggested),
-                        },
-                        token);
+                    var repair = Repair.Create(Guid.CreateVersion7(), tenantId, claim.Id, centre?.Id, approvedAt);
+                    db.Repairs.Add(repair);
+                    if (centre is not null)
+                    {
+                        await AppendAsync(
+                            claim.Id, approvedAt, TrailStep.RepairCentreAssigned, $"Seeded history: repair centre suggested: {centre.Name}.",
+                            new
+                            {
+                                seededHistory = true,
+                                repairId = repair.Id,
+                                serviceCenterId = centre.Id,
+                                serviceCenterName = centre.Name,
+                                assignment = nameof(HandoverAssignment.Suggested),
+                            },
+                            token);
+                    }
+                }
+
+                if (onRemedy is not null)
+                {
+                    await onRemedy(new SeededRemedy(claim, product, version, remedy, approvedAt), token);
                 }
 
                 await db.SaveChangesAsync(token);
@@ -195,16 +219,17 @@ internal sealed class RemedyScenarioSeeder(
     /// </summary>
     private async Task SeedDecidedRemedyAsync(
         Claim claim,
+        Product product,
         RemedyScenarioClaimSeed scenario,
         DecidedRemedySeed decided,
         PolicyVersion version,
-        decimal claimValue,
         DateTimeOffset approvedAt,
         DateTimeOffset decidedAt,
+        SeededRemedyHandler? onRemedy,
         CancellationToken ct)
     {
         var evaluation = evaluator.Evaluate(
-            version.RemedyRules, decided.Scenario, decided.FailedAttempts, decided.EstimateAmount, claimValue);
+            version.RemedyRules, decided.Scenario, decided.FailedAttempts, decided.EstimateAmount, product.ClaimValue);
         if (!evaluation.NeedsReviewer || !evaluation.AllowedRemedies.Contains(decided.Remedy))
         {
             throw new InvalidDataException(
@@ -265,6 +290,11 @@ internal sealed class RemedyScenarioSeeder(
                     },
                     token);
 
+                if (onRemedy is not null)
+                {
+                    await onRemedy(new SeededRemedy(claim, product, version, decided.Remedy, decidedAt), token);
+                }
+
                 await db.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
             },
@@ -279,7 +309,8 @@ internal sealed class RemedyScenarioSeeder(
             : AppendAsync(claim.Id, approvedAt, TrailStep.ReviewerDecided, "Seeded history: approved by a reviewer.", marker, ct);
     }
 
-    private Task AppendAsync(Guid claimId, DateTimeOffset at, TrailStep step, string summary, object payload, CancellationToken ct)
+    /// <summary>Appends a seeded-history trail entry at its historical time <paramref name="at"/>.</summary>
+    internal Task AppendAsync(Guid claimId, DateTimeOffset at, TrailStep step, string summary, object payload, CancellationToken ct)
         => new DecisionTrailWriter(db, tenantContext, new FixedTime(at)).AppendAsync(claimId, step, TenantSeeder.HistoryActor, summary, payload, ct);
 
     /// <summary>The executor's recommendation summary (policy version and table row).</summary>
@@ -300,3 +331,12 @@ internal sealed class RemedyScenarioSeeder(
         public override DateTimeOffset GetUtcNow() => instant;
     }
 }
+
+/// <summary>
+/// A seeded claim whose remedy was just set (by the policy at <see cref="DecidedAt"/> = the approval, or by the
+/// seeded-history reviewer): the claim, its product, the applicable policy version and the remedy.
+/// </summary>
+internal sealed record SeededRemedy(Claim Claim, Product Product, PolicyVersion Version, RemedyType Remedy, DateTimeOffset DecidedAt);
+
+/// <summary>Runs inside a seeded claim's transaction once its remedy is set (<see cref="RemedyScenarioSeeder.SeedClaimsAsync"/>).</summary>
+internal delegate Task SeededRemedyHandler(SeededRemedy remedy, CancellationToken ct);

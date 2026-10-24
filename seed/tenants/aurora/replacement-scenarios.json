@@ -1,0 +1,53 @@
+{
+  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Aurora reaches Replacement only after two failed repairs (row repairFailed; no repair history is seeded, so the faulty product is not held by a repair centre). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Aurora returns the faulty product at collection, Borealis before reservation. X5 is a second X1-like claim so the refused hand-over is tested before any unit is reserved, independently of X2-X4. Later stories add their claims here (X8-X12, X16, X17).",
+  "claims": [
+    {
+      "scenario": "X1-aurora",
+      "id": "11111111-0006-7000-8000-000000000001",
+      "reference": "RPMTX1A001",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0301",
+      "region": "EU",
+      "purchasePlace": "Online shop",
+      "purchasePrice": 450.00,
+      "problemDescription": "The display shows vertical lines and the touch input stops responding after a few minutes of use.",
+      "purchasedDaysAgo": -70,
+      "submittedDaysAgo": -25,
+      "approvedDaysAgo": -25,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the display fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Replacement",
+        "reason": "Two repair attempts did not fix the display; the policy gives a replacement.",
+        "decidedDaysAgo": -1
+      }
+    },
+    {
+      "scenario": "X5",
+      "id": "11111111-0006-7000-8000-000000000005",
+      "reference": "RPMTX5A001",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0305",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The tablet switches itself off when the battery shows more than half its charge.",
+      "purchasedDaysAgo": -60,
+      "submittedDaysAgo": -20,
+      "approvedDaysAgo": -20,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the power fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Replacement",
+        "reason": "Two repair attempts did not fix the power fault; the policy gives a replacement.",
+        "decidedDaysAgo": -1
+      }
+    }
+  ]
+}

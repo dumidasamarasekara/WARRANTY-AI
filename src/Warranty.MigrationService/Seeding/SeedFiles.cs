@@ -91,6 +91,7 @@ public sealed record HistoricalClaimSeed(
 /// validation scenario it serves (e.g. <c>R1</c>). The remedy is not part of the seed: it is derived from the
 /// claim's applicable policy version at seeding time. <see cref="ApprovedBy"/> is <c>System</c> (automatic
 /// approval) or <c>Reviewer</c>; every <c>*DaysAgo</c> value is a signed day offset from the seeding day.
+/// <c>replacement-scenarios.json</c> (003 quickstart §2) uses the same shape, always with a decided remedy Replacement.
 /// </summary>
 public sealed record RemedyScenarioClaimSeed(
     string Scenario,
@@ -154,14 +155,16 @@ public sealed record TenantSeedSet(
     IReadOnlyList<HistoricalClaimSeed> HistoricalClaims,
     IReadOnlyList<KnowledgeSeed> Knowledge,
     IReadOnlyList<PolicyRemediesSeed> PolicyRemedies,
-    IReadOnlyList<RemedyScenarioClaimSeed> RemedyScenarios);
+    IReadOnlyList<RemedyScenarioClaimSeed> RemedyScenarios,
+    IReadOnlyList<RemedyScenarioClaimSeed> ReplacementScenarios);
 
 public sealed record SeedSet(IReadOnlyList<TenantSeedSet> Tenants, IReadOnlyList<KnowledgeSeed> GlobalKnowledge);
 
 /// <summary>
 /// Reads the synthetic seed folder (data-model.md §Seed data): <c>tenants/{slug}/tenant.json</c>,
 /// <c>products.json</c>, <c>serials.json</c>, <c>customers.json</c>, <c>service-centers.json</c>,
-/// optional <c>historical-claims.json</c>, <c>remedy-scenarios.json</c> and <c>policies/*.md</c>, plus <c>global/*.md</c>. Every
+/// optional <c>historical-claims.json</c>, <c>remedy-scenarios.json</c>, <c>replacement-scenarios.json</c> and
+/// <c>policies/*.md</c>, plus <c>global/*.md</c>. Every
 /// file is checked for references the database would only reject later (unknown model codes,
 /// customers or a folder name that differs from the slug).
 /// </summary>
@@ -207,6 +210,9 @@ public static class SeedFiles
         var scenarios = File.Exists(Path.Combine(folder, "remedy-scenarios.json"))
             ? Read<RemedyScenariosFile>(folder, "remedy-scenarios.json").Claims
             : [];
+        var replacements = File.Exists(Path.Combine(folder, "replacement-scenarios.json"))
+            ? Read<RemedyScenariosFile>(folder, "replacement-scenarios.json").Claims
+            : [];
 
         var models = products.Select(p => p.ModelCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var emails = customers.Select(c => c.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -220,7 +226,10 @@ public static class SeedFiles
                 .Select(h => $"history claim {h.Reference} must be purchased, submitted and finalized in that order, in the past"))
             .Concat(history.Where(h => h.PhotoDamageTypes is { } types && (types.Count == 0 || types.Any(string.IsNullOrWhiteSpace)))
                 .Select(h => $"history claim {h.Reference} lists an empty photo damage type"))
-            .Concat(ScenarioErrors(scenarios, history, models, serialNumbers, emails))
+            .Concat(ScenarioErrors("remedy scenario", scenarios, models, serialNumbers, emails))
+            .Concat(ScenarioErrors("replacement scenario", replacements, models, serialNumbers, emails))
+            .Concat(ReplacementScenarioErrors(replacements))
+            .Concat(SeededClaimDuplicates(history, [.. scenarios, .. replacements]))
             .Concat(centers.GroupBy(c => c.Id).Where(g => g.Count() > 1).Select(g => $"service center {g.Key} is listed more than once"))
             .Concat(centers.Where(c => c.Priority < 0).Select(c => $"service center {c.Name} has a negative priority"))
             // Claimants see an active centre's address and opening hours (data-model.md); inactive centres need neither.
@@ -236,7 +245,7 @@ public static class SeedFiles
 
         var knowledge = Markdown(Path.Combine(folder, "policies"), $"{tenant.KnowledgeNamespace}/policies");
         var remedies = knowledge.Select(k => Remedies(folder, k)).OfType<PolicyRemediesSeed>().ToList();
-        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge, remedies, scenarios);
+        return new TenantSeedSet(tenant, products, serials, customers, centers, history, knowledge, remedies, scenarios, replacements);
     }
 
     /// <summary>
@@ -289,23 +298,24 @@ public static class SeedFiles
     }
 
     /// <summary>
-    /// Checks the remedy scenario claims for what the database or the domain would only reject later: unknown
-    /// model, serial or customer, an invalid claim reference, a scenario, ID or reference used twice (also
-    /// against the history claims), dates out of order or in the future, and a blank text.
+    /// Checks the remedy or replacement scenario claims (<paramref name="kind"/> names the file in messages) for what
+    /// the database or the domain would only reject later: unknown model, serial or customer, an invalid claim
+    /// reference, a scenario used twice, dates out of order or in the future, and a blank text. IDs and references
+    /// used twice are checked across all seeded claims by <see cref="SeededClaimDuplicates"/>.
     /// </summary>
     private static IEnumerable<string> ScenarioErrors(
+        string kind,
         IReadOnlyList<RemedyScenarioClaimSeed> scenarios,
-        IReadOnlyList<HistoricalClaimSeed> history,
         HashSet<string> models,
         HashSet<string> serialNumbers,
         HashSet<string> emails)
     {
         foreach (var s in scenarios)
         {
-            var name = $"remedy scenario {s.Scenario}";
+            var name = $"{kind} {s.Scenario}";
             if (string.IsNullOrWhiteSpace(s.Scenario))
             {
-                yield return $"remedy scenario claim {s.Reference} has no scenario name";
+                yield return $"{kind} claim {s.Reference} has no scenario name";
             }
 
             if (!models.Contains(s.ModelCode))
@@ -364,9 +374,23 @@ public static class SeedFiles
 
         foreach (var duplicate in scenarios.GroupBy(s => s.Scenario, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
         {
-            yield return $"remedy scenario {duplicate.Key} is listed more than once";
+            yield return $"{kind} {duplicate.Key} is listed more than once";
         }
+    }
 
+    /// <summary>
+    /// A replacement scenario claim reaches Replacement only through a reviewer's decision (003 research R14): its
+    /// <see cref="RemedyScenarioClaimSeed.DecidedRemedy"/> must be present and name Replacement.
+    /// </summary>
+    private static IEnumerable<string> ReplacementScenarioErrors(IReadOnlyList<RemedyScenarioClaimSeed> replacements)
+        => replacements
+            .Where(s => s.DecidedRemedy?.Remedy != RemedyType.Replacement)
+            .Select(s => $"replacement scenario {s.Scenario} needs a decided remedy Replacement");
+
+    /// <summary>A claim ID or reference used by more than one seeded claim (history, remedy and replacement scenarios).</summary>
+    private static IEnumerable<string> SeededClaimDuplicates(
+        IReadOnlyList<HistoricalClaimSeed> history, IReadOnlyList<RemedyScenarioClaimSeed> scenarios)
+    {
         var references = history.Select(h => ClaimReference.Normalize(h.Reference))
             .Concat(scenarios.Select(s => ClaimReference.Normalize(s.Reference ?? string.Empty)));
         foreach (var duplicate in references.GroupBy(r => r, StringComparer.Ordinal).Where(g => g.Count() > 1))
