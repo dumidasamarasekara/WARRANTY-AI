@@ -1119,7 +1119,7 @@ export interface components {
             /** @description EV-n reference used in the latest evaluation */
             ref?: string;
             /** @enum {string} */
-            kind: "Invoice" | "Photo" | "Other";
+            kind: "Invoice" | "Photo" | "Other" | "ProtectionPlanDocument";
             fileName: string;
             contentType: string;
             round: number;

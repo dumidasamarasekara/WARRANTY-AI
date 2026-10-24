@@ -29,8 +29,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 {
-    private const string PendingReviewerConfirmation = "Pending T262";
-
     /// <summary>Wire name of the protection-plan guardrail check (T261).</summary>
     private const string PlanCheck = "PROTECTION_PLAN_NOT_RELIED_ON";
 
@@ -130,22 +128,25 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
         item.GetProperty("escalationReasons").EnumerateArray().Select(r => r.GetString()).ShouldContain(scenario.Outcome.EscalationReasonText);
     }
 
-    [Fact(Skip = PendingReviewerConfirmation)]
+    [Fact]
     public async Task R14_the_reviewer_confirms_the_plan_and_approves_and_the_remedy_comes_from_row_protectionPlan()
     {
+        // A claim of its own: approving the shared R14 claim would race the escalation test, which reads it under review.
+        // It repeats the R14 serial and files, so it may carry duplicate signals as well; it still goes to review.
         var scenario = GoldenScenario.Load("R14-borealis");
-        var claimId = await SubmitR14Async(scenario);
+        scenario.ProtectionPlanDocument.ShouldNotBeNull("precondition");
+        var claimId = await SubmitAsClaimantAsync(scenario);
         (await WaitUntilSettledAsync(claimId)).ShouldBe(ClaimStatus.UnderReview);
 
         var decision = await DecideAsync(TestStaffUsers.ReviewerBorealis, claimId, new JsonObject
         {
             ["decision"] = "Approve",
             ["claimantExplanation"] = "Your protection plan covers the accidental damage to your Borealis Slate 11; we are arranging a free repair.",
-            ["internalReason"] = "Protection plan document checked: valid plan for this serial, covering accidental damage.",
+            ["justification"] = "Protection plan document checked: valid plan for this serial, covering accidental damage.",
             ["protectionPlanConfirmed"] = true,
         });
 
-        decision.StatusCode.ShouldBe(HttpStatusCode.OK, decision.Body);
+        decision.StatusCode.ShouldBe(HttpStatusCode.Created, decision.Body);
         var claim = await ClaimRowAsync(claimId);
         claim.Status.ShouldBe("Approved");
         claim.ProtectionPlanConfirmed.ShouldBe(true);
@@ -195,7 +196,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 
     // ---- Submission --------------------------------------------------------------------------------
 
-    /// <summary>The R14 claim with its plan document, shared by the escalation and the reviewer tests.</summary>
+    /// <summary>The R14 claim with its plan document, submitted once per run (the escalation test).</summary>
     private Task<Guid> SubmitR14Async(GoldenScenario scenario)
     {
         scenario.ProtectionPlanDocument.ShouldNotBeNull("precondition");

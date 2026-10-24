@@ -405,7 +405,9 @@ public sealed class ActionExecutor(
             return;
         }
 
-        const RemedyScenario scenario = RemedyScenario.CoveredDefect;
+        // Research R13: a protection plan the reviewer confirmed (recorded before the approval) uses row protectionPlan when
+        // the version lets a plan lift its exclusion; automatic approvals and every other claim are a covered defect.
+        var scenario = RemedyQueries.InitialScenario(claim.ProtectionPlanConfirmed == true, version);
         var evaluation = remedyEvaluator.Evaluate(version.RemedyRules, scenario, claimValue: product?.ClaimValue);
         if (chosen is { } choice && !evaluation.AllowedRemedies.Contains(choice))
         {

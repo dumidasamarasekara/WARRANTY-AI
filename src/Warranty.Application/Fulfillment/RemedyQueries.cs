@@ -127,6 +127,38 @@ public sealed class RemedyQueries(
         return ToPreview(evaluation);
     }
 
+    /// <summary>
+    /// <c>remedyPreviewWithProtectionPlan</c> (002 research R9, T262): what approving would set once the reviewer confirms the
+    /// declared protection plan — row <c>protectionPlan</c>. Null unless the claim declares a plan and its applicable version
+    /// lets a plan lift the accidental-damage exclusion; otherwise a confirmed plan changes nothing (FR-006).
+    /// </summary>
+    public async Task<RemedyPreview?> PreviewWithProtectionPlanAsync(Claim claim, Product? product, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        if (!claim.HasProtectionPlan)
+        {
+            return null;
+        }
+
+        var version = await ApplicableVersionAsync(claim, product, ct);
+        if (InitialScenario(planConfirmed: true, version) != RemedyScenario.ProtectionPlanDamage)
+        {
+            return null;
+        }
+
+        return ToPreview(evaluator.Evaluate(version!.RemedyRules, RemedyScenario.ProtectionPlanDamage, claimValue: product?.ClaimValue));
+    }
+
+    /// <summary>
+    /// The scenario of an approval (research R13): <see cref="RemedyScenario.ProtectionPlanDamage"/> when the reviewer confirmed
+    /// a protection plan and the claim's version lets a plan lift its accidental-damage exclusion, otherwise
+    /// <see cref="RemedyScenario.CoveredDefect"/> (a plan the version does not honour changes nothing, FR-006).
+    /// </summary>
+    public static RemedyScenario InitialScenario(bool planConfirmed, PolicyVersion? version)
+        => planConfirmed && version?.RemedyRules?.ProtectionPlan is { LiftsAccidentalDamageExclusion: true }
+            ? RemedyScenario.ProtectionPlanDamage
+            : RemedyScenario.CoveredDefect;
+
     /// <summary>The evaluator output as a preview: the recommendation is the single allowed remedy.</summary>
     public static RemedyPreview ToPreview(RemedyEvaluation evaluation)
     {
