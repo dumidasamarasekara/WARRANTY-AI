@@ -42,13 +42,13 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 6,
-            ["catalog.product_serials"] = 113,
+            ["catalog.product_serials"] = 115,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 6,
-            ["audit.decision_trail_entries"] = 24,
-            ["claims.claim_remedies"] = 4,
-            ["claims.remedy_decisions"] = 8,
+            ["claims.claims"] = 8,
+            ["audit.decision_trail_entries"] = 32,
+            ["claims.claim_remedies"] = 6,
+            ["claims.remedy_decisions"] = 12,
             ["claims.repairs"] = 4,
             ["claims.repair_handovers"] = 4,
             ["audit.repair_events"] = 4,
@@ -196,6 +196,51 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             "RMDYR2B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
             "RMDYR4A001 | Approved | System | AUR-WP v2 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Aurora Service Center Amsterdam",
             "RMDYR4B001 | Approved | System | BOR-WP v1 | InProgress | Repair | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | Borealis Repair Hub Lyon",
+        ]);
+    }
+
+    /// <summary>
+    /// Feature 002 (T251, R11): the claims with a decided remedy get it from a re-evaluation of their own policy version
+    /// after two failed repairs (row <c>repairFailed</c>) and a seeded-history reviewer decision with its reason —
+    /// Replacement at Aurora, Refund at Borealis — in progress, with no repair, no completion and no refund request.
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "002")]
+    public async Task Decided_remedy_claims_get_the_reviewer_decided_remedy_of_their_own_policy_version()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+        await using var command = new NpgsqlCommand(
+            """
+            select c.reference, c.status, p.code || ' v' || v.version, r.scenario, r.state, r.remedy,
+                   (select string_agg(d.kind || ':' || d.table_row || ':' || coalesce(d.decided_by, '-') || ':' || d.failed_attempts, ',' order by d.seq)
+                    from claims.remedy_decisions d where d.claim_id = c.id),
+                   (select d.reason from claims.remedy_decisions d where d.claim_id = c.id and d.kind = 'Decided'),
+                   (select string_agg(t.step, ',' order by t.seq) from audit.decision_trail_entries t where t.claim_id = c.id),
+                   (select count(*) from claims.repairs rp where rp.claim_id = c.id)
+                 + (select count(*) from claims.remedy_completions rc where rc.claim_id = c.id)
+            from claims.claims c
+            join claims.claim_remedies r on r.claim_id = c.id
+            join policy.policy_versions v on v.id = r.policy_version_id
+            join policy.warranty_policies p on p.id = v.policy_id
+            where c.reference like 'RMDYR11%'
+            order by c.reference
+            """,
+            warranty);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var rows = new List<string>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            reader.GetString(7).ShouldStartWith("Two repair attempts did not fix");
+            reader.GetInt64(9).ShouldBe(0);
+            rows.Add(string.Join(" | ", Enumerable.Range(0, 9).Where(i => i != 7)
+                .Select(i => Convert.ToString(reader.GetValue(i), System.Globalization.CultureInfo.InvariantCulture))));
+        }
+
+        rows.ShouldBe(
+        [
+            "RMDYR11A01 | Approved | AUR-WP v2 | RepairFailed | InProgress | Replacement | Evaluated:repairFailed:-:2,Decided:repairFailed:Reviewer:2 | ClaimSubmitted,AutoApproved,RemedyRecommended,RemedyDecided",
+            "RMDYR11B01 | Approved | BOR-WP v1 | RepairFailed | InProgress | Refund | Evaluated:repairFailed:-:2,Decided:repairFailed:Reviewer:2 | ClaimSubmitted,AutoApproved,RemedyRecommended,RemedyDecided",
         ]);
     }
 

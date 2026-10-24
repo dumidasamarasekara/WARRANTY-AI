@@ -1,5 +1,5 @@
 {
-  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase, region, price, problem and dates); T245 completes it.",
+  "$comment": "Approved claims for the 002 remedy scenarios (quickstart §2), created by the migration service's RemedyScenarioSeeder without an AI run and marked as seeded history. The remedy is never written here: the seeder evaluates the remedy rules of the claim's applicable policy version for the initial scenario (research R13), exactly as the ActionExecutor does at approval. Dates are signed day offsets from the seeding day (negative = in the past). approvedBy: System (automatic approval) or Reviewer. R4-aurora and R4-borealis are the 'same facts, different company' pair (same purchase, region, price, problem and dates); T245 completes it. R11-borealis (T251) carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow the remedy named; the seeded-history reviewer then decides it with the reason given (no repair history is seeded, and no refund is requested).",
   "claims": [
     {
       "scenario": "R2",
@@ -34,6 +34,30 @@
       "approvedDaysAgo": -7,
       "approvedBy": "System",
       "explanation": "Your claim is covered by the Borealis Care Warranty: the display fault is a manufacturing defect."
+    },
+    {
+      "scenario": "R11-borealis",
+      "id": "22222222-0005-7000-8000-000000000003",
+      "reference": "RMDYR11B01",
+      "customerEmail": "remedy.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0018",
+      "region": "EU",
+      "purchasePlace": "Borealis Store Lyon",
+      "purchasePrice": 480.00,
+      "problemDescription": "The tablet loses its Wi-Fi connection every few minutes and cannot reconnect without a restart.",
+      "purchasedDaysAgo": -150,
+      "submittedDaysAgo": -30,
+      "approvedDaysAgo": -30,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the Borealis Care Warranty: the network fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Refund",
+        "reason": "Two repair attempts did not fix the network fault; the policy gives a refund.",
+        "decidedDaysAgo": -2
+      }
     }
   ]
 }
