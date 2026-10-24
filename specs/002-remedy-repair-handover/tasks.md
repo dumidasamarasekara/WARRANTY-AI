@@ -227,7 +227,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T264 [P] Update documentation: add feature 002 to `CLAUDE.md` (what it adds, the `Feature=002` test trait, the T2xx numbering); note in `specs/001-ai-claim-adjudication/spec.md` Assumptions, `plan.md` workflow step 7 and `ui-design.md` §2 that the simulated repair request and "the service centre will contact you" are superseded by feature 002
+- [X] T264 [P] Update documentation: add feature 002 to `CLAUDE.md` (what it adds, the `Feature=002` test trait, the T2xx numbering); note in `specs/001-ai-claim-adjudication/spec.md` Assumptions, `plan.md` workflow step 7 and `ui-design.md` §2 that the simulated repair request and "the service centre will contact you" are superseded by feature 002
 - [ ] T265 Run the full validation: `dotnet build Warranty.slnx`, `dotnet test --solution Warranty.slnx -- --filter-not-trait "Category=Smoke"`, the frontend lint/test/build, quickstart R1–R18 by hand, and the timed walkthroughs for SC-001 (hand-over and status update under one minute) and SC-006 (auditor explains a remedy from the trail in under 3 minutes); record the results in the PR description
 
 ---
