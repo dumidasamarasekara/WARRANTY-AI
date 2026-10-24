@@ -12,12 +12,10 @@ namespace Warranty.UnitTests.Fulfillment;
 /// makes the repair not possible without counting a failure; after a failure below the limit a new attempt starts at the
 /// centre or, when the product was returned to the customer, after a new hand-over; and the re-evaluation with the
 /// count and the estimate gives each company's own result (quickstart R4, R8 – R10). The domain transitions are
-/// implemented in T247; the evaluator cases run against the merged <see cref="RemedyPolicyEvaluator"/>.
+/// implemented in T247.
 /// </summary>
 public sealed class RepairFailureTests
 {
-    private const string PendingTransitions = "Pending T247";
-
     private const string Actor = "agent-sub-t245";
     private const string FirstFailure = "The display flickers again after the panel was replaced.";
     private const string SecondFailure = "The new panel shows the same fault after one day.";
@@ -37,7 +35,7 @@ public sealed class RepairFailureTests
 
     // ── Failure counting (FR-029) ──────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void A_failure_ends_the_open_attempt_as_failed_counts_it_and_makes_the_repair_not_possible()
     {
         var repair = AtRepairCentre();
@@ -55,7 +53,7 @@ public sealed class RepairFailureTests
         Payload(recorded).GetProperty("attemptId").GetGuid().ShouldBe(attempt.Id);
     }
 
-    [Theory(Skip = PendingTransitions)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -70,7 +68,7 @@ public sealed class RepairFailureTests
         repair.CurrentAttempt.ShouldNotBeNull().IsOpen.ShouldBeTrue();
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void Each_failed_attempt_is_counted_once()
     {
         var repair = AtRepairCentre();
@@ -85,7 +83,7 @@ public sealed class RepairFailureTests
         repair.NotPossibleReason.ShouldBe(RepairNotPossibleReason.Failed);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void Estimates_and_failures_need_the_product_at_the_centre()
     {
         var repair = Repair.Create(Guid.CreateVersion7(), Tenant, ClaimId, Centre, CreatedAt);
@@ -100,7 +98,7 @@ public sealed class RepairFailureTests
 
     // ── Not economical is never a failure (FR-004, FR-029, FR-032) ─────────────────────────────
 
-    [Theory(Skip = PendingTransitions)]
+    [Theory]
     [InlineData(288.00, 288.00)]
     [InlineData(0.00, 288.00)]
     [InlineData(10000.00, null)]
@@ -119,7 +117,7 @@ public sealed class RepairFailureTests
         repair.AllowedEvents().ShouldContain(RepairEventType.MarkedReady);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void An_estimate_one_cent_above_the_limit_makes_the_repair_not_economical_without_counting_a_failure()
     {
         var repair = AtRepairCentre();
@@ -138,7 +136,7 @@ public sealed class RepairFailureTests
         payload.GetProperty("economicLimitAmount").GetDecimal().ShouldBe(EconomicLimit);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void An_uneconomical_estimate_after_a_failure_leaves_the_failure_count_unchanged()
     {
         var repair = AtRepairCentre();
@@ -151,7 +149,7 @@ public sealed class RepairFailureTests
         repair.Attempts.Select(a => a.Result).ShouldBe([AttemptResult.Failed, AttemptResult.NotEconomical]);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void A_negative_estimate_is_refused()
     {
         var repair = AtRepairCentre();
@@ -162,7 +160,7 @@ public sealed class RepairFailureTests
         repair.Status.ShouldBe(RepairStatus.AtRepairCentre);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void After_an_uneconomical_estimate_no_new_attempt_is_allowed()
     {
         var repair = AtRepairCentre();
@@ -177,7 +175,7 @@ public sealed class RepairFailureTests
 
     // ── A new attempt after a failure (FR-030) ─────────────────────────────────────────────────
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void A_new_attempt_with_the_product_still_at_the_centre_opens_the_next_attempt_there()
     {
         var repair = AtRepairCentre();
@@ -197,7 +195,7 @@ public sealed class RepairFailureTests
         Payload(recorded).GetProperty("productLocation").GetString().ShouldBe(nameof(ProductLocation.AtCentre));
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void A_new_attempt_after_the_product_was_returned_waits_for_a_new_hand_over_which_opens_the_next_attempt()
     {
         var repair = AtRepairCentre();
@@ -218,7 +216,7 @@ public sealed class RepairFailureTests
         repair.FailedAttempts.ShouldBe(1);
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void A_new_attempt_needs_a_failed_repair()
     {
         var repair = AtRepairCentre();
@@ -289,7 +287,7 @@ public sealed class RepairFailureTests
         (evaluation.ContinueRepair, evaluation.NeedsReviewer, evaluation.EconomicLimitAmount).ShouldBe((true, false, (decimal?)null));
     }
 
-    [Theory(Skip = PendingTransitions)]
+    [Theory]
     [InlineData("Aurora", RemedyType.Replacement)]
     [InlineData("Borealis", RemedyType.Refund)]
     public void The_repair_s_own_failure_count_drives_the_re_evaluation(string company, RemedyType remedy)
@@ -307,7 +305,7 @@ public sealed class RepairFailureTests
         (atLimit.NeedsReviewer, atLimit.SingleRemedy).ShouldBe((true, (RemedyType?)remedy));
     }
 
-    [Fact(Skip = PendingTransitions)]
+    [Fact]
     public void The_evaluator_s_economic_limit_decides_the_repair_s_estimate()
     {
         var limit = Evaluator.Evaluate(
