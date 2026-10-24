@@ -199,6 +199,25 @@ describe('ClaimStatusPage', () => {
     expect(remedy).toHaveTextContent('Handed over In progress')
   })
 
+  it('shows the new repair centre after a transfer', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        ...repairRemedy('AwaitingHandover'),
+        repairCentre: { name: 'South Service Hub', address: '4 Quay Street, Springfield', openingHours: 'Mon–Sat 09:00–18:00' },
+      },
+    })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    const centre = within(remedy).getByRole('heading', { name: 'Repair centre' }).closest('section, div')!.parentElement!
+    expect(centre).toHaveTextContent('South Service Hub')
+    expect(centre).toHaveTextContent('4 Quay Street, Springfield')
+    expect(centre).toHaveTextContent('Opening hours: Mon–Sat 09:00–18:00')
+    expect(remedy).toHaveTextContent('Take your product to the repair centre')
+    expect(document.body).not.toHaveTextContent('North Service Hub')
+  })
+
   it('turns the centre card into a ready-for-collection callout', async () => {
     respondWith({ status: 'Approved', remedy: repairRemedy('ReadyForCollection') })
     renderStatus()

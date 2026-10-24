@@ -6,6 +6,7 @@ import type {
   RepairEvent,
   RepairEventRequest,
   RepairEventType,
+  RepairStatus,
   RepairView,
   ReportSource,
 } from './remedyQueries'
@@ -121,7 +122,7 @@ export function repairEventOrigin(event: Pick<RepairEvent, 'reportedAt' | 'recor
   return `reported by ${reportSourceLabel(event.source).toLowerCase()} ${formatDateTime(event.reportedAt)} · recorded by ${event.actor} ${formatDateTime(event.recordedAt)}`
 }
 
-/** Event types this dialog records; T257 adds the remaining ones. */
+/** Event types the repair event dialog records, in the button order of ui-screens.md §2. */
 export const repairDialogEvents = [
   'HandedOver',
   'CentreChanged',
@@ -130,6 +131,8 @@ export const repairDialogEvents = [
   'RepairFailed',
   'Collected',
   'NewAttemptStarted',
+  'Transferred',
+  'Correction',
 ] as const satisfies readonly RepairEventType[]
 
 export type RepairDialogEvent = (typeof repairDialogEvents)[number]
@@ -146,10 +149,56 @@ export const repairActionLabels: Record<RepairDialogEvent, string> = {
   RepairFailed: 'Repair failed',
   Collected: 'Record collection',
   NewAttemptStarted: 'Start new attempt',
+  Transferred: 'Transfer',
+  Correction: 'Correct an entry',
 }
+
+/** A field a correction can set (`RepairEventRequest` "Correction: … the corrected field"). */
+export type CorrectableField = 'handedOverOn' | 'centreReference' | 'estimateAmount' | 'toStatus'
+
+export const correctableFieldLabels: Record<CorrectableField, string> = {
+  handedOverOn: 'Hand-over date',
+  centreReference: 'Centre reference',
+  estimateAmount: 'Estimate',
+  toStatus: 'Status',
+}
+
+/** The fields a correction of this event can set; empty when the event carries nothing to correct. */
+export function correctableFields(event: Pick<RepairEvent, 'type' | 'toStatus'>): CorrectableField[] {
+  if (event.type === 'Correction') return []
+  const fields: CorrectableField[] = []
+  if (event.type === 'HandedOver') fields.push('handedOverOn', 'centreReference')
+  if (event.type === 'EstimateReported') fields.push('estimateAmount')
+  if (event.toStatus) fields.push('toStatus')
+  return fields
+}
+
+/** Seq of the correction for each corrected event (the latest when an entry was corrected more than once). */
+export function correctedBy(events: readonly Pick<RepairEvent, 'seq' | 'correctsSeq'>[]): Map<number, number> {
+  const corrections = new Map<number, number>()
+  for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
+    if (event.correctsSeq !== undefined) corrections.set(event.correctsSeq, event.seq)
+  }
+  return corrections
+}
+
+/** Every repair status, in state-machine order (data-model.md "Repair"). */
+export const repairStatuses = [
+  'AwaitingHandover',
+  'AtRepairCentre',
+  'ReadyForCollection',
+  'Collected',
+  'RepairNotPossible',
+] as const satisfies readonly RepairStatus[]
+
+/** Anchor id of a repair event entry, so a correction can link to the entry it corrects. */
+export const repairEventAnchor = (seq: number) => `repair-event-${seq}`
 
 /** Happy-path order: the first allowed of these is the one primary button. */
 const happyPath: readonly RepairEventType[] = ['HandedOver', 'MarkedReady', 'Collected', 'NewAttemptStarted']
+
+/** "Entry 3 · Handed over": how a correction names the entry it corrects. */
+export const repairEventName = (event: Pick<RepairEvent, 'seq' | 'type'>) => `Entry ${event.seq} · ${repairEventLabel(event.type)}`
 
 /** Where the product is when a new attempt starts (`RepairEventRequest.productLocation`). */
 export const productLocationLabels: Record<NonNullable<RepairEventRequest['productLocation']>, string> = {
