@@ -42,16 +42,19 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 7,
-            ["catalog.product_serials"] = 135,
+            ["catalog.product_serials"] = 138,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 12,
-            ["audit.decision_trail_entries"] = 49,
-            ["claims.claim_remedies"] = 9,
-            ["claims.remedy_decisions"] = 18,
+            ["claims.claims"] = 15,
+            ["audit.decision_trail_entries"] = 64,
+            ["claims.claim_remedies"] = 12,
+            ["claims.remedy_decisions"] = 24,
             ["claims.repairs"] = 7,
             ["claims.repair_handovers"] = 7,
             ["audit.repair_events"] = 7,
+            ["claims.replacements"] = 3,
+            ["claims.replacement_locations"] = 3,
+            ["audit.replacement_events"] = 3,
             ["policy.warranty_policies"] = 2,
             ["policy.policy_versions"] = 3,
         });
@@ -222,6 +225,66 @@ public sealed class MigrationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Feature 003 (T321, research R3, R14): the replacement scenario claims are Approved with the remedy Replacement a
+    /// seeded-history reviewer decided from their own policy version, and have a replacement with the rules of that
+    /// version, in the initial status of its return rule (Aurora at collection → awaiting a unit; Borealis before
+    /// reservation → awaiting the return), with one active suggested location — the first centre of the region that
+    /// issues replacements (priority, then name) — and one <c>LocationSuggested</c> event. A second run adds nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "003")]
+    public async Task Replacement_scenario_claims_are_approved_with_a_replacement_at_the_suggested_location()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+        await using var command = new NpgsqlCommand(
+            """
+            select c.reference, c.status, cr.state || ' ' || cr.remedy, p.code || ' v' || v.version,
+                   rp.product_rule || '/' || rp.return_rule || '/' || rp.minimum_cover_months, rp.status, rp.return_state,
+                   sc.name || ' (' || l.assignment || ')',
+                   (select string_agg(e.seq || ':' || e.type || ':' || e.to_status || ':' || e.source, ',' order by e.seq)
+                    from audit.replacement_events e where e.replacement_id = rp.id),
+                   (select string_agg(t.step, ',' order by t.seq) from audit.decision_trail_entries t where t.claim_id = c.id),
+                   (select count(*) from claims.replacement_locations a where a.replacement_id = rp.id),
+                   sc.is_active and sc.issues_replacements and l.is_active,
+                   (select bool_and((t.payload::jsonb ->> 'seededHistory') = 'true') from audit.decision_trail_entries t where t.claim_id = c.id),
+                   (select count(*) from claims.repairs r where r.claim_id = c.id)
+            from claims.claims c
+            join claims.claim_remedies cr on cr.claim_id = c.id
+            join claims.replacements rp on rp.claim_id = c.id
+            join policy.policy_versions v on v.id = rp.policy_version_id and v.id = cr.policy_version_id
+            join policy.warranty_policies p on p.id = v.policy_id
+            join claims.replacement_locations l on l.id = rp.active_location_id
+            join integration.service_centers sc on sc.id = l.service_center_id
+            where c.reference like 'RPMT%'
+            order by c.reference
+            """,
+            warranty);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var rows = new List<string>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            reader.GetInt64(10).ShouldBe(1);
+            reader.GetBoolean(11).ShouldBeTrue();
+            reader.GetBoolean(12).ShouldBeTrue();
+            reader.GetInt64(13).ShouldBe(0);
+            rows.Add(string.Join(" | ", Enumerable.Range(0, 10).Select(i => Convert.ToString(reader.GetValue(i), System.Globalization.CultureInfo.InvariantCulture))));
+        }
+
+        const string Trail = "ClaimSubmitted,AutoApproved,RemedyRecommended,RemedyDecided,ReplacementLocationAssigned";
+        rows.ShouldBe(
+        [
+            "RPMTX1A001 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
+                + $"Aurora Service Center Amsterdam (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
+            "RPMTX5A001 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
+                + $"Aurora Service Center Springfield (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
+            "RPMTX6B001 | Approved | InProgress Replacement | BOR-WP v1 | SameModel/BeforeReservation/6 | AwaitingReturn | NotYetReturned | "
+                + $"Borealis Repair Hub Lyon (Suggested) | 1:LocationSuggested:AwaitingReturn:System | {Trail}",
+        ]);
+    }
+
+    /// <summary>
     /// Feature 002 (T222): the remedy scenario claims are Approved by the system at their historical time, and their
     /// remedy is the one the evaluator derives from the claim's own policy version — Repair set by policy from row
     /// <c>coveredDefect</c>, with an evaluation and a policy decision row — and a repair awaiting hand-over at the
@@ -352,6 +415,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             "tenancy.tenants", "tenancy.tenant_channels", "tenancy.tenant_settings", "catalog.products", "catalog.product_serials",
             "crm.customers", "integration.service_centers", "claims.claims", "audit.decision_trail_entries",
             "claims.claim_remedies", "claims.remedy_decisions", "claims.repairs", "claims.repair_handovers", "audit.repair_events",
+            "claims.replacements", "claims.replacement_locations", "audit.replacement_events",
             "policy.warranty_policies", "policy.policy_versions",
         ];
         await using var connection = await OpenAsync("warranty");

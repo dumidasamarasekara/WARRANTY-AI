@@ -29,11 +29,13 @@ public static class MigrationServiceExtensions
 
         // The remedy scenario seed derives each remedy with the executor's evaluator and centre lookup.
         builder.Services.AddSingleton<RemedyPolicyEvaluator>();
+        builder.Services.AddSingleton<ReplacementPolicy>();
 
         builder.Services.AddScoped<DatabaseMigrator>();
         builder.Services.AddScoped<TenantSeeder>();
         builder.Services.AddScoped<KnowledgeSeeder>();
         builder.Services.AddScoped<RemedyScenarioSeeder>();
+        builder.Services.AddScoped<ReplacementScenarioSeeder>();
         builder.Services.AddSingleton<SeedingPipeline>();
         builder.Services.AddHostedService<MigrationWorker>();
         return builder;

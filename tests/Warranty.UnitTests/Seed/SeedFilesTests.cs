@@ -461,6 +461,81 @@ public sealed class SeedFilesTests
     }
 
     /// <summary>
+    /// Feature 003 (T321): each tenant's <c>replacement-scenarios.json</c> holds approved claims whose remedy a reviewer
+    /// decided as Replacement — Aurora after two failed repairs (row <c>repairFailed</c>), Borealis after an uneconomical
+    /// estimate (row <c>repairNotEconomical</c>) — with X1-aurora and X6-borealis as the "same facts, different company" pair.
+    /// </summary>
+    [Fact]
+    public void Replacement_scenarios_load_per_tenant_with_the_X1_X6_pair_sharing_the_same_facts()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+        var aurora = seed.Tenants[0].ReplacementScenarios;
+        var borealis = seed.Tenants[1].ReplacementScenarios;
+
+        aurora.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
+            [("X1-aurora", "RPMTX1A001", "AUR-TAB10", "AT10-24-0301", Region.EU), ("X5", "RPMTX5A001", "AUR-TAB10", "AT10-24-0305", Region.NA)]);
+        borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
+            [("X6-borealis", "RPMTX6B001", "BOR-SLATE11", "BS11-24-0306", Region.EU)]);
+        aurora.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairFailed && s.DecidedRemedy.FailedAttempts == 2);
+        borealis.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairNotEconomical && s.DecidedRemedy.EstimateAmount == 350m);
+        aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System && s.DecidedRemedy!.Remedy == RemedyType.Replacement);
+        aurora[0].Id.ShouldBe(Guid.Parse("11111111-0006-7000-8000-000000000001"));
+        borealis[0].Id.ShouldBe(Guid.Parse("22222222-0006-7000-8000-000000000006"));
+
+        var (a, b) = (aurora[0], borealis[0]);
+        (a.Region, a.PurchasePlace, a.PurchasePrice, a.ProblemDescription, a.PurchasedDaysAgo, a.SubmittedDaysAgo, a.ApprovedDaysAgo, a.DecidedRemedy!.DecidedDaysAgo)
+            .ShouldBe((b.Region, b.PurchasePlace, b.PurchasePrice, b.ProblemDescription, b.PurchasedDaysAgo, b.SubmittedDaysAgo, b.ApprovedDaysAgo, b.DecidedRemedy!.DecidedDaysAgo));
+    }
+
+    [Fact]
+    public void Replacement_scenarios_are_optional()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            File.Delete(Path.Combine(root, "tenants", "borealis", "replacement-scenarios.json"));
+
+            var seed = SeedFiles.Load(root);
+
+            seed.Tenants[1].ReplacementScenarios.ShouldBeEmpty();
+            seed.Tenants[0].ReplacementScenarios.Count.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("serialNumber", "\"AT10-99-0001\"", "replacement scenario X1-aurora names unknown serial AT10-99-0001")]
+    [InlineData("modelCode", "\"AUR-TV55\"", "replacement scenario X1-aurora names unknown model AUR-TV55")]
+    [InlineData("customerEmail", "\"nobody@aurora.example.com\"", "replacement scenario X1-aurora names unknown customer")]
+    [InlineData("reference", "\"RMDYR1A001\"", "RMDYR1A001 is used by more than one seeded claim")]
+    [InlineData("id", "\"11111111-0005-7000-8000-000000000001\"", "is used by more than one seeded claim")]
+    [InlineData("scenario", "\"X5\"", "replacement scenario X5 is listed more than once")]
+    [InlineData("approvedDaysAgo", "1", "submitted and approved in that order")]
+    [InlineData("decidedRemedy", "null", "replacement scenario X1-aurora needs a decided remedy Replacement")]
+    [InlineData("decidedRemedy", "{\"scenario\":\"RepairFailed\",\"failedAttempts\":2,\"remedy\":\"Refund\",\"reason\":\"Two repair attempts did not fix it.\",\"decidedDaysAgo\":-1}", "needs a decided remedy Replacement")]
+    [InlineData("decidedRemedy", "{\"scenario\":\"RepairFailed\",\"remedy\":\"Replacement\",\"reason\":\"short\",\"decidedDaysAgo\":-1}", "needs a remedy decision reason")]
+    public void An_invalid_replacement_scenario_is_rejected_before_anything_is_written(string field, string json, string message)
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var file = Path.Combine(root, "tenants", "aurora", "replacement-scenarios.json");
+            var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;
+            document["claims"]![0]![field] = System.Text.Json.Nodes.JsonNode.Parse(json);
+            File.WriteAllText(file, document.ToJsonString());
+
+            Should.Throw<InvalidDataException>(() => SeedFiles.Load(root)).Message.ShouldContain(message);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// The policy file with its front-matter <c>remedies</c> block removed and, unless <paramref name="block"/>
     /// is null, replaced by the given YAML (inserted just before the closing <c>---</c>).
     /// </summary>

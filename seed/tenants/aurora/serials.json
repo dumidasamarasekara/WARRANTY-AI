@@ -38,6 +38,8 @@
   { "serialNumber": "AT10-24-0037", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-06", "reservedFor": "R11-aurora (remedy-scenarios.json, Replacement decided after two failed repairs)" },
   { "serialNumber": "AT10-24-0112", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-06", "reservedFor": "R12-aurora (remedy-scenarios.json, transfer after one failure and a hand-over date correction)" },
   { "serialNumber": "AT10-24-0040", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-06", "reservedFor": "R15-aurora (S4-aurora with a protection plan)" },
+  { "serialNumber": "AT10-24-0301", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-13", "reservedFor": "X1-aurora (replacement-scenarios.json, same facts as X6-borealis)" },
+  { "serialNumber": "AT10-24-0305", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-13", "reservedFor": "X5 (replacement-scenarios.json, hand-over refused before a unit is reserved)" },
 
   { "serialNumber": "AP6-24-0001", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-01" },
   { "serialNumber": "AP6-24-0002", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-02" },
