@@ -17,6 +17,7 @@ public enum RemedyScenario
     ProtectionPlanDamage,
     RepairNotEconomical,
     RepairFailed,
+    ReplacementNotAvailable,
 }
 
 /// <summary>Lifecycle of a claim's current remedy (<c>claim_remedies.state</c>).</summary>
@@ -41,6 +42,9 @@ public enum RemedyPendingReason
 
     [JsonStringEnumMemberName("REPAIR_NOT_ECONOMICAL")]
     RepairNotEconomical,
+
+    [JsonStringEnumMemberName("REPLACEMENT_NOT_AVAILABLE")]
+    ReplacementNotAvailable,
 }
 
 /// <summary><see cref="Evaluated"/> = remedy-rule evaluator output; <see cref="Decided"/> = remedy set.</summary>
@@ -126,4 +130,86 @@ public enum AttemptResult
     Collected,
     Failed,
     NotEconomical,
+}
+
+/// <summary>Status of a replacement (<c>claims.replacements.status</c>, 003 data-model.md state machine).</summary>
+public enum ReplacementStatus
+{
+    AwaitingReturn,
+    AwaitingUnit,
+    ReadyForCollection,
+    HandedToCustomer,
+    NotAvailable,
+    Cancelled,
+}
+
+/// <summary>Where the faulty product stands (<c>claims.replacements.return_state</c>).</summary>
+public enum ReturnState
+{
+    NotYetReturned,
+    Returned,
+    HeldByRepairCentre,
+    Mismatch,
+
+    /// <summary>A serial mismatch accepted by a reviewer.</summary>
+    Accepted,
+}
+
+/// <summary>Type of an append-only replacement event (<c>audit.replacement_events.type</c>).</summary>
+public enum ReplacementEventType
+{
+    LocationSuggested,
+    LocationChanged,
+    ReturnRecorded,
+    ReturnAccepted,
+    ModelProposed,
+    ModelApproved,
+    ModelDeclined,
+    UnitReserved,
+    UnitRefused,
+    Moved,
+    HandedToCustomer,
+    NotAvailable,
+    Cancelled,
+    Correction,
+}
+
+/// <summary>Which product may be handed out as a replacement (<c>remedy_rules.replacement.productRule</c>).</summary>
+public enum ReplacementProductRule
+{
+    SameModel,
+    SameCategoryAtLeastClaimValue,
+}
+
+/// <summary>When the faulty product is returned (<c>remedy_rules.replacement.returnRule</c>).</summary>
+public enum ReplacementReturnRule
+{
+    AtCollection,
+    BeforeReservation,
+}
+
+/// <summary>How a replacement location was assigned (<c>claims.replacement_locations.assignment</c>).</summary>
+public enum LocationAssignment
+{
+    Suggested,
+    ChosenByStaff,
+    Moved,
+}
+
+/// <summary>Outcome of a reserved replacement unit; <see cref="Released"/> = the location moved.</summary>
+public enum ReplacementUnitResult
+{
+    Reserved,
+    HandedOver,
+    Refused,
+    Released,
+    Cancelled,
+}
+
+/// <summary>State of an equivalent-model proposal (<c>claims.replacement_model_proposals.state</c>).</summary>
+public enum ModelProposalState
+{
+    Pending,
+    Approved,
+    Declined,
 }

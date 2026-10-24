@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 
 namespace Warranty.UnitTests.Domain;
 
@@ -75,6 +76,40 @@ public sealed class WireNameTests
         => WireName.All<TrailStep>().Count.ShouldBe(29);
 
     [Fact]
+    public void RemedyScenario_and_pending_reason_include_the_replacement_not_available_values()
+    {
+        WireName.All<RemedyScenario>().ShouldBe(
+            ["CoveredDefect", "ProtectionPlanDamage", "RepairNotEconomical", "RepairFailed", "ReplacementNotAvailable"],
+            ignoreOrder: true);
+        WireName.All<RemedyPendingReason>().ShouldBe(
+            ["POLICY_CHOICE", "NO_REMEDY_RULE", "REPAIR_FAILED_LIMIT", "REPAIR_NOT_ECONOMICAL", "REPLACEMENT_NOT_AVAILABLE"],
+            ignoreOrder: true);
+    }
+
+    [Fact]
+    public void Replacement_enums_use_data_model_names()
+    {
+        WireName.All<ReplacementStatus>().ShouldBe(
+            ["AwaitingReturn", "AwaitingUnit", "ReadyForCollection", "HandedToCustomer", "NotAvailable", "Cancelled"],
+            ignoreOrder: true);
+        WireName.All<ReturnState>().ShouldBe(
+            ["NotYetReturned", "Returned", "HeldByRepairCentre", "Mismatch", "Accepted"], ignoreOrder: true);
+        WireName.All<ReplacementEventType>().ShouldBe(
+            [
+                "LocationSuggested", "LocationChanged", "ReturnRecorded", "ReturnAccepted", "ModelProposed", "ModelApproved",
+                "ModelDeclined", "UnitReserved", "UnitRefused", "Moved", "HandedToCustomer", "NotAvailable", "Cancelled",
+                "Correction",
+            ],
+            ignoreOrder: true);
+        WireName.All<ReplacementProductRule>().ShouldBe(["SameModel", "SameCategoryAtLeastClaimValue"], ignoreOrder: true);
+        WireName.All<ReplacementReturnRule>().ShouldBe(["AtCollection", "BeforeReservation"], ignoreOrder: true);
+        WireName.All<LocationAssignment>().ShouldBe(["Suggested", "ChosenByStaff", "Moved"], ignoreOrder: true);
+        WireName.All<ReplacementUnitResult>().ShouldBe(
+            ["Reserved", "HandedOver", "Refused", "Released", "Cancelled"], ignoreOrder: true);
+        WireName.All<ModelProposalState>().ShouldBe(["Pending", "Approved", "Declined"], ignoreOrder: true);
+    }
+
+    [Fact]
     public void Of_and_Parse_round_trip_every_value()
     {
         RoundTrip<AiDecision>();
@@ -88,6 +123,16 @@ public sealed class WireNameTests
         RoundTrip<Disposition>();
         RoundTrip<TrailStep>();
         RoundTrip<Region>();
+        RoundTrip<RemedyScenario>();
+        RoundTrip<RemedyPendingReason>();
+        RoundTrip<ReplacementStatus>();
+        RoundTrip<ReturnState>();
+        RoundTrip<ReplacementEventType>();
+        RoundTrip<ReplacementProductRule>();
+        RoundTrip<ReplacementReturnRule>();
+        RoundTrip<LocationAssignment>();
+        RoundTrip<ReplacementUnitResult>();
+        RoundTrip<ModelProposalState>();
     }
 
     [Fact]
