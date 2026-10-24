@@ -26,7 +26,7 @@ namespace Warranty.IntegrationTests.Fulfillment;
 public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 {
     /// <summary>The queue lists remedy items from T228; the reviewer confirms a remedy after a failure from T249.</summary>
-    private const string PendingReviewerConfirmation = "Pending T228 and T249";
+    private const string PendingReviewerConfirmation = "Pending T249";
 
     private const string FirstFailure = "The display flickers again after the panel was replaced.";
     private const string SecondFailure = "The new panel shows the same fault after one day of use.";

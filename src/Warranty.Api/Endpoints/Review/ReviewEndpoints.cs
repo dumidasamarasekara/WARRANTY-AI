@@ -6,6 +6,7 @@ using Warranty.Application.Claims;
 using Warranty.Application.Review;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 
 namespace Warranty.Api.Endpoints.Review;
 
@@ -58,8 +59,24 @@ public static class ReviewEndpoints
             });
         }
 
+        RemedyType? remedy = null;
+        if (request.Remedy is not null)
+        {
+            if (!Enum.TryParse<RemedyType>(request.Remedy, ignoreCase: false, out var parsed) || !Enum.IsDefined(parsed)
+                || !string.Equals(parsed.ToString(), request.Remedy, StringComparison.Ordinal))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["remedy"] = [$"Remedy must be one of {string.Join(", ", Enum.GetNames<RemedyType>())}."],
+                });
+            }
+
+            remedy = parsed;
+        }
+
         var command = new RecordReviewDecisionCommand(
-            claimId, ifMatch, kind, request.Justification, request.ClaimantExplanation, request.RequestedItems);
+            claimId, ifMatch, kind, request.Justification, request.ClaimantExplanation, request.RequestedItems, remedy,
+            request.ProtectionPlanConfirmed);
 
         return await recordDecision.ExecuteAsync(command, ct) switch
         {
@@ -89,11 +106,14 @@ public static class ReviewEndpoints
 
 /// <summary>
 /// <c>ReviewDecisionRequest</c> (contracts/rest-api.openapi.yaml). Unknown members are rejected
-/// (<c>additionalProperties: false</c>), so no reviewer or tenant field can be smuggled in.
+/// (<c>additionalProperties: false</c>), so no reviewer or tenant field can be smuggled in. <c>remedy</c> and
+/// <c>protectionPlanConfirmed</c> are the 002 approval fields.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReviewDecisionRequest(
     string? Decision,
     string? Justification,
     string? ClaimantExplanation,
-    IReadOnlyList<RequestedItem>? RequestedItems);
+    IReadOnlyList<RequestedItem>? RequestedItems,
+    string? Remedy = null,
+    bool? ProtectionPlanConfirmed = null);
