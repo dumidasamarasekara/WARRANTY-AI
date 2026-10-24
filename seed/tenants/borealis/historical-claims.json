@@ -1,4 +1,22 @@
 {
-  "$comment": "No seeded history for Borealis; the duplicate-window scenario (quickstart S18) runs on Aurora.",
-  "claims": []
+  "$comment": "Seeded history for the protection-plan scenario (002 quickstart R14): an approved accidental-damage claim (a cracked screen) of BS11-24-0015, finalized more than 90 days ago so it raises no duplicate-claim signal. photoDamageTypes seeds its photo analysis, so claim_history_lookup counts the serial's one included accidental-damage incident as used. The duplicate-window scenario (quickstart S18) runs on Aurora. Dates are signed day offsets from the seeding day (negative = in the past).",
+  "claims": [
+    {
+      "id": "22222222-0004-7000-8000-000000000001",
+      "reference": "HSTBR00001",
+      "customerEmail": "na1.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0015",
+      "region": "NA",
+      "purchasePlace": "Borealis Store",
+      "purchasePrice": 480.00,
+      "problemDescription": "The tablet fell off the kitchen counter and the screen glass cracked in one corner.",
+      "purchasedDaysAgo": -300,
+      "submittedDaysAgo": -125,
+      "finalizedDaysAgo": -120,
+      "outcome": "Approved",
+      "explanation": "Your Borealis Care plan includes one accidental-damage repair in the first 12 months, so your screen will be repaired.",
+      "photoDamageTypes": ["CRACKED_SCREEN"]
+    }
+  ]
 }

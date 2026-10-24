@@ -1,6 +1,7 @@
 {
   "$comment": [
     "Golden scenarios (quickstart section 4). The replay provider picks a scenario by the claim's serial (and tenant) and answers the n-th model call of an agent from tests/fixtures/ai-recordings/{scenarioId}/{agent}-{n}.json.",
+    "Protection plan (002 US6, quickstart R14/R15): recordingsOf names another scenario whose fixtures a variant on its own serial replays (no fixture folder of its own; the fixtures' invoice serial is that scenario's, so the invoice serial check fails on the variant). claim.hasProtectionPlan and evidence.protectionPlanDocument (sent as the protectionPlanDocument part) state the plan. absentEscalationReasons: reason codes the claim must not have.",
     "claim: the ClaimSubmissionData sent to POST /api/public/claims or POST /api/claims, without purchase.date; the purchase date is the claim date plus purchaseDateOffsetMonths (or purchaseDate when a scenario needs an absolute date).",
     "evidence: files under seed/evidence/ (rendered from seed/evidence/evidence.json by tools/Warranty.EvidenceGenerator), uploaded as the invoice part and the photos parts in this order.",
     "references: the run's harness-issued references the fixtures assume. EV-1 is the invoice and EV-2.. the photos in upload order. POL-n are issued for the retrieved clauses of the applicable policy version with Period and Exclusion clauses first in clause-key order, then Coverage clauses in clause-key order, then the other retrieved clauses by score (PolicyAgent.IssueOrder); only the references the fixtures use are listed.",
@@ -2448,6 +2449,171 @@
           }
         }
       ]
+    },
+    {
+      "scenarioId": "R14-borealis",
+      "story": "002-US6",
+      "title": "S4-borealis on a serial whose included accidental-damage incident is already used (seeded history), with 'I have an additional protection plan' ticked and the plan document: a reviewer must check the plan",
+      "tenant": "borealis",
+      "channel": "claimant",
+      "serial": "BS11-24-0015",
+      "recordingsOf": "S4-borealis",
+      "faultyRecommendation": true,
+      "purchaseDateOffsetMonths": -10,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-6",
+          "email": "na6.customer@borealis.example.com",
+          "phone": "+1 555 020 0006",
+          "addressLine": "600 Example Court",
+          "city": "Northport",
+          "postalCode": "00002",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "BOR-SLATE11",
+          "serialNumber": "BS11-24-0015"
+        },
+        "purchase": {
+          "place": "Borealis Store",
+          "price": 480.0,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "I dropped my Borealis Slate 11 on a tiled floor and the screen cracked. The glass is shattered from the impact point across the display and the touch screen no longer responds properly.",
+        "hasProtectionPlan": true
+      },
+      "evidence": {
+        "invoice": "R14/invoice.pdf",
+        "photos": ["R14/photo-1.jpg", "R14/photo-2.jpg"],
+        "protectionPlanDocument": "R14/protection-plan.pdf"
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "BOR-WP-2.1",
+        "POL-2": "BOR-WP-2.2",
+        "POL-3": "BOR-WP-3.1",
+        "POL-4": "BOR-WP-3.2",
+        "POL-5": "BOR-WP-1.1",
+        "POL-6": "BOR-WP-1.2"
+      },
+      "expected": {
+        "status": "UnderReview",
+        "disposition": "HumanReview",
+        "recommendation": "APPROVE",
+        "citedClauseKeys": ["BOR-WP-1.2"],
+        "escalationReasons": ["PROTECTION_PLAN_TO_CHECK"],
+        "escalationReasonText": "protection plan to be checked",
+        "failedGuardrails": ["PROTECTION_PLAN_NOT_RELIED_ON", "GROUNDED_IN_CLAUSE"]
+      }
+    },
+    {
+      "scenarioId": "R14-borealis-no-document",
+      "story": "002-US6",
+      "title": "S4-borealis with 'I have an additional protection plan' ticked but no plan document: the plan document is requested as missing information",
+      "tenant": "borealis",
+      "channel": "claimant",
+      "serial": "BS11-24-0019",
+      "recordingsOf": "S4-borealis",
+      "purchaseDateOffsetMonths": -10,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-7",
+          "email": "na7.customer@borealis.example.com",
+          "phone": "+1 555 020 0007",
+          "addressLine": "700 Example Court",
+          "city": "Northport",
+          "postalCode": "00002",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "BOR-SLATE11",
+          "serialNumber": "BS11-24-0019"
+        },
+        "purchase": {
+          "place": "Borealis Store",
+          "price": 480.0,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "I dropped my Borealis Slate 11 on a tiled floor and the screen cracked. The glass is shattered from the impact point across the display and the touch screen no longer responds properly.",
+        "hasProtectionPlan": true
+      },
+      "evidence": {
+        "invoice": "R14/no-document-invoice.pdf",
+        "photos": ["R14/no-document-photo-1.jpg"]
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1"
+      },
+      "expected": {
+        "status": "PendingInformation",
+        "disposition": "RequestInformation",
+        "recommendation": null,
+        "requestedItems": ["PROTECTION_PLAN_DOCUMENT"],
+        "modelCalls": { "intake": 1 }
+      }
+    },
+    {
+      "scenarioId": "R15-aurora",
+      "story": "002-US6",
+      "title": "S4-aurora with 'I have an additional protection plan' ticked and the plan document: Aurora's policy does not let a plan lift the accidental-damage exclusion, so the plan changes nothing",
+      "tenant": "aurora",
+      "channel": "claimant",
+      "serial": "AT10-24-0040",
+      "recordingsOf": "S4-aurora",
+      "purchaseDateOffsetMonths": -10,
+      "claim": {
+        "customer": {
+          "fullName": "Sample Customer NA-40",
+          "email": "na40.customer@aurora.example.com",
+          "phone": "+1 555 010 0040",
+          "addressLine": "4000 Example Lane",
+          "city": "Riverton",
+          "postalCode": "00004",
+          "country": "US"
+        },
+        "product": {
+          "modelCode": "AUR-TAB10",
+          "serialNumber": "AT10-24-0040"
+        },
+        "purchase": {
+          "place": "Aurora Store",
+          "price": 450.0,
+          "currency": "USD",
+          "country": "US"
+        },
+        "problemDescription": "I dropped my Aurora Tab 10 on a tiled floor and the screen cracked. The glass is shattered from the impact point across the display and the touch screen no longer responds properly.",
+        "hasProtectionPlan": true
+      },
+      "evidence": {
+        "invoice": "R15/invoice.pdf",
+        "photos": ["R15/photo-1.jpg", "R15/photo-2.jpg"],
+        "protectionPlanDocument": "R15/protection-plan.pdf"
+      },
+      "references": {
+        "EV-1": "invoice",
+        "EV-2": "photo-1",
+        "EV-3": "photo-2",
+        "POL-1": "AUR-WP-2.1",
+        "POL-2": "AUR-WP-2.2",
+        "POL-3": "AUR-WP-2.3",
+        "POL-4": "AUR-WP-3.1",
+        "POL-5": "AUR-WP-3.2",
+        "POL-6": "AUR-WP-3.3",
+        "POL-7": "AUR-WP-3.4",
+        "POL-8": "AUR-WP-1.1"
+      },
+      "expected": {
+        "recommendation": "REJECT",
+        "coverage": "NOT_COVERED",
+        "citedClauseKeys": ["AUR-WP-3.1"],
+        "passedGuardrails": ["COVERAGE_WINDOW_AGREES", "GROUNDED_IN_CLAUSE", "PROTECTION_PLAN_NOT_RELIED_ON"],
+        "absentEscalationReasons": ["PROTECTION_PLAN_TO_CHECK"]
+      }
     }
   ]
 }

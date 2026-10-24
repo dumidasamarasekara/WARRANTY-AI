@@ -20,7 +20,11 @@ public sealed class SeedFilesTests
         aurora.Knowledge.Select(k => k.BlobPath).ShouldBe(["tenant-aurora/policies/AUR-WP-v1.md", "tenant-aurora/policies/AUR-WP-v2.md"]);
         aurora.HistoricalClaims.Count.ShouldBe(2);
         aurora.ServiceCenters.ShouldContain(c => c.Region == Region.EU);
-        seed.Tenants[1].HistoricalClaims.ShouldBeEmpty();
+        // Borealis: the approved accidental-damage claim that uses up BS11-24-0015's included incident (002 quickstart R14).
+        var borealisHistory = seed.Tenants[1].HistoricalClaims.ShouldHaveSingleItem();
+        (borealisHistory.SerialNumber, borealisHistory.Outcome).ShouldBe(("BS11-24-0015", "Approved"));
+        borealisHistory.PhotoDamageTypes.ShouldBe(["CRACKED_SCREEN"]);
+        aurora.HistoricalClaims.ShouldAllBe(h => h.PhotoDamageTypes == null);
         seed.GlobalKnowledge.Select(k => k.BlobPath).ShouldBe(
             ["global/fraud-patterns.md", "global/injection-phrases.md", "global/procedures.md", "global/terminology.md"]);
         seed.GlobalKnowledge.Concat(aurora.Knowledge).ShouldAllBe(k => !k.Content.Contains('\r'));

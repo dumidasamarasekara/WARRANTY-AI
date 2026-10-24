@@ -72,7 +72,16 @@ public sealed partial class GoldenScenarioFixturesTests
             var product = scenario.GetProperty("claim").GetProperty("product");
 
             product.GetProperty("serialNumber").GetString().ShouldBe(serial, $"{id}: the claim must carry the scenario serial");
-            if (catalog.Find(serial, tenant) == id)
+            if (scenario.TryGetProperty("recordingsOf", out var recordingsOf))
+            {
+                // A variant on its own serial that replays another scenario's fixtures (e.g. with a protection plan).
+                var source = recordingsOf.GetString()!;
+                scenarios.ShouldContain(s => s.GetProperty("scenarioId").GetString() == source, $"{id}: recordingsOf names no scenario");
+                catalog.Find(serial, tenant).ShouldBe(source, $"{id}: replays the fixtures of {source}");
+                Directory.Exists(Path.Combine(RecordingsRoot(), source)).ShouldBeTrue($"{id}: {source} has no fixture folder");
+                Directory.Exists(Path.Combine(RecordingsRoot(), id)).ShouldBeFalse($"{id}: replays {source}, so it has no fixtures of its own");
+            }
+            else if (catalog.Find(serial, tenant) == id)
             {
                 // The first scenario of a serial is the one replay selects; later ones share its fixtures on purpose.
                 Directory.Exists(Path.Combine(RecordingsRoot(), id)).ShouldBeTrue($"{id}: no fixture folder");

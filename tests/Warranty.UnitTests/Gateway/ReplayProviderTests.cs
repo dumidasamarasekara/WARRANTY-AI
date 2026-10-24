@@ -178,6 +178,20 @@ public sealed class ReplayProviderTests : IDisposable
     }
 
     [Fact]
+    public void A_scenario_with_recordingsOf_replays_the_fixtures_of_the_named_scenario()
+    {
+        var scenarios = new ReplayScenarioCatalog(
+        [
+            new ReplayScenario("S4-borealis", "borealis", "BS11-24-0001"),
+            new ReplayScenario("R14-borealis", "borealis", "BS11-24-0015", RecordingsOf: "S4-borealis"),
+        ]);
+
+        scenarios.Find("BS11-24-0015", "borealis").ShouldBe("S4-borealis");
+        scenarios.Find("BS11-24-0001", "borealis").ShouldBe("S4-borealis");
+        scenarios.Scenarios.Select(s => s.ScenarioId).ShouldBe(["S4-borealis", "R14-borealis"]);
+    }
+
+    [Fact]
     public async Task The_scripted_provider_answers_in_order_and_throws_when_it_runs_out()
     {
         var scripted = new ScriptedModelProvider()

@@ -13,10 +13,11 @@
   { "serialNumber": "BS11-24-0012", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-08", "reservedFor": "golden G-BOR-19" },
   { "serialNumber": "BS11-24-0013", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-15", "reservedFor": "golden G-BOR-21" },
   { "serialNumber": "BS11-24-0014", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-15", "reservedFor": "golden G-BOR-01" },
-  { "serialNumber": "BS11-24-0015", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-22" },
+  { "serialNumber": "BS11-24-0015", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-22", "reservedFor": "R14-borealis (protection plan; its accidental-damage incident is used by the seeded history claim)" },
   { "serialNumber": "BS11-24-0016", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-29", "reservedFor": "R2 (remedy-scenarios.json)" },
   { "serialNumber": "BS11-24-0017", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-07-29", "reservedFor": "R4-borealis (remedy-scenarios.json, same facts as R4-aurora)" },
   { "serialNumber": "BS11-24-0018", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-05", "reservedFor": "R11-borealis (remedy-scenarios.json, Refund decided after two failed repairs)" },
+  { "serialNumber": "BS11-24-0019", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-05", "reservedFor": "R14-borealis-no-document (protection plan stated without its document)" },
 
   { "serialNumber": "BH2-24-0001", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-02" },
   { "serialNumber": "BH2-24-0002", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-04" },
