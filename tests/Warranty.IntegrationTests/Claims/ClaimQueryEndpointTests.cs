@@ -41,6 +41,16 @@ public sealed class ClaimQueryEndpointTests(WarrantyAppFixture fixture)
         detail.GetProperty("reviewerInfoRequested").GetBoolean().ShouldBeFalse();
         detail.GetProperty("reviewDecisions").GetArrayLength().ShouldBe(0);
 
+        // 002 (T229): no remedy before approval; the preview is what approving would set under AUR-WP's rules.
+        detail.GetProperty("hasProtectionPlan").GetBoolean().ShouldBeFalse();
+        detail.TryGetProperty("remedy", out _).ShouldBeFalse();
+        var preview = detail.GetProperty("remedyPreview");
+        preview.GetProperty("scenario").GetString().ShouldBe("CoveredDefect");
+        preview.GetProperty("tableRow").GetString().ShouldBe("coveredDefect");
+        preview.GetProperty("allowedRemedies").EnumerateArray().Select(r => r.GetString()).ShouldBe(["Repair"]);
+        preview.GetProperty("recommendedRemedy").GetString().ShouldBe("Repair");
+        preview.GetProperty("needsChoice").GetBoolean().ShouldBeFalse();
+
         var evidence = detail.GetProperty("evidence").EnumerateArray().ToList();
         evidence.Select(e => e.GetProperty("kind").GetString()).ShouldBe(["Invoice", "Photo"], ignoreOrder: true);
         evidence.ShouldAllBe(e => e.GetProperty("round").GetInt32() == 1);

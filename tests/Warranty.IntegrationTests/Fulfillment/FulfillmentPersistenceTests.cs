@@ -4,6 +4,7 @@ using Npgsql;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Integrations;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Fulfillment;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Fulfillment;
 using Warranty.IntegrationTests.Infrastructure;
@@ -155,6 +156,58 @@ public sealed class FulfillmentPersistenceTests(WarrantyAppFixture fixture)
 
         (await ScalarAsync<string>("select pending_reason from claims.claim_remedies where claim_id = @value", claimId)).ShouldBeNull();
         (await ScalarAsync<string>("select state from claims.claim_remedies where claim_id = @value", claimId)).ShouldBe("Completed");
+    }
+
+    [Fact]
+    public async Task The_remedy_view_carries_the_policy_basis_the_history_and_an_etag_that_changes_with_the_remedy()
+    {
+        var claimId = await CopyFinalizedClaimAsync();
+        var versionId = await ScalarAsync<Guid>("select id from policy.policy_versions where tenant_id = @value order by id limit 1", Aurora);
+        var at = DateTimeOffset.UtcNow;
+        var allowed = new[] { RemedyType.Repair, RemedyType.Replacement };
+
+        using (TenantContextScope.Begin(Aurora, "aurora"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var queries = scope.ServiceProvider.GetRequiredService<RemedyQueries>();
+            (await queries.GetRemedyAsync(claimId, Ct)).ShouldBeNull();
+
+            var remedies = scope.ServiceProvider.GetRequiredService<IRemedyRepository>();
+            remedies.Add(ClaimRemedy.AwaitDecision(
+                Guid.CreateVersion7(), Aurora, claimId, versionId, RemedyScenario.CoveredDefect, allowed, RemedyPendingReason.PolicyChoice, at));
+            remedies.AddDecision(RemedyDecision.Evaluated(
+                Guid.CreateVersion7(), Aurora, claimId, 1, RemedyScenario.CoveredDefect, versionId, "coveredDefect", allowed, 0, null, at));
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(Ct);
+        }
+
+        string firstETag;
+        using (TenantContextScope.Begin(Aurora, "aurora"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var view = (await scope.ServiceProvider.GetRequiredService<RemedyQueries>().GetRemedyAsync(claimId, Ct)).ShouldNotBeNull();
+            view.State.ShouldBe(RemedyState.AwaitingDecision);
+            view.PendingReason.ShouldBe(RemedyPendingReason.PolicyChoice);
+            view.RecommendedRemedy.ShouldBeNull();
+            view.PolicyVersion.PolicyCode.ShouldStartWith("AUR-");
+            view.PolicyVersion.Version.ShouldBeGreaterThan(0);
+            view.TableRow.ShouldBe("coveredDefect");
+            view.History.ShouldHaveSingleItem().Actor.ShouldBe(RemedyDecision.SystemActor);
+            view.ETag.ShouldMatch("^\"[0-9]+\"$");
+            firstETag = view.ETag;
+
+            var remedies = scope.ServiceProvider.GetRequiredService<IRemedyRepository>();
+            (await remedies.GetAsync(claimId, Ct)).ShouldNotBeNull().Decide(RemedyType.Replacement, at);
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(Ct);
+        }
+
+        using (TenantContextScope.Begin(Aurora, "aurora"))
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var view = (await scope.ServiceProvider.GetRequiredService<RemedyQueries>().GetRemedyAsync(claimId, Ct)).ShouldNotBeNull();
+            view.State.ShouldBe(RemedyState.InProgress);
+            view.Remedy.ShouldBe(RemedyType.Replacement);
+            view.ETag.ShouldNotBe(firstETag);
+        }
     }
 
     [Fact]

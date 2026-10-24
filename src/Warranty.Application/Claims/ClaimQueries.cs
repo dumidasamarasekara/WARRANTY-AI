@@ -4,10 +4,12 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Fulfillment;
 using Warranty.Domain.Adjudication;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
 
@@ -28,7 +30,8 @@ public sealed record ClaimSummaryPage(IReadOnlyList<ClaimSummary> Items, int Pag
 
 /// <summary>
 /// <c>ClaimDetail</c> (FR-033): the claim, its evidence, the latest evaluation and the review decisions.
-/// Members a role may not see are null and left out of the JSON (FR-005).
+/// Members a role may not see are null and left out of the JSON (FR-005). From 002: the remedy once the claim is
+/// approved and, while it is <see cref="ClaimStatus.UnderReview"/>, the remedy preview of an approval.
 /// </summary>
 public sealed record ClaimDetail(
     Guid ClaimId,
@@ -49,7 +52,10 @@ public sealed record ClaimDetail(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FinalExplanation,
     IReadOnlyList<RequestedItem> RequestedItems,
     int AutoInfoRequestCount,
-    bool ReviewerInfoRequested);
+    bool ReviewerInfoRequested,
+    bool HasProtectionPlan,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyView? Remedy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPreview? RemedyPreview);
 
 public sealed record ClaimCustomer(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FullName,
@@ -187,7 +193,8 @@ public sealed class ClaimQueries(
     ITenantRepository tenants,
     IPolicyRepository policies,
     IAdjudicationRepository adjudication,
-    IReviewRepository reviews)
+    IReviewRepository reviews,
+    RemedyQueries remedies)
 {
     public const int DefaultPageSize = 25;
 
@@ -278,7 +285,12 @@ public sealed class ClaimQueries(
             claim.FinalExplanation,
             claim.RequestedItems,
             claim.AutoInfoRequestCount,
-            claim.ReviewerInfoRequested);
+            claim.ReviewerInfoRequested,
+            claim.HasProtectionPlan,
+            await remedies.GetRemedyAsync(claimId, ct),
+            claim.Status == ClaimStatus.UnderReview
+                ? await remedies.PreviewAsync(claim, product, RemedyScenario.CoveredDefect, ct)
+                : null);
 
         return new ClaimDetailResult(detail, FormatETag(rowVersion));
     }
