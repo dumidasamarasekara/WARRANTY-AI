@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Warranty.Domain.Catalog;
+using Warranty.Domain.Claims;
 using Warranty.Domain.Policies;
 
 namespace Warranty.Domain.Fulfillment;
@@ -187,19 +189,121 @@ public sealed class Replacement
     /// <see cref="ReplacementEventType.UnitReserved"/> and <see cref="ReplacementEventType.HandedToCustomer"/> no unresolved
     /// mismatch; a correction is allowed in every status except <see cref="ReplacementStatus.HandedToCustomer"/> and
     /// <see cref="ReplacementStatus.Cancelled"/>. Reviewer-only events are left out for a claims agent, every event for an
-    /// auditor; <see cref="ReplacementEventType.Cancelled"/> (system only) is never listed. Pending T325 (the whole list).
+    /// auditor; <see cref="ReplacementEventType.Cancelled"/> (system only) is never listed.
     /// </summary>
     public IReadOnlyList<ReplacementEventType> AllowedEvents(StaffRole role)
-        => throw new NotImplementedException($"Pending T325 ({Status}, {role}).");
+    {
+        if (role is not (StaffRole.ClaimsAgent or StaffRole.ClaimsReviewer))
+        {
+            return [];
+        }
+
+        var open = Status is ReplacementStatus.AwaitingReturn or ReplacementStatus.AwaitingUnit or ReplacementStatus.ReadyForCollection;
+        var hasLocation = ActiveLocationId is not null;
+        var mismatch = ReturnState == ReturnState.Mismatch;
+        var events = new List<ReplacementEventType>();
+
+        if (Status is ReplacementStatus.AwaitingReturn or ReplacementStatus.AwaitingUnit)
+        {
+            events.Add(ReplacementEventType.LocationChanged);
+        }
+
+        if (hasLocation && Return is null && ReturnState == ReturnState.NotYetReturned
+            && (Status == ReplacementStatus.AwaitingReturn
+                || (Status is ReplacementStatus.AwaitingUnit or ReplacementStatus.ReadyForCollection
+                    && ReturnRule == ReplacementReturnRule.AtCollection)))
+        {
+            events.Add(ReplacementEventType.ReturnRecorded);
+        }
+
+        if (open && mismatch)
+        {
+            events.Add(ReplacementEventType.ReturnAccepted);
+        }
+
+        if (Status == ReplacementStatus.AwaitingUnit)
+        {
+            if (ProductRule == ReplacementProductRule.SameCategoryAtLeastClaimValue && PendingProposalId is null)
+            {
+                events.Add(ReplacementEventType.ModelProposed);
+            }
+
+            if (PendingProposalId is not null)
+            {
+                events.Add(ReplacementEventType.ModelApproved);
+                events.Add(ReplacementEventType.ModelDeclined);
+            }
+
+            if (hasLocation && !mismatch)
+            {
+                events.Add(ReplacementEventType.UnitReserved);
+            }
+        }
+
+        if (Status == ReplacementStatus.ReadyForCollection)
+        {
+            events.Add(ReplacementEventType.UnitRefused);
+        }
+
+        if (open && hasLocation)
+        {
+            events.Add(ReplacementEventType.Moved);
+        }
+
+        if (Status == ReplacementStatus.ReadyForCollection && !mismatch)
+        {
+            events.Add(ReplacementEventType.HandedToCustomer);
+        }
+
+        if (Status == ReplacementStatus.AwaitingUnit)
+        {
+            events.Add(ReplacementEventType.NotAvailable);
+        }
+
+        if (Status is not (ReplacementStatus.HandedToCustomer or ReplacementStatus.Cancelled))
+        {
+            events.Add(ReplacementEventType.Correction);
+        }
+
+        return role == StaffRole.ClaimsReviewer ? events : [.. events.Where(e => !IsReviewerOnly(e))];
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.LocationChanged"/>: <see cref="ReplacementStatus.AwaitingReturn"/> or
     /// <see cref="ReplacementStatus.AwaitingUnit"/> stays; the staff-chosen location becomes the only active location
     /// (<see cref="LocationAssignment.ChosenByStaff"/>, reason required). Whether the location is an eligible replacement
-    /// location of the tenant is checked by the use case. Pending T325.
+    /// location of the tenant is checked by the use case.
     /// </summary>
     public ReplacementEvent ChangeLocation(Guid serviceCenterId, string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T325 ({serviceCenterId}, {reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (serviceCenterId == Guid.Empty)
+        {
+            throw new ArgumentException("A replacement location ID is required.", nameof(serviceCenterId));
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to change the replacement location.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.LocationChanged, report);
+
+        var previous = ActiveLocation?.ServiceCenterId;
+        var location = AddLocation(serviceCenterId, LocationAssignment.ChosenByStaff, reason, report.Actor, report.RecordedAt);
+        return Append(
+            ReplacementEventType.LocationChanged,
+            Status,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["serviceCenterId"] = serviceCenterId,
+                ["previousServiceCenterId"] = previous,
+                ["locationId"] = location.Id,
+                ["reason"] = location.Reason,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ReturnRecorded"/>: the faulty product was returned to the active location on
@@ -209,11 +313,45 @@ public sealed class Replacement
     /// <see cref="ReplacementStatus.AwaitingUnit"/>; from <see cref="ReplacementStatus.AwaitingUnit"/> or
     /// <see cref="ReplacementStatus.ReadyForCollection"/> (<see cref="ReplacementReturnRule.AtCollection"/> only) the status stays.
     /// A match sets <see cref="ReturnState.Returned"/>; a mismatch sets <see cref="ReturnState.Mismatch"/> and keeps the status.
-    /// The return is recorded once (corrections go through events). Pending T325 (<see cref="ReplacementReturnRule.AtCollection"/>)
-    /// and T336 (<see cref="ReplacementReturnRule.BeforeReservation"/> and the mismatch).
+    /// The return is recorded once (corrections go through events). Pending T336 (<see cref="ReplacementReturnRule.BeforeReservation"/>
+    /// and the mismatch).
     /// </summary>
     public ReplacementEvent RecordReturn(DateOnly returnedOn, string serialSeen, bool serialMatches, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T325/T336 ({returnedOn}, {serialSeen}, {serialMatches}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(serialSeen))
+        {
+            throw new ArgumentException("The serial seen on the returned product is required.", nameof(serialSeen));
+        }
+
+        Require(ReplacementEventType.ReturnRecorded, report);
+
+        if (Status == ReplacementStatus.AwaitingReturn || !serialMatches)
+        {
+            throw new NotImplementedException(
+                $"Pending T336 (a return under {ReturnRule} in status {Status}, serial match {serialMatches}).");
+        }
+
+        var location = ActiveLocation!;
+        var faultyReturn = AddReturn(
+            returnedOn, location.ServiceCenterId, serialSeen, serialMatches, repairHandoverId: null, report.Note, report.Actor,
+            report.RecordedAt);
+        SetReturnState(ReturnState.Returned, report.RecordedAt);
+        return Append(
+            ReplacementEventType.ReturnRecorded,
+            Status,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["returnId"] = faultyReturn.Id,
+                ["serviceCenterId"] = location.ServiceCenterId,
+                ["returnedOn"] = returnedOn,
+                ["serialSeen"] = faultyReturn.SerialSeen,
+                ["serialMatches"] = serialMatches,
+                ["returnState"] = ReturnState.ToString(),
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ReturnAccepted"/> (claims reviewer only): a reviewer accepts a returned product whose
@@ -254,10 +392,39 @@ public sealed class Replacement
     /// <paramref name="productId"/> with <paramref name="serialNumber"/> at the active location and makes it current. Needs an
     /// active location and no unresolved mismatch. The use case resolves the model (the claimed one or
     /// <see cref="ApprovedProductId"/>), checks the serial rules (FR-022) and queues the ready notification once per unit.
-    /// Pending T325.
     /// </summary>
     public ReplacementEvent ReserveUnit(Guid productId, string serialNumber, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T325 ({productId}, {serialNumber}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (productId == Guid.Empty)
+        {
+            throw new ArgumentException("The product of the reserved unit is required.", nameof(productId));
+        }
+
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            throw new ArgumentException("The serial number of the reserved unit is required.", nameof(serialNumber));
+        }
+
+        Require(ReplacementEventType.UnitReserved, report);
+
+        var location = ActiveLocation!;
+        var unit = AddUnit(location.ServiceCenterId, productId, ProductSerial.NormalizeSerial(serialNumber), report.RecordedAt);
+        SetStatus(ReplacementStatus.ReadyForCollection, report.RecordedAt);
+        return Append(
+            ReplacementEventType.UnitReserved,
+            ReplacementStatus.AwaitingUnit,
+            ReplacementStatus.ReadyForCollection,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["unitId"] = unit.Id,
+                ["unitSeq"] = unit.Seq,
+                ["serviceCenterId"] = unit.ServiceCenterId,
+                ["productId"] = unit.ProductId,
+                ["serialNumber"] = unit.SerialNumber,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.UnitRefused"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
@@ -284,10 +451,50 @@ public sealed class Replacement
     /// <see cref="ReturnState.Mismatch"/>. Under <see cref="ReplacementReturnRule.AtCollection"/>,
     /// <paramref name="returnConfirmed"/> must be true unless the product was already returned or is held by a repair centre
     /// (an <see cref="ArgumentException"/> otherwise, FR-021); a confirmation records the return
-    /// (<see cref="ReturnState.Returned"/>). The use case completes the remedy and registers the serial. Pending T325.
+    /// (<see cref="ReturnState.Returned"/>). The use case completes the remedy and registers the serial.
     /// </summary>
     public ReplacementEvent HandToCustomer(DateOnly handedOverOn, bool returnConfirmed, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T325 ({handedOverOn}, {returnConfirmed}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        Require(ReplacementEventType.HandedToCustomer, report);
+
+        var unit = CurrentUnit is { IsReserved: true } reserved
+            ? reserved
+            : throw new InvalidClaimTransitionException(
+                $"Cannot record {ReplacementEventType.HandedToCustomer} on a replacement in status {Status} without a reserved unit.");
+
+        var settled = ReturnState is ReturnState.Returned or ReturnState.HeldByRepairCentre or ReturnState.Accepted;
+        var confirmsReturn = ReturnRule == ReplacementReturnRule.AtCollection && !settled;
+        if (confirmsReturn && !returnConfirmed)
+        {
+            throw new ArgumentException(
+                "The return of the faulty product must be confirmed to hand the replacement to the customer.", nameof(returnConfirmed));
+        }
+
+        unit.End(ReplacementUnitResult.HandedOver, reason: null, report.RecordedAt);
+        if (confirmsReturn)
+        {
+            SetReturnState(ReturnState.Returned, report.RecordedAt);
+        }
+
+        SetStatus(ReplacementStatus.HandedToCustomer, report.RecordedAt);
+        return Append(
+            ReplacementEventType.HandedToCustomer,
+            ReplacementStatus.ReadyForCollection,
+            ReplacementStatus.HandedToCustomer,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["unitId"] = unit.Id,
+                ["unitSeq"] = unit.Seq,
+                ["serviceCenterId"] = unit.ServiceCenterId,
+                ["productId"] = unit.ProductId,
+                ["serialNumber"] = unit.SerialNumber,
+                ["handedOverOn"] = handedOverOn,
+                ["returnConfirmed"] = confirmsReturn,
+                ["returnState"] = ReturnState.ToString(),
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.NotAvailable"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
@@ -434,5 +641,51 @@ public sealed class Replacement
         _events.Add(replacementEvent);
         UpdatedAt = recordedAt;
         return replacementEvent;
+    }
+
+    /// <summary>The allowed events as listed in a refusal.</summary>
+    internal static string Describe(IReadOnlyList<ReplacementEventType> events)
+        => events.Count == 0 ? "none" : string.Join(", ", events);
+
+    /// <summary>Events only a claims reviewer may record (research R5, FR-024).</summary>
+    private static bool IsReviewerOnly(ReplacementEventType type)
+        => type is ReplacementEventType.ReturnAccepted or ReplacementEventType.ModelApproved or ReplacementEventType.ModelDeclined;
+
+    /// <summary>
+    /// Refuses <paramref name="type"/> for the role of <paramref name="report"/> (an auditor records nothing, a claims agent no
+    /// reviewer-only event), then unless it is allowed from the current status, naming the status and the allowed events.
+    /// </summary>
+    private void Require(ReplacementEventType type, ReplacementReport report)
+    {
+        if (report.Role is not (StaffRole.ClaimsAgent or StaffRole.ClaimsReviewer)
+            || (report.Role == StaffRole.ClaimsAgent && IsReviewerOnly(type)))
+        {
+            throw new UnauthorizedAccessException($"A {report.Role} cannot record {type} on a replacement.");
+        }
+
+        var allowed = AllowedEvents(report.Role);
+        if (!allowed.Contains(type))
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {type} on a replacement in status {Status} (return {ReturnState}); allowed events: {Describe(allowed)}.");
+        }
+    }
+
+    /// <summary>Appends a staff-reported event; the payload also carries the staff member's display name when known.</summary>
+    private ReplacementEvent Append(
+        ReplacementEventType type,
+        ReplacementStatus fromStatus,
+        ReplacementStatus toStatus,
+        ReplacementReport report,
+        Dictionary<string, object?> payload)
+    {
+        if (!string.IsNullOrWhiteSpace(report.ActorName))
+        {
+            payload["actorName"] = report.ActorName;
+        }
+
+        return AppendEvent(
+            type, fromStatus, toStatus, report.ReportedAt, report.RecordedAt, report.Source, report.Actor, report.Note,
+            JsonSerializer.Serialize(payload));
     }
 }
