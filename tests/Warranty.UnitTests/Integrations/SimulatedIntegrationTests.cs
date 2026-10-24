@@ -87,7 +87,7 @@ public sealed class SimulatedIntegrationTests
         var closed = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Closed", ["tablet"], isActive: false, priority: 1);
         integration.GetServiceCentersAsync(Region.NA, Ct).Returns([beta, closed, zeta, alpha]);
 
-        var eligible = await new SimulatedServiceNetwork(integration).ListEligibleAsync(Region.NA, " Tablet ", Ct);
+        var eligible = await new SimulatedServiceNetwork(integration).ListEligibleAsync(Region.NA, " Tablet ", ServiceCenterPurpose.Repair, Ct);
 
         eligible.Select(c => c.Id).ShouldBe([zeta.Id, alpha.Id, beta.Id]);
         eligible.Select(c => c.ServesClaim).ShouldBe([true, true, false]);
@@ -109,7 +109,7 @@ public sealed class SimulatedIntegrationTests
         (await network.FindServiceCenterAsync(Region.NA, "tablet", Ct))!.Id.ShouldBe(preferred.Id);
         (await network.FindServiceCenterAsync(Region.NA, "laptop", Ct))!.Id.ShouldBe(general.Id);
         (await network.FindServiceCenterAsync(Region.EU, "tablet", Ct)).ShouldBeNull();
-        (await network.ListEligibleAsync(Region.EU, "tablet", Ct)).ShouldBeEmpty();
+        (await network.ListEligibleAsync(Region.EU, "tablet", ServiceCenterPurpose.Repair, Ct)).ShouldBeEmpty();
     }
 
     [Fact]

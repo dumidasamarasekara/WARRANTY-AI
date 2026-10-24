@@ -37,8 +37,17 @@ public interface IServiceNetwork
     /// <summary>
     /// The active centres of the region, ordered by priority (lower first) then name; each says whether it
     /// repairs the product category (<see cref="EligibleServiceCenter.ServesClaim"/>). Inactive centres are never listed.
+    /// For <see cref="ServiceCenterPurpose.Replacement"/> only centres that issue replacement units are listed (003).
     /// </summary>
-    Task<IReadOnlyList<EligibleServiceCenter>> ListEligibleAsync(Region region, string productCategory, CancellationToken ct);
+    Task<IReadOnlyList<EligibleServiceCenter>> ListEligibleAsync(
+        Region region, string productCategory, ServiceCenterPurpose purpose, CancellationToken ct);
+}
+
+/// <summary>What a centre is selected for: a repair hand-over (002) or a replacement collection location (003).</summary>
+public enum ServiceCenterPurpose
+{
+    Repair,
+    Replacement,
 }
 
 public sealed record ServiceCenterInfo(Guid Id, string Name, Region Region);

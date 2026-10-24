@@ -86,7 +86,7 @@ public sealed class RecordRepairEventTests
                 call.ArgAt<TrailStep>(1), call.ArgAt<string>(2), JsonSerializer.SerializeToElement(call.ArgAt<object?>(4)))));
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", ClaimValue, "USD"));
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns(
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns(
         [
             new EligibleServiceCenter(SuggestedCentre, "Aurora Service Center Springfield", Region.NA, "1 Main St", "Mon-Fri 9-17", "555-0100", 10, true),
             new EligibleServiceCenter(OtherCentre, "Aurora Service Center Shelbyville", Region.NA, "2 Oak Ave", "Mon-Sat 9-18", "555-0101", 20, true),

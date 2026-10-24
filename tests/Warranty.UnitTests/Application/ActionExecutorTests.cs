@@ -68,7 +68,7 @@ public sealed class ActionExecutorTests
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", 349m, "EUR"));
         _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns(_center);
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_eligible]);
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns([_eligible]);
         _remedies.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRemedies.Add(call.Arg<ClaimRemedy>()));
         _repairRecords.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRepairs.Add(call.Arg<Repair>()));
         // The applicable version (AUR-WP v2-like) sets Repair by policy for a covered defect (002 research R3, R13).
@@ -112,7 +112,7 @@ public sealed class ActionExecutorTests
         await _repairs.DidNotReceiveWithAnyArgs().CreateAsync(default, default, Ct);
         Received.InOrder(() =>
         {
-            _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>());
+            _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>());
             _notifications.EnqueueAsync(claim.Id, ActionExecutor.ApprovedTemplate, Arg.Any<CancellationToken>());
         });
 
@@ -233,7 +233,7 @@ public sealed class ActionExecutorTests
     [Fact]
     public async Task Without_a_service_center_the_approval_stands_and_the_repair_waits_for_staff_to_choose_a_centre()
     {
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([]);
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns([]);
         var (claim, action) = Arrange(GuardrailScenario.ClearApprove());
 
         await Executor().ExecuteAsync(action, Ct);

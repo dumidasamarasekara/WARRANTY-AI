@@ -22,7 +22,7 @@ public static class RepairCentreEligibility
 
         if (claim.Region is { } region)
         {
-            var serving = (await network.ListEligibleAsync(region, category, ct)).Where(c => c.ServesClaim).ToList();
+            var serving = (await network.ListEligibleAsync(region, category, ServiceCenterPurpose.Repair, ct)).Where(c => c.ServesClaim).ToList();
             if (serving.Count > 0)
             {
                 return serving;
@@ -32,7 +32,7 @@ public static class RepairCentreEligibility
         var all = new List<EligibleServiceCenter>();
         foreach (var anyRegion in Enum.GetValues<Region>())
         {
-            all.AddRange((await network.ListEligibleAsync(anyRegion, category, ct)).Select(c => c with { ServesClaim = false }));
+            all.AddRange((await network.ListEligibleAsync(anyRegion, category, ServiceCenterPurpose.Repair, ct)).Select(c => c with { ServesClaim = false }));
         }
 
         return all
