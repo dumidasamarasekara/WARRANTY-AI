@@ -7,7 +7,9 @@ namespace Warranty.Integrations.Simulated;
 
 /// <summary>
 /// Simulated notifications: an outbox row in <c>integration.notifications</c>, added to the caller's
-/// unit of work. Nothing is sent in the PoC.
+/// unit of work. Nothing is sent in the PoC. The caller names the template: <c>claim-approved</c>,
+/// <c>claim-rejected</c>, <c>RepairReadyForCollection</c> (002, key <c>repair-ready:{attemptId}</c>) and
+/// <c>ReplacementReadyForCollection</c> (003, key <c>replacement-ready:{unitId}</c>).
 /// </summary>
 internal sealed class SimulatedNotificationService(
     IIntegrationRepository integration, ITenantContext tenantContext, TimeProvider time) : INotificationService

@@ -94,6 +94,25 @@ public sealed class SimulatedIntegrationTests
     }
 
     [Fact]
+    public async Task Service_network_lists_only_active_centres_that_issue_replacements_for_a_replacement()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        var repairsOnly = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Repairs only", ["tablet"], priority: 1);
+        var issuer = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Issuer", ["tablet"], priority: 10, issuesReplacements: true);
+        var otherCategory = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Phones", ["phone"], priority: 20, issuesReplacements: true);
+        var closed = ServiceCenter.Create(Guid.NewGuid(), Aurora, Region.NA, "Closed", ["tablet"], isActive: false, priority: 5, issuesReplacements: true);
+        integration.GetServiceCentersAsync(Region.NA, Ct).Returns([otherCategory, closed, repairsOnly, issuer]);
+        var network = new SimulatedServiceNetwork(integration);
+
+        var locations = await network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Replacement, Ct);
+        var repairCentres = await network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Ct);
+
+        locations.Select(c => c.Id).ShouldBe([issuer.Id, otherCategory.Id]);
+        locations.Select(c => c.ServesClaim).ShouldBe([true, false]);
+        repairCentres.Select(c => c.Id).ShouldBe([repairsOnly.Id, issuer.Id, otherCategory.Id]);
+    }
+
+    [Fact]
     public async Task Service_network_suggests_only_active_centres_and_prefers_the_higher_priority()
     {
         var integration = Substitute.For<IIntegrationRepository>();
@@ -164,6 +183,26 @@ public sealed class SimulatedIntegrationTests
                 n.Id == result.NotificationId && n.TenantId == Aurora && n.ClaimId == claimId && n.DedupeKey == "repair-ready:42"),
             Arg.Any<CancellationToken>());
         integration.DidNotReceive().AddNotification(Arg.Any<Notification>());
+    }
+
+    [Fact]
+    public async Task A_replacement_ready_notification_is_queued_with_its_template_and_unit_key()
+    {
+        var integration = Substitute.For<IIntegrationRepository>();
+        integration.TryAddNotificationAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(true);
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 3, 9, 0, 0, TimeSpan.Zero));
+        var claimId = Guid.NewGuid();
+        var unitId = Guid.NewGuid();
+
+        var result = await new SimulatedNotificationService(integration, new FakeTenantContext(Aurora), time)
+            .EnqueueAsync(claimId, "ReplacementReadyForCollection", $"replacement-ready:{unitId}", Ct);
+
+        result.AlreadyQueued.ShouldBeFalse();
+        await integration.Received(1).TryAddNotificationAsync(
+            Arg.Is<Notification>(n =>
+                n.Id == result.NotificationId && n.TenantId == Aurora && n.ClaimId == claimId
+                && n.Template == "ReplacementReadyForCollection" && n.DedupeKey == $"replacement-ready:{unitId}"),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
