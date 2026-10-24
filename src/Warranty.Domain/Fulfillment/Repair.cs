@@ -1,11 +1,12 @@
 using System.Text.Json;
+using Warranty.Domain.Claims;
 
 namespace Warranty.Domain.Fulfillment;
 
 /// <summary>
 /// The repair of an approved claim whose remedy is Repair (<c>claims.repairs</c>), one per claim. Owns
 /// its hand-overs, attempts and append-only events; status changes follow the repair state machine in
-/// data-model.md and go only through this aggregate (transitions are added in T238, T247 and T256).
+/// data-model.md and go only through this aggregate (US3 and US5 transitions are added in T247 and T256).
 /// </summary>
 public sealed class Repair
 {
@@ -105,40 +106,131 @@ public sealed class Repair
 
     /// <summary>
     /// The event types allowed from the current status (drives <c>RepairView.allowedEvents</c> and the 409 detail).
-    /// Pending T238 (US2 events); T247 and T256 add the US3 and US5 events.
+    /// US2 events; T247 and T256 add the US3 and US5 events. A hand-over needs an active centre.
     /// </summary>
-    public IReadOnlyList<RepairEventType> AllowedEvents()
-        => throw new NotImplementedException($"Pending T238 ({Status}).");
+    public IReadOnlyList<RepairEventType> AllowedEvents() => Status switch
+    {
+        RepairStatus.AwaitingHandover when ActiveHandoverId is not null => [RepairEventType.CentreChanged, RepairEventType.HandedOver],
+        RepairStatus.AwaitingHandover => [RepairEventType.CentreChanged],
+        RepairStatus.AtRepairCentre => [RepairEventType.MarkedReady],
+        RepairStatus.ReadyForCollection => [RepairEventType.Collected],
+        _ => [],
+    };
 
     /// <summary>
     /// <see cref="RepairEventType.CentreChanged"/>: <see cref="RepairStatus.AwaitingHandover"/> stays; the staff-chosen
-    /// centre becomes the active hand-over (<see cref="HandoverAssignment.ChosenByStaff"/>, reason required). Pending T238.
+    /// centre becomes the active hand-over (<see cref="HandoverAssignment.ChosenByStaff"/>, reason required). Whether the
+    /// centre is an eligible centre of the tenant is checked by the use case.
     /// </summary>
     public RepairEvent ChangeCentre(Guid serviceCenterId, string reason, RepairReport report)
-        => throw new NotImplementedException($"Pending T238 ({serviceCenterId}, {reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (serviceCenterId == Guid.Empty)
+        {
+            throw new ArgumentException("A repair centre ID is required.", nameof(serviceCenterId));
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to change the repair centre.", nameof(reason));
+        }
+
+        Require(RepairEventType.CentreChanged, RepairStatus.AwaitingHandover);
+
+        var previous = ActiveHandover?.ServiceCenterId;
+        var handover = AddHandover(serviceCenterId, HandoverAssignment.ChosenByStaff, reason, report.Actor, report.RecordedAt);
+        return Append(
+            RepairEventType.CentreChanged,
+            RepairStatus.AwaitingHandover,
+            RepairStatus.AwaitingHandover,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["serviceCenterId"] = serviceCenterId,
+                ["previousServiceCenterId"] = previous,
+                ["handoverId"] = handover.Id,
+                ["reason"] = handover.Reason,
+            });
+    }
 
     /// <summary>
     /// <see cref="RepairEventType.HandedOver"/>: <see cref="RepairStatus.AwaitingHandover"/> → <see cref="RepairStatus.AtRepairCentre"/>;
     /// needs an active centre; records the date and centre reference on the active hand-over and opens attempt 1
-    /// when no attempt is open. Pending T238.
+    /// when no attempt is open.
     /// </summary>
     public RepairEvent RecordHandover(DateOnly handedOverOn, string? centreReference, RepairReport report)
-        => throw new NotImplementedException($"Pending T238 ({handedOverOn}, {centreReference}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        Require(RepairEventType.HandedOver, RepairStatus.AwaitingHandover);
+        var handover = ActiveHandover
+            ?? throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.HandedOver} on a repair in status {Status} without an active repair centre; "
+                + $"allowed events: {Describe(AllowedEvents())}.");
+
+        handover.RecordHandedOver(handedOverOn, centreReference, report.Note);
+        var attempt = CurrentAttempt is { IsOpen: true } open ? open : StartAttempt(handover.ServiceCenterId, report.RecordedAt);
+        Status = RepairStatus.AtRepairCentre;
+        return Append(
+            RepairEventType.HandedOver,
+            RepairStatus.AwaitingHandover,
+            RepairStatus.AtRepairCentre,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["serviceCenterId"] = handover.ServiceCenterId,
+                ["handoverId"] = handover.Id,
+                ["handedOverOn"] = handedOverOn,
+                ["centreReference"] = handover.CentreReference,
+                ["attemptId"] = attempt.Id,
+                ["attemptSeq"] = attempt.Seq,
+            });
+    }
 
     /// <summary>
     /// <see cref="RepairEventType.MarkedReady"/>: <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.ReadyForCollection"/>;
-    /// the current attempt ends as <see cref="AttemptResult.Ready"/>. Pending T238.
+    /// the current attempt ends as <see cref="AttemptResult.Ready"/>.
     /// </summary>
     public RepairEvent MarkReady(RepairReport report)
-        => throw new NotImplementedException($"Pending T238 ({report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        Require(RepairEventType.MarkedReady, RepairStatus.AtRepairCentre);
+        var attempt = CurrentAttempt is { IsOpen: true } open
+            ? open
+            : throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.MarkedReady} on a repair in status {Status} without an open attempt.");
+
+        attempt.MarkReady(report.RecordedAt);
+        Status = RepairStatus.ReadyForCollection;
+        return Append(
+            RepairEventType.MarkedReady,
+            RepairStatus.AtRepairCentre,
+            RepairStatus.ReadyForCollection,
+            report,
+            new Dictionary<string, object?> { ["attemptId"] = attempt.Id, ["attemptSeq"] = attempt.Seq });
+    }
 
     /// <summary>
     /// <see cref="RepairEventType.Collected"/>: <see cref="RepairStatus.ReadyForCollection"/> → <see cref="RepairStatus.Collected"/>
-    /// (final); the current attempt's result becomes <see cref="AttemptResult.Collected"/>. Pending T238.
+    /// (final); the current attempt's result becomes <see cref="AttemptResult.Collected"/>.
     /// </summary>
     public RepairEvent RecordCollection(RepairReport report)
-        => throw new NotImplementedException($"Pending T238 ({report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        Require(RepairEventType.Collected, RepairStatus.ReadyForCollection);
+        var attempt = CurrentAttempt is { Result: AttemptResult.Ready } ready
+            ? ready
+            : throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.Collected} on a repair in status {Status} without a ready attempt.");
 
+        attempt.MarkCollected();
+        Status = RepairStatus.Collected;
+        return Append(
+            RepairEventType.Collected,
+            RepairStatus.ReadyForCollection,
+            RepairStatus.Collected,
+            report,
+            new Dictionary<string, object?> { ["attemptId"] = attempt.Id, ["attemptSeq"] = attempt.Seq });
+    }
     /// <summary>
     /// <see cref="RepairEventType.EstimateReported"/> at the repair centre: stays <see cref="RepairStatus.AtRepairCentre"/>, or
     /// becomes <see cref="RepairStatus.RepairNotPossible"/> (<see cref="RepairNotPossibleReason.NotEconomical"/>) only when
@@ -220,5 +312,33 @@ public sealed class Repair
         _events.Add(repairEvent);
         UpdatedAt = recordedAt;
         return repairEvent;
+    }
+
+    /// <summary>The allowed events as listed in a refusal.</summary>
+    internal static string Describe(IReadOnlyList<RepairEventType> events)
+        => events.Count == 0 ? "none" : string.Join(", ", events);
+
+    /// <summary>Refuses <paramref name="type"/> unless the repair is in <paramref name="from"/>, naming the status and the allowed events.</summary>
+    private void Require(RepairEventType type, RepairStatus from)
+    {
+        if (Status != from)
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {type} on a repair in status {Status}; allowed events: {Describe(AllowedEvents())}.");
+        }
+    }
+
+    /// <summary>Appends a staff-reported event; the payload also carries the staff member's display name when known.</summary>
+    private RepairEvent Append(
+        RepairEventType type, RepairStatus fromStatus, RepairStatus toStatus, RepairReport report, Dictionary<string, object?> payload)
+    {
+        if (!string.IsNullOrWhiteSpace(report.ActorName))
+        {
+            payload["actorName"] = report.ActorName;
+        }
+
+        return AppendEvent(
+            type, fromStatus, toStatus, report.ReportedAt, report.RecordedAt, report.Source, report.Actor, report.Note,
+            JsonSerializer.Serialize(payload));
     }
 }
