@@ -72,3 +72,26 @@
     padding: var(--space-4);
   }
 }
+
+/* Remedy section — 002 contracts/ui-screens.md §5. */
+.remedy {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.remedyLine {
+  font: 600 15px/22px var(--font-sans);
+}
+
+.centre {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.centreName {
+  font-weight: 600;
+}
+
+.centreAddress {
+  white-space: pre-line;
+}

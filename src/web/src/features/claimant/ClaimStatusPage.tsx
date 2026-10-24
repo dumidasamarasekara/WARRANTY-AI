@@ -18,12 +18,20 @@ import {
   type Tone,
 } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
-import { claimProgressSteps, isTransientStatus, nextSteps, statusPollIntervalMs } from './claimProgress'
+import {
+  claimProgressSteps,
+  isReadyForCollection,
+  isTransientStatus,
+  nextSteps,
+  remedyStepPresentation,
+  statusPollIntervalMs,
+} from './claimProgress'
 import styles from './ClaimStatusPage.module.css'
 import { SupplementForm } from './SupplementForm'
 import { asSupplementForm } from './supplement'
 
 type ClaimantClaimView = Schemas['ClaimantClaimView']
+type ClaimantRemedyView = Schemas['ClaimantRemedyView']
 
 const submitSupplement = (reference: string, body: FormData) =>
   unwrap(
@@ -100,6 +108,66 @@ function WhatHappensNext({ claim }: { claim: ClaimantClaimView }) {
           </TimelineItem>
         ))}
       </Timeline>
+    </Card>
+  )
+}
+
+/** The repair centre's public details only — never its contact, reference or notes (FR-041). */
+function RepairCentreDetails({ centre }: { centre: NonNullable<ClaimantRemedyView['repairCentre']> }) {
+  return (
+    <div className={styles.centre}>
+      <p className={styles.centreName}>{centre.name}</p>
+      {centre.address && <p className={styles.centreAddress}>{centre.address}</p>}
+      {centre.openingHours && <p className={styles.stepText}>Opening hours: {centre.openingHours}</p>}
+    </div>
+  )
+}
+
+/**
+ * The remedy section of an approved claim (002 contracts/ui-screens.md §5), built only from
+ * `ClaimantClaimView.remedy`: the remedy line and label, the four Repair steps and the repair centre.
+ */
+function RemedySection({ remedy }: { remedy: ClaimantRemedyView }) {
+  if (!remedy.remedy) {
+    // A remedy is being decided, also after "Repair not possible": the label text only.
+    return (
+      <section className={cx(styles.banner, tones.pending)} aria-label="Remedy">
+        <p className={styles.bannerBody}>{remedy.label}</p>
+      </section>
+    )
+  }
+
+  const ready = isReadyForCollection(remedy)
+  return (
+    <Card title="Your remedy" titleAs="h2" padding="lg">
+      <div className={styles.remedy} aria-label="Remedy" role="region">
+        <p className={styles.remedyLine}>Remedy: {remedy.remedy}</p>
+        <p className={styles.stepText}>{remedy.label}</p>
+        {remedy.steps.length > 0 && (
+          <Timeline label="Repair progress">
+            {remedy.steps.map((step) => {
+              const { state, tone } = remedyStepPresentation(step.state)
+              return (
+                <TimelineItem key={step.title} tone={tone}>
+                  <p className={styles.stepTitle}>
+                    {step.title} <span className={styles.stepMeta}>{state}</span>
+                  </p>
+                </TimelineItem>
+              )
+            })}
+          </Timeline>
+        )}
+        {remedy.repairCentre &&
+          (ready ? (
+            <Alert tone="ok" title="Your product is ready for collection">
+              <RepairCentreDetails centre={remedy.repairCentre} />
+            </Alert>
+          ) : (
+            <Card title="Repair centre" titleAs="h3">
+              <RepairCentreDetails centre={remedy.repairCentre} />
+            </Card>
+          ))}
+      </div>
     </Card>
   )
 }
@@ -189,6 +257,7 @@ export function ClaimStatusPage({ pollIntervalMs = statusPollIntervalMs }: Claim
           />
         </Card>
       )}
+      {view.status === 'Approved' && view.remedy && <RemedySection remedy={view.remedy} />}
       <WhatHappensNext claim={view} />
     </section>
   )
