@@ -123,14 +123,24 @@ public sealed class RecordRepairEvent(
     /// <summary>
     /// The events allowed for <paramref name="repair"/> given the claim's <paramref name="remedy"/>: the repair's own list,
     /// without <see cref="RepairEventType.NewAttemptStarted"/> once the remedy has left the repair (attempt limit reached,
-    /// FR-031). Drives <c>RepairView.allowedEvents</c> and the 409 detail.
+    /// FR-031), and none once a reviewer decided another remedy: the repair is closed (T249). Drives
+    /// <c>RepairView.allowedEvents</c> and the 409 detail.
     /// </summary>
     public static IReadOnlyList<RepairEventType> AllowedEvents(Repair repair, ClaimRemedy? remedy)
     {
         ArgumentNullException.ThrowIfNull(repair);
+        if (IsClosedBy(remedy))
+        {
+            return [];
+        }
+
         var allowed = repair.AllowedEvents();
         return IsRepairInProgress(remedy) ? allowed : [.. allowed.Where(e => e != RepairEventType.NewAttemptStarted)];
     }
+
+    /// <summary>A repair is closed once its claim's remedy was decided as Replacement or Refund (002 FR-031, FR-032, T249).</summary>
+    public static bool IsClosedBy(ClaimRemedy? remedy)
+        => remedy is { State: not RemedyState.AwaitingDecision, Remedy: { } decided } && decided != RemedyType.Repair;
 
     public async Task<RecordRepairEventResult> ExecuteAsync(RecordRepairEventCommand command, CancellationToken ct)
     {

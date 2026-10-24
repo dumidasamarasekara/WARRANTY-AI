@@ -153,8 +153,10 @@ public sealed class ActionExecutor(
         // Re-evaluation with the remedy's own policy version, scenario and repair facts (FR-002, FR-010).
         var version = await policies.GetVersionAsync(remedy.PolicyVersionId, ct);
         var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
-        var failedAttempts = repair?.FailedAttempts ?? 0;
-        var estimate = repair?.Attempts.LastOrDefault(a => a.EstimateAmount is not null)?.EstimateAmount;
+        // The repair is authoritative for its facts; without one, the evaluation that set the remedy's scenario recorded them.
+        var basis = history.Where(d => d.Kind == RemedyDecisionKind.Evaluated && d.Scenario == remedy.Scenario).MaxBy(d => d.Seq);
+        var failedAttempts = repair?.FailedAttempts ?? basis?.FailedAttempts ?? 0;
+        var estimate = repair?.Attempts.LastOrDefault(a => a.EstimateAmount is not null)?.EstimateAmount ?? basis?.EstimateAmount;
         var evaluation = remedyEvaluator.Evaluate(version?.RemedyRules, remedy.Scenario, failedAttempts, estimate, product?.ClaimValue);
         if (version is null || !evaluation.AllowedRemedies.Contains(decision.Remedy) || !remedy.AllowedRemedies.Contains(decision.Remedy))
         {
@@ -194,6 +196,17 @@ public sealed class ActionExecutor(
                 tableRow = evaluation.TableRow,
             },
             ct);
+
+        if (repair is not null && decision.Remedy != RemedyType.Repair)
+        {
+            // After a failed or uneconomical repair (FR-031, FR-032) the repair is closed: it keeps its attempts and events,
+            // and no repair event is allowed any more (RecordRepairEvent.AllowedEvents).
+            await trail.AppendAsync(
+                claim.Id, TrailStep.RepairStatusUpdated, actor,
+                $"Repair closed: the remedy is now {decision.Remedy}.",
+                new { repairId = repair.Id, status = repair.Status.ToString(), closed = true, remedy = decision.Remedy.ToString() },
+                ct);
+        }
 
         switch (decision.Remedy)
         {
