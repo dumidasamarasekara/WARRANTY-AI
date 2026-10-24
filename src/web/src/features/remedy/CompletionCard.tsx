@@ -12,6 +12,11 @@ export interface CompletionCardProps {
   remedy: RemedyView & { remedy: CompletableRemedy }
   /** Claims agents and reviewers record the completion; auditors see the card read-only. */
   canAct: boolean
+  /**
+   * The claim has a replacement (`ClaimDetail.replacement`, 003): the Replacement card owns a Replacement remedy and
+   * this card renders nothing for it (003 ui-screens.md §2).
+   */
+  hasReplacement?: boolean
   /** Reload the claim for the current remedy and a fresh ETag (409 and 412). */
   onReload: () => Promise<unknown>
 }
@@ -142,13 +147,17 @@ function CompletionForm({ claimId, remedy, onReload, onRecorded }: CompletionFor
  * Left column of the Remedy tab when the remedy is Replacement or Refund (002 ui-screens.md §2,
  * FR-034, FR-035): while a Refund is `InProgress`, claims agents and reviewers record the completion date and the
  * refund reference; once `Completed`, a read-only summary. Submits with `If-Match` = the remedy ETag. A Replacement
- * completes through its HandedToCustomer replacement event (003 research R12), so its card has no form.
+ * completes through its HandedToCustomer replacement event (003 research R12): when the claim has a replacement the
+ * Replacement card replaces this card (003 ui-screens.md §2); a Replacement decided before 003 has none and keeps this
+ * card read-only, with the completion recorded then.
  */
-export function CompletionCard({ claimId, remedy, canAct, onReload }: CompletionCardProps) {
+export function CompletionCard({ claimId, remedy, canAct, onReload, hasReplacement = false }: CompletionCardProps) {
   const copy = completionCopy[remedy.remedy]
   const completion = remedy.completion
   const completed = remedy.state === 'Completed'
   const [recorded, setRecorded] = useState(false)
+
+  if (remedy.remedy === 'Replacement' && hasReplacement) return null
 
   return (
     <>

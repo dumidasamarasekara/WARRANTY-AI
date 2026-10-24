@@ -9,7 +9,7 @@ using Warranty.Domain.Fulfillment;
 namespace Warranty.Application.Fulfillment;
 
 /// <summary>
-/// A staff record that a Replacement or Refund remedy was carried out (002 contracts, <c>RemedyCompletionRequest</c>)
+/// A staff record that a Refund remedy was carried out (002 contracts, <c>RemedyCompletionRequest</c>; 003 research R12)
 /// with the <c>If-Match</c> value (the remedy ETag) it was sent with. Fields are nullable so that a missing one is a
 /// 400 naming it. The staff member is the principal of <see cref="ITenantContext"/>, never a request field.
 /// </summary>
@@ -51,10 +51,12 @@ public abstract record RecordRemedyCompletionResult
 }
 
 /// <summary>
-/// Records that a Replacement was handed to the customer or a Refund was completed (002 FR-034, FR-035). In order: the
-/// principal must be a claims agent or a claims reviewer (403); the claim must be visible in the tenant (404); the
-/// request must name a Replacement or Refund (a Repair completes through the <c>Collected</c> repair event), a
-/// completion date not in the future and, for a Refund, the refund reference of at most
+/// Records that a Refund was completed (002 FR-035). Since 003 (research R12, replacing 002 FR-034) a Replacement
+/// completes through the <c>HandedToCustomer</c> replacement event (<c>RecordReplacementEvent</c>), as a Repair
+/// completes through the <c>Collected</c> repair event; completion rows with remedy Replacement written before 003 stay
+/// readable. In order: the principal must be a claims agent or a claims reviewer (403); the claim must be visible in
+/// the tenant (404); the request must name a Refund (a Repair or a Replacement is refused naming the event that
+/// completes it), a completion date not in the future and the refund reference of at most
 /// <see cref="MaxReferenceLength"/> characters (400 naming the field); the claim must have a remedy (409);
 /// <c>If-Match</c> must equal the remedy's row version (412); the remedy must be <see cref="RemedyState.InProgress"/>
 /// with the requested remedy (409 naming the state and the current remedy). One transaction then writes the
@@ -173,10 +175,13 @@ public sealed class RecordRemedyCompletion(
         switch (command.Remedy)
         {
             case null:
-                errors["remedy"] = ["The remedy (Replacement or Refund) is required."];
+                errors["remedy"] = ["The remedy (Refund) is required."];
                 break;
             case RemedyType.Repair:
                 errors["remedy"] = ["A Repair is completed by recording the Collected repair event, not by a completion record."];
+                break;
+            case RemedyType.Replacement:
+                errors["remedy"] = ["A Replacement is completed by recording the HandedToCustomer replacement event, not by a completion record."];
                 break;
         }
 
@@ -210,7 +215,6 @@ public sealed class RecordRemedyCompletion(
         return new RecordRemedyCompletionResult.Conflict(detail, remedy.State, remedy.Remedy);
     }
 
-    private static string Summary(RemedyCompletion completion) => completion.Remedy == RemedyType.Refund
-        ? $"Refund completed on {completion.CompletedOn:yyyy-MM-dd} (reference {completion.Reference})."
-        : $"Replacement handed to the customer on {completion.CompletedOn:yyyy-MM-dd}.";
+    private static string Summary(RemedyCompletion completion)
+        => $"Refund completed on {completion.CompletedOn:yyyy-MM-dd} (reference {completion.Reference}).";
 }

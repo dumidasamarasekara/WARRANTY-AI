@@ -16,9 +16,10 @@ using Warranty.Domain.Fulfillment;
 namespace Warranty.UnitTests.Application;
 
 /// <summary>
-/// Staff completion of a Replacement or Refund remedy (002 T251; FR-034, FR-035): <see cref="RecordRemedyCompletion"/>
+/// Staff completion of a Refund remedy (002 T251; FR-035; 003 research R12): <see cref="RecordRemedyCompletion"/>
 /// accepts only claims agents and claims reviewers (403); refuses a missing remedy or date, a date in the future, a
-/// Repair (completed by the <c>Collected</c> repair event instead), a reference over 100 characters and a Refund
+/// Repair (completed by the <c>Collected</c> repair event instead), a Replacement (completed by the
+/// <c>HandedToCustomer</c> replacement event instead), a reference over 100 characters and a Refund
 /// without its reference (400 naming the field); a missing or stale remedy ETag (412); a remedy that is not the current
 /// one or not <see cref="RemedyState.InProgress"/>, and a lost race on save (409) — all without writing anything. A
 /// recorded completion writes one <see cref="RemedyCompletion"/> row, completes the remedy and appends one
@@ -76,25 +77,25 @@ public sealed class RecordRemedyCompletionTests
     // ── Recorded completions (FR-034, FR-035) ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task A_replacement_handed_over_completes_the_remedy_with_one_row_and_one_trail_entry_in_one_transaction()
+    public async Task A_refund_completion_writes_one_row_and_one_trail_entry_in_one_transaction()
     {
-        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Yesterday));
+        var result = await Execute(claim, Command(RemedyType.Refund, Yesterday));
 
         var recorded = result.ShouldBeOfType<RecordRemedyCompletionResult.Recorded>();
         recorded.Remedy.ShouldBeSameAs(remedy);
         remedy.State.ShouldBe(RemedyState.Completed);
-        remedy.Remedy.ShouldBe(RemedyType.Replacement);
+        remedy.Remedy.ShouldBe(RemedyType.Refund);
         var completion = _completions.ShouldHaveSingleItem();
         recorded.Completion.ShouldBeSameAs(completion);
         (completion.ClaimId, completion.TenantId, completion.Remedy, completion.CompletedOn, completion.Reference)
-            .ShouldBe((claim.Id, Tenant, RemedyType.Replacement, Yesterday, (string?)null));
+            .ShouldBe((claim.Id, Tenant, RemedyType.Refund, Yesterday, (string?)RefundReference));
         (completion.RecordedBy, completion.RecordedAt, completion.RefundRequestId).ShouldBe((AgentSub, Now, (Guid?)null));
 
         var entry = _entries.ShouldHaveSingleItem();
         (entry.Step, entry.Actor).ShouldBe((TrailStep.RemedyCompleted, AgentSub));
-        entry.Payload.GetRawText().ShouldContain(nameof(RemedyType.Replacement));
+        entry.Payload.GetRawText().ShouldContain(nameof(RemedyType.Refund));
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
@@ -114,17 +115,6 @@ public sealed class RecordRemedyCompletionTests
         entry.Payload.GetRawText().ShouldContain(RefundReference);
     }
 
-    [Fact]
-    public async Task A_replacement_may_carry_an_optional_reference()
-    {
-        var (claim, _) = ArrangeInProgress(RemedyType.Replacement);
-
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today, "DN-55120"));
-
-        result.ShouldBeOfType<RecordRemedyCompletionResult.Recorded>();
-        _completions.ShouldHaveSingleItem().Reference.ShouldBe("DN-55120");
-    }
-
     // ── Roles (contracts: claims-agent and claims-reviewer) ─────────────────────────────────────
 
     [Theory]
@@ -133,21 +123,21 @@ public sealed class RecordRemedyCompletionTests
     public async Task Claims_agents_and_claims_reviewers_may_record_a_completion(string role)
     {
         _tenant.Roles.Returns(new HashSet<string>(StringComparer.Ordinal) { role });
-        var (claim, _) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, _) = ArrangeInProgress(RemedyType.Refund);
 
-        (await Execute(claim, Command(RemedyType.Replacement, Today))).ShouldBeOfType<RecordRemedyCompletionResult.Recorded>();
+        (await Execute(claim, Command(RemedyType.Refund, Today))).ShouldBeOfType<RecordRemedyCompletionResult.Recorded>();
     }
 
     [Fact]
     public async Task An_auditor_is_forbidden_and_nothing_is_written()
     {
         _tenant.Roles.Returns(new HashSet<string>(StringComparer.Ordinal) { Principals.AuditorRole });
-        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.Forbidden>();
-        await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
+        await ShouldBeUnchangedAsync(remedy, RemedyType.Refund);
     }
 
     // ── Request fields (contracts RemedyCompletionRequest) ─────────────────────────────────────
@@ -156,6 +146,7 @@ public sealed class RecordRemedyCompletionTests
     {
         { "noRemedy", "remedy" },
         { "repair", "remedy" },
+        { "replacement", "remedy" },
         { "noCompletedOn", "completedOn" },
         { "tomorrow", "completedOn" },
         { "referenceTooLong", "reference" },
@@ -165,21 +156,22 @@ public sealed class RecordRemedyCompletionTests
     [MemberData(nameof(MissingOrInvalidFields))]
     public async Task Missing_or_invalid_fields_are_refused_naming_the_field(string request, string field)
     {
-        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
         var command = request switch
         {
-            "noRemedy" => Command(RemedyType.Replacement, Today) with { Remedy = null },
+            "noRemedy" => Command(RemedyType.Refund, Today) with { Remedy = null },
             "repair" => Command(RemedyType.Repair, Today),
-            "noCompletedOn" => Command(RemedyType.Replacement, Today) with { CompletedOn = null },
-            "tomorrow" => Command(RemedyType.Replacement, Today.AddDays(1)),
-            "referenceTooLong" => Command(RemedyType.Replacement, Today, new string('R', 101)),
+            "replacement" => Command(RemedyType.Replacement, Today),
+            "noCompletedOn" => Command(RemedyType.Refund, Today) with { CompletedOn = null },
+            "tomorrow" => Command(RemedyType.Refund, Today.AddDays(1)),
+            "referenceTooLong" => Command(RemedyType.Refund, Today, new string('R', 101)),
             _ => throw new ArgumentOutOfRangeException(nameof(request), request, null),
         };
 
         var result = await Execute(claim, command);
 
         ShouldBeInvalid(result, field);
-        await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
+        await ShouldBeUnchangedAsync(remedy, RemedyType.Refund);
     }
 
     [Theory]
@@ -211,21 +203,34 @@ public sealed class RecordRemedyCompletionTests
         await ShouldBeUnchangedAsync(remedy, RemedyType.Repair);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("DN-55120")]
+    public async Task A_replacement_is_refused_even_when_the_current_remedy_is_Replacement(string? reference)
+    {
+        // 003 research R12: a Replacement completes through the HandedToCustomer replacement event (RecordReplacementEvent).
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
+
+        var result = await Execute(claim, Command(RemedyType.Replacement, Yesterday, reference));
+
+        var invalid = result.ShouldBeOfType<RecordRemedyCompletionResult.Invalid>();
+        invalid.Errors["remedy"].ShouldContain(m => m.Contains("HandedToCustomer", StringComparison.Ordinal));
+        await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
+    }
+
     // ── Remedy state (FR-034, data-model.md "Remedy") ──────────────────────────────────────────
 
-    [Theory]
-    [InlineData(RemedyType.Replacement, RemedyType.Refund)]
-    [InlineData(RemedyType.Refund, RemedyType.Replacement)]
-    public async Task A_remedy_that_is_not_the_current_one_conflicts_naming_the_current_remedy(RemedyType current, RemedyType requested)
+    [Fact]
+    public async Task A_refund_that_is_not_the_current_remedy_conflicts_naming_the_current_remedy()
     {
-        var (claim, remedy) = ArrangeInProgress(current);
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
 
-        var result = await Execute(claim, Command(requested, Today, RefundReference));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         var conflict = result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>();
-        (conflict.State, conflict.CurrentRemedy).ShouldBe((RemedyState.InProgress, current));
-        conflict.Detail.ShouldContain(current.ToString());
-        await ShouldBeUnchangedAsync(remedy, current);
+        (conflict.State, conflict.CurrentRemedy).ShouldBe((RemedyState.InProgress, (RemedyType?)RemedyType.Replacement));
+        conflict.Detail.ShouldContain(nameof(RemedyType.Replacement));
+        await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
     }
 
     [Fact]
@@ -237,7 +242,7 @@ public sealed class RecordRemedyCompletionTests
             RemedyPendingReason.RepairFailedLimit, DecidedAt);
         ArrangeApproved(claim, remedy);
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         var conflict = result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>();
         conflict.State.ShouldBe(RemedyState.AwaitingDecision);
@@ -249,10 +254,10 @@ public sealed class RecordRemedyCompletionTests
     [Fact]
     public async Task A_completed_remedy_cannot_be_completed_again()
     {
-        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
-        remedy.Complete(RemedyType.Replacement, DecidedAt.AddDays(1));
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
+        remedy.Complete(RemedyType.Refund, DecidedAt.AddDays(1));
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>().State.ShouldBe(RemedyState.Completed);
         await ShouldNotWriteAsync();
@@ -264,7 +269,7 @@ public sealed class RecordRemedyCompletionTests
         var claim = NewClaim();
         _claims.GetAsync(claim.Id, Arg.Any<CancellationToken>()).Returns(claim);
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>().State.ShouldBeNull();
         await ShouldNotWriteAsync();
@@ -275,12 +280,12 @@ public sealed class RecordRemedyCompletionTests
     [Fact]
     public async Task An_unknown_claim_or_a_claim_of_another_tenant_is_not_found()
     {
-        (await UseCase().ExecuteAsync(Command(RemedyType.Replacement, Today) with { ClaimId = Guid.NewGuid() }, Ct))
+        (await UseCase().ExecuteAsync(Command(RemedyType.Refund, Today) with { ClaimId = Guid.NewGuid() }, Ct))
             .ShouldBeOfType<RecordRemedyCompletionResult.NotFound>();
 
         var foreign = NewClaim(OtherTenant);
         _claims.GetAsync(foreign.Id, Arg.Any<CancellationToken>()).Returns(foreign);
-        (await Execute(foreign, Command(RemedyType.Replacement, Today))).ShouldBeOfType<RecordRemedyCompletionResult.NotFound>();
+        (await Execute(foreign, Command(RemedyType.Refund, Today))).ShouldBeOfType<RecordRemedyCompletionResult.NotFound>();
 
         await ShouldNotWriteAsync();
     }
@@ -296,21 +301,21 @@ public sealed class RecordRemedyCompletionTests
     [InlineData("not-a-version")]
     public async Task A_missing_or_stale_If_Match_fails_the_precondition(string? ifMatch)
     {
-        var (claim, remedy) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, remedy) = ArrangeInProgress(RemedyType.Refund);
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today) with { IfMatch = ifMatch });
+        var result = await Execute(claim, Command(RemedyType.Refund, Today) with { IfMatch = ifMatch });
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.PreconditionFailed>();
-        await ShouldBeUnchangedAsync(remedy, RemedyType.Replacement);
+        await ShouldBeUnchangedAsync(remedy, RemedyType.Refund);
     }
 
     [Fact]
     public async Task A_concurrent_change_detected_on_save_conflicts()
     {
-        var (claim, _) = ArrangeInProgress(RemedyType.Replacement);
+        var (claim, _) = ArrangeInProgress(RemedyType.Refund);
         _unitOfWork.Configure().ExecuteInTransactionAsync(default!, Ct).ThrowsAsyncForAnyArgs(new ConcurrencyConflictException("xmin changed"));
 
-        var result = await Execute(claim, Command(RemedyType.Replacement, Today));
+        var result = await Execute(claim, Command(RemedyType.Refund, Today));
 
         result.ShouldBeOfType<RecordRemedyCompletionResult.Conflict>();
     }
@@ -332,7 +337,7 @@ public sealed class RecordRemedyCompletionTests
 
     private RecordRemedyCompletion UseCase() => new(_tenant, _claims, _remedies, _trail, _unitOfWork, _time);
 
-    private static RecordRemedyCompletionCommand Command(RemedyType remedy, DateOnly completedOn, string? reference = null)
+    private static RecordRemedyCompletionCommand Command(RemedyType remedy, DateOnly completedOn, string? reference = RefundReference)
         => new(Guid.Empty, ValidIfMatch, remedy, completedOn, reference);
 
     private static Claim NewClaim(Guid? tenantId = null) => Claim.Submit(

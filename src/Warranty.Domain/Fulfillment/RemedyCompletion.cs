@@ -5,7 +5,9 @@ namespace Warranty.Domain.Fulfillment;
 /// <summary>
 /// Staff record that a Replacement or Refund remedy was carried out (<c>claims.remedy_completions</c>,
 /// one per claim). A completed Repair has no row; its completion is the repair's <c>Collected</c>
-/// status. A Refund needs the refund reference from the refund option (FR-035).
+/// status. A Refund needs the refund reference from the refund option (FR-035). Since 003 (research R12) new rows are
+/// written only for a Refund; a Replacement completes through its <c>HandedToCustomer</c> event, and rows with remedy
+/// Replacement are those written before 003, which stay readable.
 /// </summary>
 public sealed class RemedyCompletion
 {

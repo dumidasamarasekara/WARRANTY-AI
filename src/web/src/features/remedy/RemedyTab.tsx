@@ -142,8 +142,8 @@ function RemedyCard({ remedy, canDecide, onDecide }: { remedy: RemedyView; canDe
  * `/staff/claims/:claimId/remedy` (002 ui-screens.md §2): the remedy card with its origin line, policy
  * basis, history and, while a reviewer must choose, the `warn` banner with **Decide remedy** for
  * reviewers. The remedy is never an AI output (FR-014): no violet, no AI tag. When the remedy is Repair,
- * the repair card follows and the right column holds the repair events; for Replacement and Refund the
- * completion card follows.
+ * the repair card follows and the right column holds the repair events; for Refund, and for a Replacement without a
+ * replacement (decided before 003), the completion card follows; a claim's replacement has its own card (003 T332).
  */
 export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: RemedyTabProps) {
   const queryClient = useQueryClient()
@@ -185,7 +185,15 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
         {decided && <Alert tone="ok" title="Remedy decided" />}
         <RemedyCard remedy={remedy} canDecide={canDecide} onDecide={openDialog} />
         {repair && <RepairCard claimId={detail.claimId} repair={repair} canAct={canRecordRepair} onReload={reload} />}
-        {completable && <CompletionCard claimId={detail.claimId} remedy={completable} canAct={canRecordRepair} onReload={reload} />}
+        {completable && (
+          <CompletionCard
+            claimId={detail.claimId}
+            remedy={completable}
+            canAct={canRecordRepair}
+            hasReplacement={detail.replacement !== undefined}
+            onReload={reload}
+          />
+        )}
       </div>
       <div className={styles.column}>{repair && <RepairEventsTimeline events={repair.events} />}</div>
       {dialogOpen && (
