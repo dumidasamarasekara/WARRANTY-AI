@@ -10,13 +10,13 @@ namespace Warranty.UnitTests.Fulfillment;
 /// The claimant's view of the remedy (002 T236; FR-039 – FR-041, data-model.md "Claimant projection"):
 /// <see cref="ClaimantRemedyProjection"/> gives the label of each remedy and repair state, the four Repair timeline
 /// steps and the active centre's name, address and opening hours, and never anything staff-only: notes, centre
-/// references, failure reasons, contact details or staff names. Pending T242; the states after a failed repair also
-/// need T247.
+/// references, failure reasons, contact details or staff names. The states after a hand-over need the repair
+/// transitions (T238); the states after a failed repair need T247.
 /// </summary>
 public sealed class ClaimantRemedyProjectionTests
 {
-    private const string Pending = "Pending T242";
-    private const string PendingWithFailure = "Pending T242 and T247";
+    private const string PendingTransitions = "Pending T238";
+    private const string PendingWithFailure = "Pending T247";
 
     private const string StaffSub = "0b9e7a52-1f2c-4c1a-9a01-a0000000a001";
     private const string StaffNote = "Staff-only note: customer called twice about the delay";
@@ -44,9 +44,9 @@ public sealed class ClaimantRemedyProjectionTests
     [
         Row("firstDecision", null, "We are deciding how to resolve your claim", false),
         Row("repairAwaitingHandover", RemedyType.Repair, "Take your product to the repair centre", false),
-        Row("repairAtRepairCentre", RemedyType.Repair, "With repair centre", false),
-        Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false),
-        Row("repairCollected", RemedyType.Repair, "Collected", true),
+        Row("repairAtRepairCentre", RemedyType.Repair, "With repair centre", false, PendingTransitions),
+        Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false, PendingTransitions),
+        Row("repairCollected", RemedyType.Repair, "Collected", true, PendingTransitions),
         Row("repairNotPossible", null, "Repair not possible. Your claim is being reviewed.", false, PendingWithFailure),
         Row("replacementInProgress", RemedyType.Replacement, "Replacement on its way", false),
         Row("replacementCompleted", RemedyType.Replacement, "Replacement handed over", true),
@@ -55,13 +55,13 @@ public sealed class ClaimantRemedyProjectionTests
     ];
 
     /// <summary>Repair timeline per status: the step of the current status is <c>current</c>, earlier ones <c>done</c>.</summary>
-    public static TheoryData<string, string[]> RepairSteps => new()
-    {
-        { "repairAwaitingHandover", ["current", "upcoming", "upcoming", "upcoming"] },
-        { "repairAtRepairCentre", ["done", "current", "upcoming", "upcoming"] },
-        { "repairReadyForCollection", ["done", "done", "current", "upcoming"] },
-        { "repairCollected", ["done", "done", "done", "done"] },
-    };
+    public static IEnumerable<TheoryDataRow<string, string[]>> RepairSteps =>
+    [
+        new("repairAwaitingHandover", ["current", "upcoming", "upcoming", "upcoming"]),
+        new("repairAtRepairCentre", ["done", "current", "upcoming", "upcoming"]) { Skip = PendingTransitions },
+        new("repairReadyForCollection", ["done", "done", "current", "upcoming"]) { Skip = PendingTransitions },
+        new("repairCollected", ["done", "done", "done", "done"]) { Skip = PendingTransitions },
+    ];
 
     // ── Labels ─────────────────────────────────────────────────────────────────────────────────
 
@@ -76,13 +76,13 @@ public sealed class ClaimantRemedyProjectionTests
         (view.Remedy, view.Label, view.Completed).ShouldBe((remedy, label, completed));
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_claim_without_a_remedy_has_no_remedy_view()
         => ClaimantRemedyProjection.Project(null, null, null).ShouldBeNull();
 
     // ── Repair timeline and centre card ────────────────────────────────────────────────────────
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [MemberData(nameof(RepairSteps))]
     public void A_repair_shows_the_four_steps_and_the_centre_name_address_and_opening_hours(string state, string[] stepStates)
     {
@@ -95,7 +95,7 @@ public sealed class ClaimantRemedyProjectionTests
         view.RepairCentre.ShouldBe(new ClaimantRepairCentreView(Centre.Name, Centre.Address, Centre.OpeningHours));
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_repair_without_an_assigned_centre_has_no_centre_card()
     {
         var remedy = RepairByPolicy();
@@ -108,7 +108,7 @@ public sealed class ClaimantRemedyProjectionTests
         view.Steps.Count.ShouldBe(4);
     }
 
-    [Theory(Skip = Pending)]
+    [Theory]
     [InlineData("firstDecision")]
     [InlineData("replacementInProgress")]
     [InlineData("replacementCompleted")]
@@ -126,7 +126,7 @@ public sealed class ClaimantRemedyProjectionTests
 
     // ── Staff-only data never reaches the claimant (FR-041) ────────────────────────────────────
 
-    [Fact(Skip = Pending)]
+    [Fact(Skip = PendingTransitions)]
     public void The_view_has_no_notes_centre_references_contact_details_or_staff_names()
     {
         var remedy = RepairByPolicy();
@@ -154,7 +154,7 @@ public sealed class ClaimantRemedyProjectionTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     private static TheoryDataRow<string, RemedyType?, string, bool> Row(
-        string state, RemedyType? remedy, string label, bool completed, string skip = Pending)
+        string state, RemedyType? remedy, string label, bool completed, string? skip = null)
         => new(state, remedy, label, completed) { Skip = skip };
 
     /// <summary>The serialized view (as the API writes it) contains none of <paramref name="staffOnly"/> nor staff-only field names.</summary>

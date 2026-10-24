@@ -176,7 +176,9 @@ public sealed class ClaimantAccessTests : IDisposable
             .ShouldBe(["reference", "status", "submittedAt", "productName", "requestedItems"], ignoreOrder: true);
     }
 
-    private ClaimantAccess Access() => new(_tenant, _claims, _catalog, _events);
+    private ClaimantAccess Access() => new(
+        _tenant, _claims, _catalog, _events,
+        Substitute.For<IRemedyRepository>(), Substitute.For<IRepairRepository>(), Substitute.For<IIntegrationRepository>());
 
     private static Claim NewClaim() => Claim.Submit(
         Guid.CreateVersion7(), TenantId, ClaimReference.Generate(), ClaimChannel.ClaimantPortal, Claim.ClaimantSubmitter, Guid.CreateVersion7(),
