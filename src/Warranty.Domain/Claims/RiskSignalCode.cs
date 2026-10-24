@@ -34,4 +34,8 @@ public enum RiskSignalCode
     /// <summary>AI-reported signal outside the fixed set.</summary>
     [JsonStringEnumMemberName("OTHER")]
     Other,
+
+    /// <summary>The claimed serial was returned and replaced, or is a replacement unit (003 research R11).</summary>
+    [JsonStringEnumMemberName("PRODUCT_RETURNED_AND_REPLACED")]
+    ProductReturnedAndReplaced,
 }

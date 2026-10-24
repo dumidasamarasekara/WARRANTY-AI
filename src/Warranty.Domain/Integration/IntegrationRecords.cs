@@ -39,6 +39,9 @@ public sealed class ServiceCenter
 
     public const int DefaultPriority = 100;
 
+    /// <summary>Only these centres are replacement locations (003 FR-007); false unless seeded otherwise.</summary>
+    public bool IssuesReplacements { get; private set; }
+
     public static ServiceCenter Create(
         Guid id,
         Guid tenantId,
@@ -49,7 +52,8 @@ public sealed class ServiceCenter
         string? openingHours = null,
         string? contact = null,
         bool isActive = true,
-        int priority = DefaultPriority)
+        int priority = DefaultPriority,
+        bool issuesReplacements = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         return new ServiceCenter
@@ -64,6 +68,7 @@ public sealed class ServiceCenter
             Contact = NullIfBlank(contact),
             IsActive = isActive,
             Priority = priority,
+            IssuesReplacements = issuesReplacements,
         };
     }
 
