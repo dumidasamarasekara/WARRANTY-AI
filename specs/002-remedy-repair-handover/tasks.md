@@ -150,7 +150,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R14 are written
 
 ### Tests for User Story 3 ⚠️ write first, ensure they fail
 
-- [ ] T245 [P] [US3] Write `tests/Warranty.UnitTests/Fulfillment/RepairFailureTests.cs` (failure counting, not-economical never counted, new attempt at the centre or after return, re-evaluation results for both rule sets) and unskip the US3 cases of `tests/Warranty.UnitTests/Fulfillment/RepairStateMachineTests.cs`; complete the R4 "same facts" pair in `seed/tenants/*/remedy-scenarios.json`
+- [X] T245 [P] [US3] Write `tests/Warranty.UnitTests/Fulfillment/RepairFailureTests.cs` (failure counting, not-economical never counted, new attempt at the centre or after return, re-evaluation results for both rule sets) and unskip the US3 cases of `tests/Warranty.UnitTests/Fulfillment/RepairStateMachineTests.cs`; complete the R4 "same facts" pair in `seed/tenants/*/remedy-scenarios.json`
 - [ ] T246 [P] [US3] Write `tests/Warranty.IntegrationTests/Fulfillment/US3_FailedRepairTests.cs` for R4, R8, R9 and R10 (claim status stays `Approved` throughout; history keeps the original remedy and every attempt)
 
 ### Implementation for User Story 3
