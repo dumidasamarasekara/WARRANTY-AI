@@ -35,6 +35,7 @@ public sealed record CustomerSeed(
 /// One repair centre of <c>service-centers.json</c> (data-model.md <c>integration.service_centers</c>).
 /// <see cref="Address"/> and <see cref="OpeningHours"/> are shown to claimants and required for an
 /// active centre; <see cref="Contact"/> is staff-only. A lower <see cref="Priority"/> is suggested first.
+/// <see cref="IssuesReplacements"/> makes the centre a replacement location (feature 003, FR-007); it defaults to no.
 /// </summary>
 public sealed record ServiceCenterSeed(
     Guid Id,
@@ -45,7 +46,8 @@ public sealed record ServiceCenterSeed(
     string? OpeningHours = null,
     string? Contact = null,
     bool IsActive = true,
-    int Priority = ServiceCenter.DefaultPriority);
+    int Priority = ServiceCenter.DefaultPriority,
+    bool IssuesReplacements = false);
 
 /// <summary>
 /// The validated <c>remedies</c> front-matter block of one seeded policy version; null

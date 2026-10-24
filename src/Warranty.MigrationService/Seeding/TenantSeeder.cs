@@ -100,7 +100,7 @@ internal sealed class TenantSeeder(WarrantyDbContext db, ITenantContext tenantCo
         {
             db.ServiceCenters.Add(ServiceCenter.Create(
                 center.Id, tenantId, center.Region, center.Name, center.Capabilities,
-                center.Address, center.OpeningHours, center.Contact, center.IsActive, center.Priority));
+                center.Address, center.OpeningHours, center.Contact, center.IsActive, center.Priority, center.IssuesReplacements));
         }
 
         await db.SaveChangesAsync(ct);

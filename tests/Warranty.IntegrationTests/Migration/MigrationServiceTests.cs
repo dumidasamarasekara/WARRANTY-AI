@@ -190,7 +190,7 @@ public sealed class MigrationServiceTests : IAsyncLifetime
     /// Feature 003 (FR-038, research R14): each region of each tenant has an active centre that issues replacement
     /// units for every product category the tenant sells, and the seeded catalog holds Aurora's AUR-TAB11.
     /// </summary>
-    [Fact(Skip = "Pending T312")]
+    [Fact]
     [Trait("Feature", "003")]
     public async Task Seeds_a_replacement_location_for_every_region_and_product_category()
     {
