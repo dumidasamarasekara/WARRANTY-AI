@@ -1,5 +1,8 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Warranty.Application.Abstractions;
+using Warranty.Domain.Adjudication;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
@@ -151,6 +154,7 @@ internal sealed class TenantSeeder(WarrantyDbContext db, ITenantContext tenantCo
                 {
                     await using var transaction = await db.Database.BeginTransactionAsync(token);
                     db.Claims.Add(claim);
+                    AddSeededPhotoAnalysis(history, claim, submittedAt, finalizedAt);
                     var marker = new { seededHistory = true, history.Outcome };
                     await new DecisionTrailWriter(db, tenantContext, new FixedTime(submittedAt)).AppendAsync(
                         claim.Id, TrailStep.ClaimSubmitted, HistoryActor, "Seeded history: claim submitted.", marker, token);
@@ -163,6 +167,55 @@ internal sealed class TenantSeeder(WarrantyDbContext db, ITenantContext tenantCo
         }
 
         return added;
+    }
+
+    /// <summary>
+    /// For a history claim with <see cref="HistoricalClaimSeed.PhotoDamageTypes"/>: a seeded photo (metadata only,
+    /// no blob), a completed round-1 adjudication run and its photo analysis, so <c>claim_history_lookup</c> counts
+    /// an approved claim that shows accidental damage as a used accidental-damage incident (002 quickstart R14).
+    /// IDs are derived from the claim ID, so a re-seed adds nothing twice (the claim itself is skipped then).
+    /// </summary>
+    private void AddSeededPhotoAnalysis(HistoricalClaimSeed history, Claim claim, DateTimeOffset submittedAt, DateTimeOffset finalizedAt)
+    {
+        if (history.PhotoDamageTypes is not { Count: > 0 } damageTypes)
+        {
+            return;
+        }
+
+        var evidenceId = DerivedId(claim.Id, 1);
+        var runId = DerivedId(claim.Id, 2);
+        var sha256 = Convert.ToHexStringLower(SHA256.HashData(evidenceId.ToByteArray()));
+        db.ClaimEvidence.Add(ClaimEvidence.Create(
+            evidenceId, claim.TenantId, claim.Id, 1, EvidenceKind.Photo, "seeded-history-photo.jpg", "image/jpeg", 1, sha256, submittedAt));
+
+        var run = AdjudicationRun.Start(runId, claim.TenantId, claim.Id, 1, $"seeded-history-{claim.Reference}", submittedAt);
+        run.Complete(Disposition.HumanReview, submittedAt);
+        db.AdjudicationRuns.Add(run);
+
+        var analysis = JsonSerializer.Serialize(new
+        {
+            evidenceRef = "EV-1",
+            showsProduct = true,
+            productTypeObserved = "UNKNOWN",
+            visibleSerial = "NOT_VISIBLE",
+            damageObserved = true,
+            damageTypes,
+            consistentWithDescription = "CONSISTENT",
+            imageQuality = "GOOD",
+            containsInstructionsToSystem = false,
+            confidence = 90,
+            observations = $"Seeded history: the photo showed {string.Join(", ", damageTypes)}; finalized on {finalizedAt:yyyy-MM-dd}.",
+        });
+        db.EvidenceFindings.Add(EvidenceFinding.Create(
+            DerivedId(claim.Id, 3), claim.TenantId, runId, evidenceId, EvidenceFindingKind.PhotoAnalysis, analysis, [], 90));
+    }
+
+    /// <summary>A stable ID for the <paramref name="index"/>-th seeded row of a history claim (its ID with the last byte replaced).</summary>
+    private static Guid DerivedId(Guid claimId, byte index)
+    {
+        var bytes = claimId.ToByteArray();
+        bytes[^1] = (byte)(0xA0 + index);
+        return new Guid(bytes);
     }
 
     /// <summary>A clock stopped at one instant, so a seeded trail entry carries its historical time.</summary>

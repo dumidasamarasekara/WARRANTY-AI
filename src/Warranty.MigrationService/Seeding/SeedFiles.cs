@@ -56,6 +56,9 @@ public sealed record PolicyRemediesSeed(string BlobPath, string PolicyCode, int 
 /// <summary>
 /// A finalized claim seeded as history (quickstart S18). Every <c>*DaysAgo</c> value is a signed day
 /// offset from the seeding day (negative = in the past), so the history keeps its distance to "today".
+/// <see cref="PhotoDamageTypes"/> (photo-analysis schema names, e.g. <c>CRACKED_SCREEN</c>) gives the claim a
+/// seeded photo and its analysis, so an approved claim showing accidental damage counts as a used
+/// accidental-damage incident of its serial (<c>claim_history_lookup</c>; 002 quickstart R14).
 /// </summary>
 public sealed record HistoricalClaimSeed(
     Guid Id,
@@ -71,7 +74,8 @@ public sealed record HistoricalClaimSeed(
     int SubmittedDaysAgo,
     int FinalizedDaysAgo,
     string Outcome,
-    string Explanation)
+    string Explanation,
+    IReadOnlyList<string>? PhotoDamageTypes = null)
 {
     public DateOnly PurchaseDate(DateTimeOffset seedingTime) => DateOnly.FromDateTime(seedingTime.UtcDateTime).AddDays(PurchasedDaysAgo);
 
@@ -212,6 +216,8 @@ public static class SeedFiles
             .Concat(history.Where(h => !emails.Contains(h.CustomerEmail)).Select(h => $"history claim {h.Reference} names unknown customer {h.CustomerEmail}"))
             .Concat(history.Where(h => !(h.PurchasedDaysAgo <= h.SubmittedDaysAgo && h.SubmittedDaysAgo <= h.FinalizedDaysAgo && h.FinalizedDaysAgo <= 0))
                 .Select(h => $"history claim {h.Reference} must be purchased, submitted and finalized in that order, in the past"))
+            .Concat(history.Where(h => h.PhotoDamageTypes is { } types && (types.Count == 0 || types.Any(string.IsNullOrWhiteSpace)))
+                .Select(h => $"history claim {h.Reference} lists an empty photo damage type"))
             .Concat(ScenarioErrors(scenarios, history, models, serialNumbers, emails))
             .Concat(centers.GroupBy(c => c.Id).Where(g => g.Count() > 1).Select(g => $"service center {g.Key} is listed more than once"))
             .Concat(centers.Where(c => c.Priority < 0).Select(c => $"service center {c.Name} has a negative priority"))

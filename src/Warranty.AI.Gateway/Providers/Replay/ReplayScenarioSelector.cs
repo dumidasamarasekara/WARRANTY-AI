@@ -20,8 +20,15 @@ public interface IReplayScenarioSelector
         => Task.FromResult(ReplayFixtureVariables.None);
 }
 
-/// <summary>One entry of <c>seed/golden/scenarios.json</c>, reduced to what replay needs.</summary>
-public sealed record ReplayScenario(string ScenarioId, string? Tenant, string Serial);
+/// <summary>
+/// One entry of <c>seed/golden/scenarios.json</c>, reduced to what replay needs. <see cref="RecordingsOf"/> names
+/// another scenario whose fixtures this one replays (a variant on its own serial, e.g. with a protection plan).
+/// </summary>
+public sealed record ReplayScenario(string ScenarioId, string? Tenant, string Serial, string? RecordingsOf = null)
+{
+    /// <summary>The fixture folder the scenario replays: its own, or that of <see cref="RecordingsOf"/>.</summary>
+    public string FixtureScenarioId => RecordingsOf ?? ScenarioId;
+}
 
 /// <summary>
 /// The golden scenario list. A scenario is found by the claim's serial number, optionally narrowed to
@@ -59,14 +66,17 @@ public sealed class ReplayScenarioCatalog
         return new ReplayScenarioCatalog(entries.EnumerateArray().Select(Parse).ToList());
     }
 
-    /// <summary>The first scenario for the serial in this tenant (or with no tenant).</summary>
+    /// <summary>
+    /// The fixture folder of the first scenario for the serial in this tenant (or with no tenant): the scenario ID,
+    /// or the scenario named by its <c>recordingsOf</c>.
+    /// </summary>
     public string? Find(string serialNumber, string? tenantSlug)
     {
         var serial = ProductSerial.NormalizeSerial(serialNumber);
         return _scenarios.FirstOrDefault(s =>
                 s.Serial == serial
                 && (s.Tenant is null || string.Equals(s.Tenant, tenantSlug, StringComparison.OrdinalIgnoreCase)))
-            ?.ScenarioId;
+            ?.FixtureScenarioId;
     }
 
     private static ReplayScenario Parse(JsonElement entry)
@@ -77,7 +87,8 @@ public sealed class ReplayScenarioCatalog
         return new ReplayScenario(
             Text(entry, "scenarioId") ?? throw new FormatException("A scenario has no 'scenarioId'."),
             Text(entry, "tenant"),
-            Text(entry, "serial") ?? throw new FormatException($"Scenario '{Text(entry, "scenarioId")}' has no 'serial'."));
+            Text(entry, "serial") ?? throw new FormatException($"Scenario '{Text(entry, "scenarioId")}' has no 'serial'."),
+            Text(entry, "recordingsOf"));
     }
 }
 

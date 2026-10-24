@@ -95,6 +95,15 @@ public sealed class GoldenScenario
     /// <summary>The scenario's photo files, paths under <c>seed/evidence/</c>, in upload order.</summary>
     public IReadOnlyList<string> PhotoFiles => _entry["evidence"]!["photos"]!.AsArray().Select(p => (string)p!).ToList();
 
+    /// <summary>The protection plan document (002 FR-036), a path under <c>seed/evidence/</c>, sent as the <c>protectionPlanDocument</c> part.</summary>
+    public string? ProtectionPlanDocument => (string?)_entry["evidence"]?["protectionPlanDocument"];
+
+    /// <summary>The scenario whose replay fixtures this variant replays on its own serial (<c>recordingsOf</c>), if any.</summary>
+    public string? RecordingsOf => (string?)_entry["recordingsOf"];
+
+    /// <summary>The escalation reason codes the claim's latest run must not include.</summary>
+    public IReadOnlyList<string> AbsentEscalationReasons => ExpectedList("absentEscalationReasons");
+
     /// <summary>The escalation reason codes the claim's latest run must include.</summary>
     public IReadOnlyList<string> ExpectedEscalationReasons => ExpectedList("escalationReasons");
 
@@ -245,6 +254,11 @@ public sealed class GoldenScenario
         foreach (var photo in evidence["photos"]!.AsArray().Select(p => (string)p!))
         {
             form.Add(EvidencePart(photo), "photos", Path.GetFileName(photo));
+        }
+
+        if (ProtectionPlanDocument is { } plan)
+        {
+            form.Add(EvidencePart(plan), "protectionPlanDocument", Path.GetFileName(plan));
         }
 
         return form;
