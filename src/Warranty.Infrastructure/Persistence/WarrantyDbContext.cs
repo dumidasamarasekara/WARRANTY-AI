@@ -102,6 +102,20 @@ public sealed class WarrantyDbContext(DbContextOptions<WarrantyDbContext> option
 
     public DbSet<RepairEvent> RepairEvents => Set<RepairEvent>();
 
+    public DbSet<Replacement> Replacements => Set<Replacement>();
+
+    public DbSet<ReplacementLocation> ReplacementLocations => Set<ReplacementLocation>();
+
+    public DbSet<FaultyProductReturn> FaultyProductReturns => Set<FaultyProductReturn>();
+
+    public DbSet<ReplacementModelProposal> ReplacementModelProposals => Set<ReplacementModelProposal>();
+
+    public DbSet<ReplacementUnit> ReplacementUnits => Set<ReplacementUnit>();
+
+    public DbSet<RegisteredReplacementSerial> ReplacementSerials => Set<RegisteredReplacementSerial>();
+
+    public DbSet<ReplacementEvent> ReplacementEvents => Set<ReplacementEvent>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<decimal>().HavePrecision(12, 2);

@@ -80,7 +80,8 @@ internal sealed class ServiceCenterConfiguration : IEntityTypeConfiguration<Serv
         // is_active = true and priority = 100 from the migration's column defaults (data-model.md).
         builder.Property(s => s.IsActive);
         builder.Property(s => s.Priority);
-        builder.Ignore(s => s.IssuesReplacements); // T308 maps this
+        // Existing rows get issues_replacements = false from the migration (the domain default, 003 data-model.md).
+        builder.Property(s => s.IssuesReplacements);
     }
 }
 
