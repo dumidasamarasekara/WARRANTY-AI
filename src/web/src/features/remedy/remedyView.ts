@@ -1,6 +1,6 @@
 import { formatDateTime, remedyTypePresentation, type RemedyType } from '../../shared/presentation'
 import type { Actor } from '../../shared/ui'
-import type { RemedyHistoryEntry, RemedyView } from './remedyQueries'
+import type { RemedyHistoryEntry, RemedyView, RepairEvent, RepairEventType, RepairView, ReportSource } from './remedyQueries'
 
 /** Limits of `RemedyDecisionRequest.reason` (002 rest-api delta). */
 export const remedyReasonLimits = { min: 10, max: 1000 } as const
@@ -83,3 +83,59 @@ export const remedyStepActor = (remedy: RemedyView): Exclude<Actor, 'ai'> =>
 
 /** Search parameter that opens the remedy dialog on the Remedy tab, e.g. from a review-queue remedy item. */
 export const decideRemedyParam = 'decide'
+
+/** Limits of `RepairEventRequest.reason` (002 rest-api delta). */
+export const repairReasonLimits = { min: 10, max: 1000 } as const
+
+const repairEventLabels: Record<string, string> = {
+  CentreChanged: 'Centre changed',
+  HandedOver: 'Handed over',
+  EstimateReported: 'Estimate recorded',
+  MarkedReady: 'Marked ready',
+  Collected: 'Collected',
+  RepairFailed: 'Repair failed',
+  NewAttemptStarted: 'New attempt started',
+  Transferred: 'Transferred',
+  Correction: 'Correction',
+}
+
+/** Past-tense label of a recorded repair event; types the contract may add later show as-is. */
+export const repairEventLabel = (type: string) => repairEventLabels[type] ?? type
+
+const reportSourceLabels: Record<ReportSource, string> = { Phone: 'Phone', Email: 'Email', InPerson: 'In person', Other: 'Other' }
+
+export const reportSources = Object.keys(reportSourceLabels) as ReportSource[]
+
+export const reportSourceLabel = (source: string) => reportSourceLabels[source as ReportSource] ?? source
+
+/** "Marked ready · reported by phone 09:10 · recorded by [AGENT] 09:14" (ui-screens.md §1). */
+export function repairEventOrigin(event: Pick<RepairEvent, 'reportedAt' | 'recordedAt' | 'source' | 'actor'>): string {
+  return `reported by ${reportSourceLabel(event.source).toLowerCase()} ${formatDateTime(event.reportedAt)} · recorded by ${event.actor} ${formatDateTime(event.recordedAt)}`
+}
+
+/** Event types this dialog records; T250 and T257 add the remaining ones. */
+export const repairDialogEvents = ['HandedOver', 'CentreChanged', 'MarkedReady', 'Collected'] as const satisfies readonly RepairEventType[]
+
+export type RepairDialogEvent = (typeof repairDialogEvents)[number]
+
+export const isRepairDialogEvent = (type: RepairEventType): type is RepairDialogEvent =>
+  (repairDialogEvents as readonly RepairEventType[]).includes(type)
+
+/** Button and dialog title per event: the action, as ui-screens.md §6. */
+export const repairActionLabels: Record<RepairDialogEvent, string> = {
+  HandedOver: 'Record hand-over',
+  CentreChanged: 'Change centre',
+  MarkedReady: 'Mark ready',
+  Collected: 'Record collection',
+}
+
+/** Happy-path order: the first allowed of these is the one primary button. */
+const happyPath: readonly RepairEventType[] = ['HandedOver', 'MarkedReady', 'Collected']
+
+/** Action buttons in the contract's order, rendered only from `RepairView.allowedEvents`. */
+export function repairActions(repair: Pick<RepairView, 'allowedEvents'>): { type: RepairDialogEvent; primary: boolean }[] {
+  const allowed = repair.allowedEvents.filter(isRepairDialogEvent)
+  const primary = happyPath.find((type) => allowed.includes(type as RepairDialogEvent))
+  const order = Object.keys(repairActionLabels) as RepairDialogEvent[]
+  return order.filter((type) => allowed.includes(type)).map((type) => ({ type, primary: type === primary }))
+}

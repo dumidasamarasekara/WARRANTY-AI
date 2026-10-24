@@ -705,7 +705,7 @@ export function ClaimDetailPage({ tab: routeTab }: { tab?: ClaimTabKey } = {}) {
       {tab === 'case' && <CaseFile {...context} />}
       {tab === 'decision' && <AiDecisionTab {...context} />}
       {tab === 'evidence' && <EvidenceTab {...context} />}
-      {tab === 'remedy' && <RemedyTab detail={detail} isReviewer={isReviewer} />}
+      {tab === 'remedy' && <RemedyTab detail={detail} isReviewer={isReviewer} canRecordRepair={isReviewer || roles.includes('claims-agent')} />}
       {tab === 'trace' && <DecisionTracePage claimId={detail.claimId} reference={detail.reference} />}
     </section>
   )
