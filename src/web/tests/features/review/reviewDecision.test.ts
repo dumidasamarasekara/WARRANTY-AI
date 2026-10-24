@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeRemedyPreview,
   buildRequestedItems,
   claimantMessagePrefill,
   decidingAiDecision,
   initialRemedy,
+  offersProtectionPlanCheck,
   overridesAi,
   remedyOptions,
   remedyPendingReasonLabel,
   requiresJustification,
   requiresRemedyChoice,
 } from '../../../src/features/review/reviewDecision'
-import { aiExplanation, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
+import { aiExplanation, claimWithProtectionPlan, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
 
 describe('review decision rules', () => {
   it('treats only a valid APPROVE or REJECT as an AI decision', () => {
@@ -86,5 +88,31 @@ describe('review decision rules', () => {
     expect(remedyPendingReasonLabel('REPAIR_FAILED_LIMIT')).toBe('Repair attempts limit reached')
     expect(remedyPendingReasonLabel('REPAIR_NOT_ECONOMICAL')).toBe('Repair is not economical')
     expect(remedyPendingReasonLabel(undefined)).toBe('Awaiting remedy decision')
+  })
+})
+
+describe('protection plan check (002 FR-036)', () => {
+  it('is offered only when approving a claim that states a plan', () => {
+    expect(offersProtectionPlanCheck(claimWithProtectionPlan(), 'Approve')).toBe(true)
+    expect(offersProtectionPlanCheck(claimWithProtectionPlan(), 'Reject')).toBe(false)
+    expect(offersProtectionPlanCheck(claimWithProtectionPlan(), 'RequestInformation')).toBe(false)
+    expect(offersProtectionPlanCheck(claimWithRemedyPreview(), 'Approve')).toBe(false)
+  })
+
+  it("switches to the plan preview's remedies once the plan is confirmed", () => {
+    const claim = claimWithProtectionPlan()
+    expect(remedyOptions(claim)).toEqual(['Repair'])
+    expect(initialRemedy(claim)).toBe('Repair')
+    expect(requiresRemedyChoice(claim, 'Approve')).toBe(false)
+    expect(activeRemedyPreview(claim, true)?.scenario).toBe('ProtectionPlanDamage')
+    expect(remedyOptions(claim, true)).toEqual(['Replacement', 'Refund'])
+    expect(initialRemedy(claim, true)).toBeNull()
+    expect(requiresRemedyChoice(claim, 'Approve', true)).toBe(true)
+  })
+
+  it('keeps the remedy preview when the policy has no plan preview', () => {
+    const claim = claimWithProtectionPlan({ withPlanPreview: false })
+    expect(remedyOptions(claim, true)).toEqual(['Repair'])
+    expect(initialRemedy(claim, true)).toBe('Repair')
   })
 })

@@ -10,6 +10,7 @@ export const requestedItemLabels = {
   PHOTO_OF_SERIAL_LABEL: 'Photo of the serial number label',
   PURCHASE_DATE: 'Purchase date',
   PROBLEM_DETAILS: 'More detail about the problem',
+  PROTECTION_PLAN_DOCUMENT: 'Protection plan document',
   OTHER: 'Other information',
 } as const
 

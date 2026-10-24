@@ -6,7 +6,7 @@ import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReviewDecisionForm, type ReviewDecisionFormProps } from '../../../src/features/review/ReviewDecisionForm'
 import type { ClaimDetail, ReviewDecisionKind } from '../../../src/features/review/reviewDecision'
-import { aiExplanation, claimId, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
+import { aiExplanation, claimId, claimWithProtectionPlan, claimWithRemedyPreview, reviewClaim } from '../../support/reviewClaims'
 
 interface Received {
   ifMatch: string | null
@@ -332,4 +332,68 @@ describe('ReviewDecisionForm', () => {
       expect(remedyGroup()).toHaveAccessibleDescription('Choose one of: Replacement, Refund.')
     })
   })
-})
+
+  describe('protection plan check (002 FR-036)', () => {
+    const planCheck = () => screen.queryByRole('checkbox', { name: 'Protection plan checked' })
+    const remedyGroup = () => screen.getByRole('radiogroup', { name: 'Remedy' })
+
+    it('is not offered when the claim states no plan', () => {
+      renderForm(claimWithRemedyPreview(), 'Approve')
+      expect(planCheck()).not.toBeInTheDocument()
+    })
+
+    it('is not offered when rejecting a claim with a plan', () => {
+      renderForm(claimWithProtectionPlan(), 'Reject')
+      expect(planCheck()).not.toBeInTheDocument()
+    })
+
+    it('sends protectionPlanConfirmed false when the reviewer leaves it unticked', async () => {
+      onDecision(() => decided('Approve'))
+      const { user } = renderForm(claimWithProtectionPlan(), 'Approve')
+
+      expect(planCheck()).not.toBeChecked()
+      expect(within(remedyGroup()).getByRole('radio', { name: /Repair/ })).toBeChecked()
+      await user.click(confirm('Approve claim'))
+
+      await waitFor(() => expect(received).toHaveLength(1))
+      expect(received[0]!.body).toEqual({
+        decision: 'Approve',
+        claimantExplanation: aiExplanation,
+        remedy: 'Repair',
+        protectionPlanConfirmed: false,
+      })
+    })
+
+    it("switches to the plan's remedies when ticked and sends the confirmation", async () => {
+      onDecision(() => decided('Approve'))
+      const { user } = renderForm(claimWithProtectionPlan(), 'Approve')
+
+      await user.click(planCheck()!)
+
+      const options = within(remedyGroup()).getAllByRole('radio')
+      expect(options.map((option) => option.getAttribute('value'))).toEqual(['Replacement', 'Refund'])
+      for (const option of options) expect(option).not.toBeChecked()
+      expect(confirm('Approve claim')).toBeDisabled()
+
+      await user.click(within(remedyGroup()).getByRole('radio', { name: /Replacement/ }))
+      await user.click(confirm('Approve claim'))
+
+      await waitFor(() => expect(received).toHaveLength(1))
+      expect(received[0]!.body).toEqual({
+        decision: 'Approve',
+        claimantExplanation: aiExplanation,
+        remedy: 'Replacement',
+        protectionPlanConfirmed: true,
+      })
+    })
+
+    it('restores the policy remedy when unticked again', async () => {
+      const { user } = renderForm(claimWithProtectionPlan(), 'Approve')
+
+      await user.click(planCheck()!)
+      await user.click(planCheck()!)
+
+      expect(within(remedyGroup()).getAllByRole('radio').map((option) => option.getAttribute('value'))).toEqual(['Repair'])
+      expect(within(remedyGroup()).getByRole('radio', { name: /Repair/ })).toBeChecked()
+    })
+  })})

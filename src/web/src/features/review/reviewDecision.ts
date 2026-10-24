@@ -124,13 +124,31 @@ export function buildRequestedItems(selected: readonly RequestedItemCode[], othe
 export type RemedyType = Schemas['RemedyType']
 export type RemedyPendingReason = Schemas['RemedyPendingReason']
 
+export type RemedyPreview = Schemas['RemedyPreview']
+
+/**
+ * Whether the decision dialog offers the "Protection plan checked" confirmation (002 FR-036,
+ * research.md R9): only when approving a claim that states a protection plan.
+ */
+export function offersProtectionPlanCheck(claim: ClaimDetail, decision: ReviewDecisionKind): boolean {
+  return decision === 'Approve' && claim.hasProtectionPlan === true
+}
+
+/**
+ * The remedy preview approving would use: `remedyPreviewWithProtectionPlan` once the reviewer has
+ * confirmed the plan and the policy lets a plan change the outcome, otherwise `remedyPreview`.
+ */
+export function activeRemedyPreview(claim: ClaimDetail, planConfirmed = false): RemedyPreview | undefined {
+  return (planConfirmed && claim.remedyPreviewWithProtectionPlan) || claim.remedyPreview
+}
+
 /**
  * The remedies a reviewer may pick when approving (002 contracts/ui-screens.md §4): only the
  * preview's `allowedRemedies`. Empty without a preview (the claim is not `UnderReview`) or when no
  * remedy rule applies; the remedy is then decided after approval.
  */
-export function remedyOptions(claim: ClaimDetail): RemedyType[] {
-  return [...(claim.remedyPreview?.allowedRemedies ?? [])]
+export function remedyOptions(claim: ClaimDetail, planConfirmed = false): RemedyType[] {
+  return [...(activeRemedyPreview(claim, planConfirmed)?.allowedRemedies ?? [])]
 }
 
 /**
@@ -138,9 +156,9 @@ export function remedyOptions(claim: ClaimDetail): RemedyType[] {
  * the only allowed remedy when there is exactly one (approving without a remedy sets it anyway),
  * otherwise none, so the reviewer has to choose.
  */
-export function initialRemedy(claim: ClaimDetail): RemedyType | null {
-  const options = remedyOptions(claim)
-  const recommended = claim.remedyPreview?.recommendedRemedy
+export function initialRemedy(claim: ClaimDetail, planConfirmed = false): RemedyType | null {
+  const options = remedyOptions(claim, planConfirmed)
+  const recommended = activeRemedyPreview(claim, planConfirmed)?.recommendedRemedy
   if (recommended && options.includes(recommended)) return recommended
   return options.length === 1 ? options[0]! : null
 }
@@ -149,8 +167,8 @@ export function initialRemedy(claim: ClaimDetail): RemedyType | null {
  * Approving needs a remedy whenever the preview offers a choice: it may be omitted only when the
  * preview gives exactly one remedy (or none). Reject and information requests never carry one.
  */
-export function requiresRemedyChoice(claim: ClaimDetail, decision: ReviewDecisionKind): boolean {
-  return decision === 'Approve' && remedyOptions(claim).length > 1
+export function requiresRemedyChoice(claim: ClaimDetail, decision: ReviewDecisionKind, planConfirmed = false): boolean {
+  return decision === 'Approve' && remedyOptions(claim, planConfirmed).length > 1
 }
 
 const remedyPendingReasonLabels: Record<RemedyPendingReason, string> = {

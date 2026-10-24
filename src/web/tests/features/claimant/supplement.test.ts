@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSupplementFormData,
+  requestsProtectionPlanDocument,
   supplementFieldForProblemKey,
   validateSupplement,
 } from '../../../src/features/claimant/supplement'
@@ -64,5 +65,26 @@ describe('requestedItemLabel', () => {
     for (const option of requestedItemOptions.filter((candidate) => candidate.item !== 'OTHER')) {
       expect(requestedItemLabel(option.item)).toBe(option.label)
     }
+  })
+})
+
+describe('protection plan document (002 FR-036, FR-037)', () => {
+  it('is offered when the claim requests it, in any case', () => {
+    expect(requestsProtectionPlanDocument([{ item: 'PROTECTION_PLAN_DOCUMENT', reason: 'Please upload your plan.' }])).toBe(true)
+    expect(requestsProtectionPlanDocument([{ item: ' protection_plan_document ', reason: 'x' }])).toBe(true)
+    expect(requestsProtectionPlanDocument([{ item: 'INVOICE', reason: 'x' }])).toBe(false)
+    expect(requestedItemLabel('PROTECTION_PLAN_DOCUMENT')).toBe('Protection plan document')
+  })
+
+  it('counts as the one thing a supplement needs and is sent as its own part', () => {
+    const plan = file('plan.pdf', 'application/pdf')
+    expect(validateSupplement('', null, [], plan, true)).toEqual({})
+    expect(validateSupplement('', null, [], null, true)).toEqual({
+      form: 'Add a note, the invoice, at least one photo or the protection plan document',
+    })
+    const body = buildSupplementFormData('', null, [], plan)
+    expect((body.get('protectionPlanDocument') as File).name).toBe('plan.pdf')
+    expect(buildSupplementFormData('note', null, []).has('protectionPlanDocument')).toBe(false)
+    expect(supplementFieldForProblemKey('ProtectionPlanDocument')).toBe('protectionPlanDocument')
   })
 })

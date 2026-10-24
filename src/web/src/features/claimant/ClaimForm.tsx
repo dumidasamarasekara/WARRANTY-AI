@@ -4,8 +4,10 @@ import { ApiProblem } from '../../shared/api/client'
 import { Alert, Button, FileDrop, Stepper, TextArea, TextInput, type FileDropItem, type StepperStep } from '../../shared/ui'
 import {
   acceptedFiles,
+  acceptedPlanFiles,
   buildClaimFormData,
   checkFile,
+  checkPlanFile,
   claimantFormSteps,
   descriptionLimits,
   emptyClaimFormValues,
@@ -13,6 +15,7 @@ import {
   fileHint,
   localToday,
   maxPhotos,
+  planFileHint,
   stepOf,
   toSubmissionData,
   validateDetails,
@@ -46,6 +49,7 @@ const copy = {
     product: 'Your product',
     purchase: 'Your purchase',
     description: 'What went wrong?',
+    planHint: "If you don't have the plan document at hand, you can send it later: we'll ask for it.",
   },
   staff: {
     step1: 'Customer and product',
@@ -56,6 +60,7 @@ const copy = {
     product: 'Product',
     purchase: 'Purchase',
     description: 'Problem description',
+    planHint: "Optional now: if the customer doesn't have the plan document, the claim asks for it later.",
   },
 } as const
 
@@ -150,6 +155,8 @@ export function ClaimForm({ variant, submit, onSubmitted }: ClaimFormProps) {
   const [errors, setErrors] = useState<ClaimFormErrors>({})
   const [invoice, setInvoice] = useState<PickedFile | null>(null)
   const [photos, setPhotos] = useState<PickedFile[]>([])
+  const [hasProtectionPlan, setHasProtectionPlan] = useState(false)
+  const [planDocument, setPlanDocument] = useState<PickedFile | null>(null)
   const [focusRequest, setFocusRequest] = useState<{ target: 'heading' | 'invalid'; id: number } | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -210,6 +217,24 @@ export function ClaimForm({ variant, submit, onSubmitted }: ClaimFormProps) {
     setErrors((current) => withError(current, 'invoice', problem))
   }
 
+  function pickPlanDocument(files: File[]) {
+    const file = files[0]
+    if (!file) return
+    const problem = checkPlanFile(file)
+    if (!problem) setPlanDocument(pick(file))
+    setErrors((current) => withError(current, 'protectionPlanDocument', problem))
+  }
+
+  function toggleProtectionPlan(event: ChangeEvent<HTMLInputElement>) {
+    const checked = event.target.checked
+    setHasProtectionPlan(checked)
+    // Without a plan the document is not sent, so it is dropped with the statement.
+    if (!checked) {
+      setPlanDocument(null)
+      setErrors((current) => withError(current, 'protectionPlanDocument', undefined))
+    }
+  }
+
   function addPhotos(files: File[]) {
     const accepted: PickedFile[] = []
     let problem: string | undefined
@@ -251,9 +276,9 @@ export function ClaimForm({ variant, submit, onSubmitted }: ClaimFormProps) {
       requestFocus('invalid')
       return
     }
-    const claim = toSubmissionData(values)
+    const claim = toSubmissionData(values, hasProtectionPlan)
     submission.mutate({
-      body: buildClaimFormData(claim, invoice.file, photos.map((photo) => photo.file)),
+      body: buildClaimFormData(claim, invoice.file, photos.map((photo) => photo.file), planDocument?.file ?? null),
       contact: { email: claim.customer.email, phone: claim.customer.phone },
     })
   }
@@ -358,6 +383,32 @@ export function ClaimForm({ variant, submit, onSubmitted }: ClaimFormProps) {
               onFiles={addPhotos}
               onRemove={(key) => setPhotos(photos.filter((photo) => photo.key !== key))}
             />
+            <div className={styles.plan}>
+              <label className={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={hasProtectionPlan}
+                  disabled={submission.isPending}
+                  onChange={toggleProtectionPlan}
+                />
+                <span>I have an additional protection plan</span>
+              </label>
+              {hasProtectionPlan && (
+                <>
+                  <FileDrop
+                    label="Protection plan document"
+                    hint={planFileHint}
+                    accept={acceptedPlanFiles}
+                    files={planDocument ? [toItem(planDocument)] : []}
+                    error={errors.protectionPlanDocument}
+                    disabled={submission.isPending}
+                    onFiles={pickPlanDocument}
+                    onRemove={() => setPlanDocument(null)}
+                  />
+                  {!planDocument && <p className={styles.note}>{text.planHint}</p>}
+                </>
+              )}
+            </div>
             {variant === 'claimant' && (
               <p className={styles.note}>Your documents are stored securely and used only to process this claim.</p>
             )}
