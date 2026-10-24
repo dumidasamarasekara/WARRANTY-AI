@@ -1,3 +1,4 @@
+import type { Schemas } from '../../shared/api/client'
 import type { ClaimStatus } from '../../shared/presentation'
 import type { StepperStep, Tone } from '../../shared/ui'
 
@@ -38,7 +39,7 @@ export interface NextStep {
   tone: Tone
 }
 
-/** The "What happens next" timeline after "Received": Checked → Decision → service centre (approvals). */
+/** The "What happens next" timeline after "Received": Checked → Decision. The remedy section follows approvals. */
 export function nextSteps(status: ClaimStatus): NextStep[] {
   const checked: NextStep =
     status === 'PendingInformation'
@@ -86,15 +87,25 @@ export function nextSteps(status: ClaimStatus): NextStep[] {
             tone: 'pending',
           }
 
-  const steps = [checked, decision]
-  if (status === 'Approved') {
-    steps.push({
-      key: 'service',
-      title: 'The service centre will contact you',
-      description: 'They will use the contact details you gave to arrange the repair.',
-      state: 'Next',
-      tone: 'pending',
-    })
+  return [checked, decision]
+}
+
+type ClaimantRemedyView = Schemas['ClaimantRemedyView']
+export type ClaimantRemedyStepState = ClaimantRemedyView['steps'][number]['state']
+
+/** How a Repair timeline step reads to the claimant (002 contracts/ui-screens.md §5). */
+export function remedyStepPresentation(state: ClaimantRemedyStepState): { state: NextStepState; tone: Tone } {
+  switch (state) {
+    case 'done':
+      return { state: 'Done', tone: 'ok' }
+    case 'current':
+      return { state: 'In progress', tone: 'system' }
+    default:
+      return { state: 'Next', tone: 'pending' }
   }
-  return steps
+}
+
+/** The product is waiting at the repair centre: the centre card becomes an `ok` callout. */
+export function isReadyForCollection(remedy: ClaimantRemedyView): boolean {
+  return remedy.steps.some((step) => step.title === 'Ready for collection' && step.state === 'current')
 }

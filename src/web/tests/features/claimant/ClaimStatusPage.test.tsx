@@ -32,6 +32,31 @@ const pendingInformation = {
   ],
 }
 
+type RepairStage = 'AwaitingHandover' | 'AtRepairCentre' | 'ReadyForCollection'
+const repairLabels: Record<RepairStage, [string, number]> = {
+  AwaitingHandover: ['Take your product to the repair centre', 0],
+  AtRepairCentre: ['With repair centre', 1],
+  ReadyForCollection: ['Ready for collection', 2],
+}
+
+/** `ClaimantRemedyView` for a Repair, as the API projects it (data-model.md "Claimant projection"). */
+function repairRemedy(stage: RepairStage) {
+  const [label, current] = repairLabels[stage]
+  return {
+    remedy: 'Repair',
+    label,
+    completed: false,
+    repairCentre: {
+      name: 'North Service Hub',
+      address: '12 Harbour Road, Springfield',
+      openingHours: 'Mon–Fri 08:00–17:00',
+    },
+    steps: ['Handed over', 'With repair centre', 'Ready for collection', 'Collected'].map((title, i) => ({
+      title,
+      state: i < current ? 'done' : i === current ? 'current' : 'upcoming',
+    })),
+  }
+}
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 beforeEach(async () => {
   statusRequests = []
@@ -132,8 +157,8 @@ describe('ClaimStatusPage', () => {
     expect(statusRequests.length).toBe(requestsAtFinalStatus)
   })
 
-  it('completes the stepper and adds the service centre step for an approved claim', async () => {
-    respondWith({ status: 'Approved', outcomeExplanation: 'Covered.' })
+  it('completes the stepper for an approved claim without the old service centre step', async () => {
+    respondWith({ status: 'Approved', outcomeExplanation: 'Covered.', remedy: repairRemedy('AtRepairCentre') })
     renderStatus()
 
     await screen.findByText('Your claim is approved')
@@ -141,10 +166,92 @@ describe('ClaimStatusPage', () => {
     expect(stepState('Decision')).toBe('completed')
     const timeline = screen.getByRole('list', { name: 'What happens next' })
     expect(within(timeline).getByText('Received')).toBeInTheDocument()
-    expect(within(timeline).getByText('The service centre will contact you')).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/service centre will contact you/i)
   })
 
-  it('shows the explanation of a rejected claim without a service centre step', async () => {
+  it('shows the remedy line, the four repair steps and the repair centre', async () => {
+    respondWith({ status: 'Approved', outcomeExplanation: 'Covered.', remedy: repairRemedy('AtRepairCentre') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('Remedy: Repair')
+    expect(remedy).toHaveTextContent('With repair centre')
+    const steps = within(within(remedy).getByRole('list', { name: 'Repair progress' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.textContent)).toEqual([
+      'Handed over Done',
+      'With repair centre In progress',
+      'Ready for collection Next',
+      'Collected Next',
+    ])
+    expect(remedy).toHaveTextContent('North Service Hub')
+    expect(remedy).toHaveTextContent('12 Harbour Road, Springfield')
+    expect(remedy).toHaveTextContent('Opening hours: Mon–Fri 08:00–17:00')
+    expect(within(remedy).queryByText('Your product is ready for collection')).not.toBeInTheDocument()
+  })
+
+  it('asks the claimant to take the product to the repair centre before the hand-over', async () => {
+    respondWith({ status: 'Approved', remedy: repairRemedy('AwaitingHandover') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('Take your product to the repair centre')
+    expect(within(remedy).getByText('Handed over')).toBeInTheDocument()
+    expect(remedy).toHaveTextContent('Handed over In progress')
+  })
+
+  it('turns the centre card into a ready-for-collection callout', async () => {
+    respondWith({ status: 'Approved', remedy: repairRemedy('ReadyForCollection') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    const callout = within(remedy).getByRole('status')
+    expect(callout).toHaveTextContent('Your product is ready for collection')
+    expect(callout).toHaveTextContent('North Service Hub')
+    expect(callout).toHaveTextContent('12 Harbour Road, Springfield')
+    expect(callout).toHaveTextContent('Opening hours: Mon–Fri 08:00–17:00')
+  })
+
+  it.each([
+    ['We are deciding how to resolve your claim'],
+    ['Repair not possible. Your claim is being reviewed.'],
+  ])('shows a neutral banner with the label only while a remedy is decided: %s', async (label) => {
+    respondWith({ status: 'Approved', remedy: { label, completed: false, steps: [] } })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent(label)
+    expect(remedy.textContent).toBe(label)
+    expect(screen.queryByRole('list', { name: 'Repair progress' })).not.toBeInTheDocument()
+  })
+
+  it('never shows staff-only remedy fields even if the response carries them', async () => {
+    const remedy = repairRemedy('AtRepairCentre') as Record<string, unknown>
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        ...remedy,
+        repairCentre: {
+          ...(remedy.repairCentre as object),
+          reference: 'RC-NA-0042',
+          contact: 'workshop@example.test',
+          phone: '+1 555 0100',
+        },
+        notes: 'Customer was rude at the counter',
+        failureReason: 'Spare part discontinued',
+        recordedBy: 'Agent Smith',
+        decidedBy: 'Reviewer Jones',
+      },
+    })
+    renderStatus()
+
+    await screen.findByRole('region', { name: 'Remedy' })
+    const page = document.body.textContent ?? ''
+    expect(page).not.toMatch(
+      /RC-NA-0042|workshop@example\.test|555 0100|Customer was rude|Spare part discontinued|Agent Smith|Reviewer Jones/,
+    )
+  })
+
+  it('shows the explanation of a rejected claim without a remedy section', async () => {
     respondWith({ status: 'Rejected', outcomeExplanation: 'Water damage is not covered by your warranty.' })
     renderStatus()
 
@@ -152,9 +259,9 @@ describe('ClaimStatusPage', () => {
     expect(screen.getByRole('region', { name: 'Claim outcome' })).toHaveTextContent(
       'Water damage is not covered by your warranty.',
     )
-    expect(screen.queryByText('The service centre will contact you')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Remedy' })).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/service centre will contact you/i)
   })
-
   it('lists the requested items by their labels and marks the evaluation step as needing attention', async () => {
     respondWith(pendingInformation)
     renderStatus()
