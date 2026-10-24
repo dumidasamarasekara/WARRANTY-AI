@@ -75,6 +75,7 @@ app.MapPublicEndpoints();
 app.MapClaimEndpoints();
 app.MapReviewEndpoints();
 app.MapTraceEndpoints();
+app.MapFulfillmentEndpoints();
 app.MapReferenceEndpoints();
 app.MapAuditEndpoints();
 

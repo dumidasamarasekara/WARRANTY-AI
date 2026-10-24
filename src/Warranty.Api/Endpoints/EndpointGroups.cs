@@ -1,5 +1,6 @@
 using Warranty.Api.Endpoints.Audit;
 using Warranty.Api.Endpoints.Claims;
+using Warranty.Api.Endpoints.Fulfillment;
 using Warranty.Api.Endpoints.Public;
 using Warranty.Api.Endpoints.Reference;
 using Warranty.Api.Endpoints.Review;
@@ -37,6 +38,11 @@ public static class EndpointGroups
     public static RouteGroupBuilder MapTraceEndpoints(this IEndpointRouteBuilder app)
         => app.MapGroup("/api/claims").WithTags("Trace").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
             .MapTraceRoutes();
+
+    /// <summary><c>/api/claims/{claimId}/repair-centres</c> and <c>/api/claims/{claimId}/repair/events</c> (002).</summary>
+    public static RouteGroupBuilder MapFulfillmentEndpoints(this IEndpointRouteBuilder app)
+        => app.MapGroup("/api/claims").WithTags("Fulfillment").RequireAuthorization().AddEndpointFilter<CrossTenantGuard>()
+            .MapFulfillmentRoutes();
 
     /// <summary><c>/api/me</c> and <c>/api/policies</c>.</summary>
     public static RouteGroupBuilder MapReferenceEndpoints(this IEndpointRouteBuilder app)

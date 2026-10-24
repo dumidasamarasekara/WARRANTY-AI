@@ -18,16 +18,21 @@ namespace Warranty.IntegrationTests.Fulfillment;
 /// R5 and R7 change the repair, so they use fresh Aurora claims: a synthetic claim submitted by <c>agent.aurora</c>,
 /// escalated (it matches no recording) and approved by <c>reviewer.aurora</c>, which sets remedy Repair by policy and
 /// a repair awaiting hand-over at the suggested centre (US1, T225/T228). The seeded R1 and R2 claims only get requests
-/// that must be refused, so other tests can keep reading them. All pending T241, which needs the US1 approval path
-/// and T238 – T240.
+/// that must be refused, so other tests can keep reading them. The fresh-claim cases are pending T228 (the US1
+/// approval path); R17 also needs the remedy-decisions endpoint of T230.
 /// </para>
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
 [Trait("Feature", "002")]
 public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 {
-    private const string PendingRepairEvents = "Pending T241";
     private const string PendingAttemptEnded = "Pending T248";
+
+    /// <summary>The fresh-claim cases approve through the reviewer path, which sets the remedy and creates the repair (T225/T228).</summary>
+    private const string PendingApproval = "Pending T228";
+
+    /// <summary>R17 also posts to the remedy-decisions endpoint (T230).</summary>
+    private const string PendingApprovalAndRemedyDecisions = "Pending T228 and T230";
 
     private const string ReadyTemplate = "RepairReadyForCollection";
     private const string StaffNote = "Customer phoned twice about the delay; staff-only note.";
@@ -42,7 +47,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R5: the hand-over -------------------------------------------------------------------------
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact(Skip = PendingApproval)]
     public async Task R5_recording_the_hand_over_puts_the_repair_at_the_centre_and_the_claimant_sees_the_centre_but_not_the_reference()
     {
         var (claimId, reference) = await ApprovedRepairClaimAsync();
@@ -100,7 +105,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R6: an event the status does not allow ----------------------------------------------------
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact]
     public async Task R6_marking_ready_before_the_hand_over_conflicts_naming_the_status_and_the_allowed_events()
     {
         var before = await RepairAsync(TestStaffUsers.AgentAurora, R1);
@@ -120,7 +125,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R7: exactly one ready notification ---------------------------------------------------------
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact(Skip = PendingApproval)]
     public async Task R7_the_same_mark_ready_sent_twice_with_the_old_ETag_changes_the_status_once_and_queues_one_notification()
     {
         var (claimId, _) = await HandedOverClaimAsync();
@@ -135,7 +140,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
         await ShouldBeReadyOnceAsync(claimId, attemptId);
     }
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact(Skip = PendingApproval)]
     public async Task R7_two_staff_marking_ready_at_once_change_the_status_once_and_queue_one_notification()
     {
         var (claimId, _) = await HandedOverClaimAsync();
@@ -157,7 +162,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
         await ShouldBeReadyOnceAsync(claimId, attemptId);
     }
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact(Skip = PendingApproval)]
     public async Task R7_collection_completes_the_repair_and_the_remedy_and_the_claimant_sees_Collected()
     {
         var (claimId, reference) = await HandedOverClaimAsync();
@@ -182,7 +187,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R16: tenant isolation ----------------------------------------------------------------------
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact]
     public async Task R16_an_Aurora_agent_gets_404_for_Borealis_repair_centres_and_a_Borealis_centre_on_an_Aurora_claim()
     {
         var borealisCentre = await ScalarAsync<Guid>(
@@ -220,7 +225,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R17: the auditor ---------------------------------------------------------------------------
 
-    [Fact(Skip = PendingRepairEvents)]
+    [Fact(Skip = PendingApprovalAndRemedyDecisions)]
     public async Task R17_an_auditor_reads_the_repair_and_its_trail_but_cannot_record_events_or_decide_the_remedy()
     {
         var (claimId, _) = await HandedOverClaimAsync();
