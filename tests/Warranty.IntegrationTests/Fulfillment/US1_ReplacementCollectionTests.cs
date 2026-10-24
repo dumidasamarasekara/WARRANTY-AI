@@ -28,7 +28,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "003")]
 public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 {
-    private const string PendingEndpoints = "Pending T329";
     private const string ReadyTemplate = "ReplacementReadyForCollection";
     private const string StaffNote = "Unit taken from the back-office stock; staff-only note.";
     private const string CopyContact = "replacement.collection@example.test";
@@ -107,7 +106,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 
     // ---- X2: reserving a unit -------------------------------------------------------------------------
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X2_reserving_a_unit_makes_it_ready_with_one_notification_and_the_claimant_sees_the_model_but_no_serial()
     {
         var (claimId, reference) = await CopyOfX1Async();
@@ -150,7 +149,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 
     // ---- X3: one status change and one notification ---------------------------------------------------
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X3_the_same_reservation_sent_again_with_the_old_ETag_gets_412_and_queues_no_second_notification()
     {
         var (claimId, _) = await CopyOfX1Async();
@@ -165,7 +164,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
         await ShouldBeReadyOnceAsync(claimId);
     }
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X3_two_staff_reserving_at_once_change_the_status_once_and_queue_one_notification()
     {
         var (claimId, _) = await CopyOfX1Async();
@@ -189,7 +188,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 
     // ---- X4: the hand-over to the customer -------------------------------------------------------------
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X4_the_hand_over_needs_the_return_confirmed_then_completes_the_remedy_and_registers_the_serial()
     {
         var (claimId, reference) = await CopyOfX1Async();
@@ -234,7 +233,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
         ShouldShowNoStaffData(claimant, serial);
     }
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X4_reserving_the_claims_own_serial_or_a_serial_handed_out_on_another_claim_is_refused()
     {
         // A unit handed out on one copy ...
@@ -264,7 +263,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 
     // ---- X5: an event the status does not allow ---------------------------------------------------------
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X5_handing_over_before_a_unit_is_reserved_conflicts_naming_the_status_and_the_allowed_events()
     {
         var before = await ReplacementAsync(TestStaffUsers.AgentAurora, X5);
@@ -285,7 +284,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
 
     // ---- X18: tenant isolation ---------------------------------------------------------------------------
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X18_an_Aurora_agent_gets_404_for_the_replacement_locations_of_a_Borealis_claim()
     {
         var deniedBefore = await AccessDeniedCountAsync(X6);
@@ -299,7 +298,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
         (await AccessDeniedCountAsync(X6)).ShouldBeGreaterThan(deniedBefore);
     }
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact(Skip = "Pending T356")]
     public async Task X18_moving_an_Aurora_replacement_to_a_Borealis_location_gets_404_and_changes_nothing()
     {
         var borealisLocation = (await ReplacementRowAsync(X6)).ServiceCenterId.ShouldNotBeNull();
@@ -324,7 +323,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
         ETagOf(await ReplacementAsync(TestStaffUsers.AgentAurora, claimId)).ShouldBe(ETagOf(before));
     }
 
-    [Fact(Skip = PendingEndpoints)]
+    [Fact]
     public async Task X18_an_Aurora_agent_recording_an_event_on_a_Borealis_claim_gets_404_and_changes_nothing()
     {
         var deniedBefore = await AccessDeniedCountAsync(X6);

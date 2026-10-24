@@ -105,7 +105,7 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- 003: a Replacement completes through the HandedToCustomer replacement event --------------
 
-    [Fact(Skip = "Pending T329")]
+    [Fact]
     public async Task A_Replacement_handed_to_the_customer_completes_the_remedy_without_a_completion_record()
     {
         // An Aurora replacement awaiting its unit, faulty product returned at collection (003 quickstart X1, T321).
