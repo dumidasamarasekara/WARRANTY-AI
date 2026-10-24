@@ -31,6 +31,13 @@ export type TrailStep =
   | 'RepairStatusUpdated'
   | 'RepairAttemptEnded'
   | 'RemedyCompleted'
+  // Replacement fulfilment and the faulty-product return (003 data-model.md)
+  | 'ReplacementLocationAssigned'
+  | 'FaultyProductReturned'
+  | 'ReplacementModelProposed'
+  | 'ReplacementModelDecided'
+  | 'ReplacementStatusUpdated'
+  | 'ReplacementUnitRegistered'
 
 const stepLabels: Record<TrailStep, string> = {
   ClaimSubmitted: 'Claim submitted',
@@ -63,6 +70,12 @@ const stepLabels: Record<TrailStep, string> = {
   RepairStatusUpdated: 'Repair status updated',
   RepairAttemptEnded: 'Repair attempt ended',
   RemedyCompleted: 'Remedy completed',
+  ReplacementLocationAssigned: 'Replacement location assigned',
+  FaultyProductReturned: 'Faulty product returned',
+  ReplacementModelProposed: 'Replacement model proposed',
+  ReplacementModelDecided: 'Replacement model decided',
+  ReplacementStatusUpdated: 'Replacement status updated',
+  ReplacementUnitRegistered: 'Replacement unit registered',
 }
 
 const agentActors = new Set(['intake', 'evidence', 'policy', 'decision'])
