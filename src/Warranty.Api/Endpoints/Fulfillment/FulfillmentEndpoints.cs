@@ -60,6 +60,27 @@ public static class FulfillmentEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status412PreconditionFailed);
+
+        // GET /api/claims/{claimId}/replacement-locations: eligible replacement locations, the first serving one suggested (003 FR-008, FR-009).
+        group.MapGet("/{claimId:guid}/replacement-locations", GetReplacementLocationsAsync)
+            .WithName("ListReplacementLocations")
+            .WithSummary("Eligible replacement locations for the claim (003 FR-008, FR-009)")
+            .RequireAuthorization(AuthPolicies.AnyStaff)
+            .Produces<IReadOnlyList<RepairCentreView>>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // POST /api/claims/{claimId}/replacement/events: one replacement update reported to staff (003 FR-009 – FR-028).
+        group.MapPost("/{claimId:guid}/replacement/events", RecordReplacementEventAsync)
+            .WithName("RecordReplacementEvent")
+            .WithSummary("Record a replacement update (003 FR-009 – FR-028)")
+            .RequireAuthorization(AuthPolicies.ClaimsAgentOrReviewer)
+            .Accepts<ReplacementEventRequest>("application/json")
+            .Produces<ReplacementView>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed);
         return group;
     }
 
@@ -211,6 +232,79 @@ public static class FulfillmentEndpoints
         }
     }
 
+    private static async Task<IResult> GetReplacementLocationsAsync(Guid claimId, ReplacementQueries query, CancellationToken ct)
+        => await query.GetReplacementLocationsAsync(claimId, ct) is { } locations ? Results.Ok(locations) : CrossTenantGuard.NotFound();
+
+    /// <summary>
+    /// <c>POST /api/claims/{claimId}/replacement/events</c>: claims agents and reviewers; which events a role may record
+    /// (reviewer-only events, self-review) is decided by the use case (403). The staff member comes from the access token,
+    /// the expected replacement version from <c>If-Match</c> (<c>ReplacementView.etag</c>). Errors as in 003 plan.md
+    /// "Error mapping".
+    /// </summary>
+    private static async Task<IResult> RecordReplacementEventAsync(
+        Guid claimId,
+        [FromHeader(Name = "If-Match")] string? ifMatch,
+        ReplacementEventRequest request,
+        RecordReplacementEvent recordEvent,
+        ReplacementQueries query,
+        CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var type = Parse<ReplacementEventType>(request.Type, "type", errors, allowed: RequestReplacementEventTypes);
+        var source = Parse<ReportSource>(request.Source, "source", errors, allowed: RequestSources);
+        var toStatus = Parse<ReplacementStatus>(request.ToStatus, "toStatus", errors);
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var command = new RecordReplacementEventCommand(
+            claimId, ifMatch, type, request.ReportedAt, source, request.Note, request.LocationId, request.Reason, request.ReturnedOn,
+            request.SerialSeen, request.ProductId, request.SerialNumber, request.HandedOverOn, request.ReturnConfirmed, request.CorrectsSeq,
+            toStatus);
+
+        switch (await recordEvent.ExecuteAsync(command, ct))
+        {
+            case RecordReplacementEventResult.Recorded:
+                return await query.GetReplacementAsync(claimId, ct) is { } view
+                    ? Results.Created($"/api/claims/{claimId}", view)
+                    : throw new InvalidOperationException($"The replacement of claim {claimId} was recorded but cannot be read back.");
+            case RecordReplacementEventResult.NotFound:
+                return CrossTenantGuard.NotFound();
+            case RecordReplacementEventResult.Forbidden forbidden:
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, detail: forbidden.Detail);
+            case RecordReplacementEventResult.PreconditionFailed failed:
+                return Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, detail: failed.Detail);
+            case RecordReplacementEventResult.Conflict conflict:
+                return Results.Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    detail: conflict.Detail,
+                    extensions: conflict.Status is { } status
+                        ? new Dictionary<string, object?>
+                        {
+                            ["replacementStatus"] = status.ToString(),
+                            ["allowedEvents"] = conflict.AllowedEvents.Select(e => e.ToString()).ToArray(),
+                        }
+                        : null);
+            case RecordReplacementEventResult.Invalid invalid:
+                return Results.ValidationProblem(new Dictionary<string, string[]>(invalid.Errors));
+            case var other:
+                throw new InvalidOperationException($"Unhandled replacement event result {other.GetType().Name}.");
+        }
+    }
+
+    /// <summary>
+    /// The event types a request may name (<c>ReplacementEventRequest.type</c>): every type except the system-recorded
+    /// <c>LocationSuggested</c> and <c>Cancelled</c>; the use case refuses those not recordable yet.
+    /// </summary>
+    private static readonly ReplacementEventType[] RequestReplacementEventTypes =
+    [
+        ReplacementEventType.LocationChanged, ReplacementEventType.ReturnRecorded, ReplacementEventType.ReturnAccepted,
+        ReplacementEventType.ModelProposed, ReplacementEventType.ModelApproved, ReplacementEventType.ModelDeclined,
+        ReplacementEventType.UnitReserved, ReplacementEventType.UnitRefused, ReplacementEventType.Moved,
+        ReplacementEventType.HandedToCustomer, ReplacementEventType.NotAvailable, ReplacementEventType.Correction,
+    ];
+
     /// <summary>The event types a request may name (<c>RepairEventRequest.type</c>): every type except <c>CentreSuggested</c> and <c>RepairNotEconomical</c>.</summary>
     private static readonly RepairEventType[] RequestEventTypes =
     [
@@ -277,3 +371,24 @@ public sealed record RemedyDecisionRequest(string? Remedy, string? Reason);
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RemedyCompletionRequest(string? Remedy, DateOnly? CompletedOn, string? Reference);
+
+/// <summary>
+/// <c>ReplacementEventRequest</c> (003 contracts). Unknown members are rejected (<c>additionalProperties: false</c>), so no
+/// staff, tenant or status field can be smuggled in; which fields an event type needs is checked by the use case.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReplacementEventRequest(
+    string? Type,
+    DateTimeOffset? ReportedAt,
+    string? Source,
+    string? Note,
+    Guid? LocationId,
+    string? Reason,
+    DateOnly? ReturnedOn,
+    string? SerialSeen,
+    Guid? ProductId,
+    string? SerialNumber,
+    DateOnly? HandedOverOn,
+    bool? ReturnConfirmed,
+    int? CorrectsSeq,
+    string? ToStatus);

@@ -206,7 +206,8 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
     }
 
     /// <summary>
-    /// Per-parent sequence keys of append-only histories (002 repair events and attempts, remedy decisions): two requests
+    /// Per-parent sequence keys of append-only histories (002 repair events and attempts, remedy decisions; 003 replacement
+    /// events and units): two requests
     /// that read the same history append the same next <c>seq</c>, and the loser's insert fails before its row-version
     /// check would. That is the same lost race, so it is a concurrency conflict (409), not a server error.
     /// </summary>
@@ -215,6 +216,8 @@ internal sealed class UnitOfWork(WarrantyDbContext db) : IUnitOfWork
         "ix_repair_events_tenant_id_repair_id_seq",
         "ix_repair_attempts_tenant_id_repair_id_seq",
         "ix_remedy_decisions_tenant_id_claim_id_seq",
+        "ix_replacement_events_tenant_id_replacement_id_seq",
+        "ix_replacement_units_tenant_id_replacement_id_seq",
     };
 
     private static bool IsLostAppendRace(DbUpdateException exception)

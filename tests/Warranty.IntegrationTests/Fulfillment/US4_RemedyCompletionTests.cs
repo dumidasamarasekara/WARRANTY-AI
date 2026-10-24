@@ -105,19 +105,12 @@ public sealed class US4_RemedyCompletionTests(WarrantyAppFixture fixture)
 
     // ---- 003: a Replacement completes through the HandedToCustomer replacement event --------------
 
-    [Fact(Skip = "Pending T329")]
+    [Fact]
     public async Task A_Replacement_handed_to_the_customer_completes_the_remedy_without_a_completion_record()
     {
-        // An Aurora replacement awaiting its unit, faulty product returned at collection (003 quickstart X1, T321).
-        // T326 may point this at a dedicated claim of replacement-scenarios.json if X1 is reserved for the US1 tests.
-        var claimId = await ScalarAsync<Guid>(
-            $"""
-            select claim_id from claims.replacements
-            where tenant_id = @value and status = '{WireName.Of(ReplacementStatus.AwaitingUnit)}'
-              and return_rule = '{WireName.Of(ReplacementReturnRule.AtCollection)}'
-            order by claim_id desc limit 1
-            """,
-            TestStaffUsers.AuroraTenantId);
+        // A new Aurora replacement awaiting its unit, faulty product returned at collection: a copy of the seeded X1 (003
+        // quickstart X1), so that the seeded X1 and X5 the US1 tests read stay unchanged whatever the test order.
+        var (claimId, _) = await new US1_ReplacementCollectionTests(fixture).CopyOfX1Async();
         var serial = $"SN-T327-{Guid.NewGuid():N}"[..24];
 
         var reserved = await ReplacementEventAsync(TestStaffUsers.AgentAurora, claimId, await ReplacementETagAsync(claimId), new JsonObject
