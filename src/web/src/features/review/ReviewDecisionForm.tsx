@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { ApiProblem, type Schemas } from '../../shared/api/client'
+import { remedyTypePresentation } from '../../shared/presentation'
 import { Alert, Button, Dialog, TextArea, TextInput } from '../../shared/ui'
 import {
   aiDecisionLabel,
@@ -7,15 +8,19 @@ import {
   claimantMessageLimits,
   claimantMessagePrefill,
   decidingAiDecision,
+  initialRemedy,
   justificationLimits,
   overridesAi,
+  remedyOptions,
   requestedItemOptions,
   requiresClaimantMessage,
   requiresJustification,
+  requiresRemedyChoice,
   reviewDecisionLabel,
   suggestedRequestedItems,
   withinLimits,
   type ClaimDetail,
+  type RemedyType,
   type RequestedItemCode,
   type ReviewDecisionKind,
 } from './reviewDecision'
@@ -82,11 +87,15 @@ export function ReviewDecisionForm({
   const needsMessage = requiresClaimantMessage(decision)
   const needsJustification = requiresJustification(claim, decision)
   const requestsInformation = decision === 'RequestInformation'
+  const approving = decision === 'Approve'
+  const remedies = approving ? remedyOptions(claim) : []
+  const needsRemedy = requiresRemedyChoice(claim, decision)
 
   const [message, setMessage] = useState(() => (needsMessage ? claimantMessagePrefill(claim, decision) : ''))
   const [justification, setJustification] = useState('')
   const [items, setItems] = useState<RequestedItemCode[]>(() => (requestsInformation ? suggestedRequestedItems(claim) : []))
   const [otherReason, setOtherReason] = useState('')
+  const [remedy, setRemedy] = useState<RemedyType | null>(() => (approving ? initialRemedy(claim) : null))
   const [problem, setProblem] = useState<DecisionProblem | null>(null)
   const [reloading, setReloading] = useState(false)
   const record = useRecordReviewDecision()
@@ -95,6 +104,7 @@ export function ReviewDecisionForm({
   const valid =
     (!needsMessage || withinLimits(message, claimantMessageLimits)) &&
     (!needsJustification || withinLimits(justification, justificationLimits)) &&
+    (!needsRemedy || remedy !== null) &&
     (!requestsInformation ||
       (items.length > 0 && (!otherSelected || (otherReason.trim().length > 0 && otherReason.trim().length <= otherReasonMax))))
 
@@ -102,6 +112,7 @@ export function ReviewDecisionForm({
   const messageError = fieldError(problem, 'claimantExplanation')
   const justificationError = fieldError(problem, 'justification')
   const itemsError = fieldError(problem, 'requestedItems')
+  const remedyError = fieldError(problem, 'remedy')
 
   const submit = (event: FormEvent | MouseEvent) => {
     event.preventDefault()
@@ -116,6 +127,7 @@ export function ReviewDecisionForm({
           justification: needsJustification ? justification.trim() : undefined,
           claimantExplanation: needsMessage ? message.trim() : undefined,
           requestedItems: requestsInformation ? buildRequestedItems(items, otherReason) : undefined,
+          remedy: approving && remedy !== null ? remedy : undefined,
         },
       },
       {
@@ -159,7 +171,7 @@ export function ReviewDecisionForm({
         </Button>
       </div>
     )
-  } else if (problem && !messageError && !justificationError && !itemsError) {
+  } else if (problem && !messageError && !justificationError && !itemsError && !remedyError) {
     error = [problem.title, problem.detail].filter(Boolean).join(' — ') || 'The decision could not be recorded.'
   }
 
@@ -238,8 +250,40 @@ export function ReviewDecisionForm({
           </>
         )}
 
-        {needsMessage && (
-          <TextArea
+        {remedies.length > 0 && (
+          <fieldset
+            className={styles.items}
+            role="radiogroup"
+            aria-describedby={remedyError ? 'remedy-error' : undefined}
+          >
+            <legend className={styles.legend}>
+              Remedy<span aria-hidden="true"> *</span>
+            </legend>
+            {remedies.map((option) => (
+              <label key={option} className={styles.item}>
+                <input
+                  type="radio"
+                  name="remedy"
+                  value={option}
+                  checked={remedy === option}
+                  onChange={() => {
+                    setRemedy(option)
+                    if (remedyError) setProblem(null)
+                  }}
+                />
+                <span>{remedyTypePresentation(option).label}</span>
+                {option === claim.remedyPreview?.recommendedRemedy && <span className={styles.hint}>set by policy</span>}
+              </label>
+            ))}
+            {remedyError && (
+              <p id="remedy-error" className={styles.fieldError}>
+                {remedyError}
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {needsMessage && (          <TextArea
             label="Message to the claimant"
             hint="Shown to the claimant. Don't mention risk or fraud checks."
             required

@@ -120,3 +120,48 @@ export function buildRequestedItems(selected: readonly RequestedItemCode[], othe
     .filter((option) => selected.includes(option.item))
     .map((option) => ({ item: option.item, reason: option.item === 'OTHER' ? otherReason.trim() : option.reason }))
 }
+
+export type RemedyType = Schemas['RemedyType']
+export type RemedyPendingReason = Schemas['RemedyPendingReason']
+
+/**
+ * The remedies a reviewer may pick when approving (002 contracts/ui-screens.md §4): only the
+ * preview's `allowedRemedies`. Empty without a preview (the claim is not `UnderReview`) or when no
+ * remedy rule applies; the remedy is then decided after approval.
+ */
+export function remedyOptions(claim: ClaimDetail): RemedyType[] {
+  return [...(claim.remedyPreview?.allowedRemedies ?? [])]
+}
+
+/**
+ * The pre-selected remedy: the policy's `recommendedRemedy` when it is one of the allowed remedies,
+ * the only allowed remedy when there is exactly one (approving without a remedy sets it anyway),
+ * otherwise none, so the reviewer has to choose.
+ */
+export function initialRemedy(claim: ClaimDetail): RemedyType | null {
+  const options = remedyOptions(claim)
+  const recommended = claim.remedyPreview?.recommendedRemedy
+  if (recommended && options.includes(recommended)) return recommended
+  return options.length === 1 ? options[0]! : null
+}
+
+/**
+ * Approving needs a remedy whenever the preview offers a choice: it may be omitted only when the
+ * preview gives exactly one remedy (or none). Reject and information requests never carry one.
+ */
+export function requiresRemedyChoice(claim: ClaimDetail, decision: ReviewDecisionKind): boolean {
+  return decision === 'Approve' && remedyOptions(claim).length > 1
+}
+
+const remedyPendingReasonLabels: Record<RemedyPendingReason, string> = {
+  POLICY_CHOICE: 'The policy allows more than one remedy',
+  NO_REMEDY_RULE: 'No remedy rule applies',
+  REPAIR_FAILED_LIMIT: 'Repair attempts limit reached',
+  REPAIR_NOT_ECONOMICAL: 'Repair is not economical',
+}
+
+/** Readable reason a remedy waits for a reviewer (002 data-model.md `pending_reason`). */
+export function remedyPendingReasonLabel(reason: RemedyPendingReason | undefined): string {
+  if (!reason) return 'Awaiting remedy decision'
+  return remedyPendingReasonLabels[reason] ?? reason
+}

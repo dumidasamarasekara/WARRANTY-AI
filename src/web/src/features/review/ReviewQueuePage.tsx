@@ -28,6 +28,7 @@ import {
   aiDecisionAsReview,
   aiDecisionLabel,
   decidingAiDecision,
+  remedyPendingReasonLabel,
   reviewDecisionLabel,
   type ClaimDetail,
   type ReviewDecisionKind,
@@ -84,8 +85,10 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
     )
   }
 
+  // Remedy decisions open the claim's Remedy tab; only claim decisions use the workspace here.
   // Without a claim in the URL the oldest escalation is shown.
-  const selected = claimId ? items.find((item) => item.claimId === claimId) : items[0]
+  const claimDecisions = items.filter((item) => item.kind !== 'RemedyDecision')
+  const selected = claimId ? claimDecisions.find((item) => item.claimId === claimId) : claimDecisions[0]
 
   return (
     <section className={styles.page}>
@@ -94,8 +97,12 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
         <nav aria-label="Review queue" className={styles.queue}>
           <ul className={styles.queueList}>
             {items.map((item) => (
-              <li key={item.claimId}>
-                <QueueCard item={item} selected={item.claimId === selected?.claimId} currency={currency} now={now} />
+              <li key={`${item.kind}-${item.claimId}`}>
+                {item.kind === 'RemedyDecision' ? (
+                  <RemedyQueueCard item={item} now={now} />
+                ) : (
+                  <QueueCard item={item} selected={item.claimId === selected?.claimId} currency={currency} now={now} />
+                )}
               </li>
             ))}
           </ul>
@@ -103,6 +110,8 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
         <div className={styles.workspace}>
           {selected ? (
             <ReviewWorkspace key={selected.claimId} item={selected} currency={currency} />
+          ) : !claimId ? (
+            <EmptyState message="No claims waiting for a review decision. Open a remedy decision from the queue." />
           ) : (
             <EmptyState
               message="This claim is no longer waiting for review."
@@ -136,6 +145,23 @@ function QueueCard({
       <span className={styles.reference}>{item.reference}</span>
       <span className={styles.product}>{item.productName}</span>
       <span className={styles.cardMeta}>{[value, ...item.escalationReasons].filter(Boolean).join(' · ')}</span>
+      <span className={styles.cardFoot}>
+        <span title={formatDateTime(item.escalatedAt)}>Escalated {formatRelative(item.escalatedAt, now)}</span>
+        {item.submittedByMe && <Badge tone="system">You submitted this claim</Badge>}
+      </span>
+    </Link>
+  )
+}
+
+/** A remedy waiting for a reviewer (002 ui-screens.md §3): the "Remedy" badge and the pending reason, opening the Remedy tab. */
+function RemedyQueueCard({ item, now }: { item: ReviewQueueItem; now: Date | undefined }) {
+  return (
+    <Link to={`/staff/claims/${item.claimId}/remedy`} className={styles.card}>
+      <span className={styles.reference}>{item.reference}</span>
+      <span className={styles.product}>{item.productName}</span>
+      <span className={styles.cardMeta}>
+        <Badge tone="warn">Remedy</Badge> {remedyPendingReasonLabel(item.remedyPendingReason)}
+      </span>
       <span className={styles.cardFoot}>
         <span title={formatDateTime(item.escalatedAt)}>Escalated {formatRelative(item.escalatedAt, now)}</span>
         {item.submittedByMe && <Badge tone="system">You submitted this claim</Badge>}
