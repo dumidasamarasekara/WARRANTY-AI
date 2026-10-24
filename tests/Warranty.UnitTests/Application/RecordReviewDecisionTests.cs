@@ -90,7 +90,7 @@ public sealed class RecordReviewDecisionTests
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", 349m, "EUR"));
         _network.FindServiceCenterAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns(_center);
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_eligible]);
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns([_eligible]);
         _repairs.CreateAsync(default, default, default).ReturnsForAnyArgs(_repairRequestId);
         _notifications.EnqueueAsync(default, default!, default).ReturnsForAnyArgs(_notificationId);
         _remedies.WhenForAnyArgs(r => r.Add(default!)).Do(call => _addedRemedies.Add(call.Arg<ClaimRemedy>()));

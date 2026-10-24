@@ -20,7 +20,8 @@ internal sealed class SimulatedServiceNetwork(IIntegrationRepository integration
         return center is null ? null : new ServiceCenterInfo(center.Id, center.Name, center.Region);
     }
 
-    public async Task<IReadOnlyList<EligibleServiceCenter>> ListEligibleAsync(Region region, string productCategory, CancellationToken ct)
+    public async Task<IReadOnlyList<EligibleServiceCenter>> ListEligibleAsync(
+        Region region, string productCategory, ServiceCenterPurpose purpose, CancellationToken ct)
     {
         var centers = await ActiveCentersAsync(region, ct);
         var category = Normalize(productCategory);

@@ -519,7 +519,7 @@ public sealed class ActionExecutor(
     private async Task CreateRepairAsync(Claim claim, Product? product, string actor, DateTimeOffset now, CancellationToken ct)
     {
         var centre = claim.Region is { } region && product is not null
-            ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ct)).FirstOrDefault(c => c.ServesClaim)
+            ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ServiceCenterPurpose.Repair, ct)).FirstOrDefault(c => c.ServesClaim)
             : null;
         var repair = Repair.Create(Guid.CreateVersion7(), claim.TenantId, claim.Id, centre?.Id, now);
         repairs.Add(repair);

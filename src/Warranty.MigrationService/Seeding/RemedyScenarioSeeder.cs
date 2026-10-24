@@ -111,7 +111,7 @@ internal sealed class RemedyScenarioSeeder(
         }
 
         var centre = evaluation.AutomaticRemedy == RemedyType.Repair
-            ? (await serviceNetwork.ListEligibleAsync(scenario.Region, product.Category, ct)).FirstOrDefault(c => c.ServesClaim)
+            ? (await serviceNetwork.ListEligibleAsync(scenario.Region, product.Category, ServiceCenterPurpose.Repair, ct)).FirstOrDefault(c => c.ServesClaim)
             : null;
 
         var strategy = db.Database.CreateExecutionStrategy();

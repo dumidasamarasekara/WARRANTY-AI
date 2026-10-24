@@ -233,4 +233,45 @@ public interface IRepairRepository
     void AddEvent(RepairEvent repairEvent);
 }
 
+/// <summary>
+/// Replacements of the current tenant's claims (<c>claims.replacements</c> with locations, the faulty-product
+/// return, model proposals and units; events in <c>audit.replacement_events</c>; 003).
+/// </summary>
+public interface IReplacementRepository
+{
+    /// <summary>
+    /// The claim's replacement (tracked) with its locations, return, proposals, units and events, or null when it has none.
+    /// </summary>
+    Task<Replacement?> GetByClaimAsync(Guid claimId, CancellationToken ct);
+
+    /// <summary>The replacement's row version (<c>xmin</c>), exposed as the replacement ETag; null when the claim has no replacement.</summary>
+    Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct);
+
+    void Add(Replacement replacement);
+
+    /// <summary>Replacement events are append-only: there is no update or delete.</summary>
+    void AddEvent(ReplacementEvent replacementEvent);
+}
+
+/// <summary>
+/// Handed-out replacement units of the current tenant (<c>catalog.replacement_serials</c>, 003 research R10, R11).
+/// Registered serials are append-only: there is no update or delete.
+/// </summary>
+public interface IReplacementSerialRegistry
+{
+    /// <summary>The registration of a handed-out unit by its serial (normalised), or null when the serial was never handed out.</summary>
+    Task<RegisteredReplacementSerial?> FindBySerialAsync(string serialNumber, CancellationToken ct);
+
+    /// <summary>The units handed out in place of the given (original) serial, oldest first.</summary>
+    Task<IReadOnlyList<RegisteredReplacementSerial>> FindByOriginalSerialAsync(string originalSerial, CancellationToken ct);
+
+    void Register(RegisteredReplacementSerial serial);
+
+    /// <summary>
+    /// True when the serial (normalised) cannot be reserved as a replacement unit: it is already in
+    /// <c>catalog.replacement_serials</c> or is the serial of any claim of the tenant (FR-022).
+    /// </summary>
+    Task<bool> IsSerialInUseAsync(string serialNumber, CancellationToken ct);
+}
+
 public sealed record AiOpsRecords(IReadOnlyList<ModelCall> ModelCalls, IReadOnlyList<ToolCall> ToolCalls, IReadOnlyList<RagQuery> RagQueries);

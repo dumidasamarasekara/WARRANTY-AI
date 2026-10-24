@@ -88,7 +88,7 @@ public sealed class ActionExecutorRemedyTests
 
         _catalog.GetProductAsync(ProductId, Arg.Any<CancellationToken>())
             .Returns(Product.Create(ProductId, Tenant, "AUR-TAB10", "Aurora Tab 10", "tablet", ClaimValue, "USD"));
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_otherCategory, _suggested, _second]);
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns([_otherCategory, _suggested, _second]);
         _notifications.EnqueueAsync(default, default!, default).ReturnsForAnyArgs(Guid.Parse("0199b000-0000-7000-8000-0000000002a2"));
         _refunds.RequestRefundAsync(default, default, default).ReturnsForAnyArgs(Guid.Parse("0199b000-0000-7000-8000-0000000002a3"));
         UseRules(RemedyRulesContract.Aurora);
@@ -153,7 +153,7 @@ public sealed class ActionExecutorRemedyTests
     [Fact]
     public async Task Without_a_centre_serving_the_claim_the_repair_waits_for_staff_to_choose_one()
     {
-        _network.ListEligibleAsync(Region.NA, "tablet", Arg.Any<CancellationToken>()).Returns([_otherCategory]);
+        _network.ListEligibleAsync(Region.NA, "tablet", ServiceCenterPurpose.Repair, Arg.Any<CancellationToken>()).Returns([_otherCategory]);
         ArrangeAutomaticApproval(out var action);
 
         await Executor().ExecuteAsync(action, Ct);
