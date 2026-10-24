@@ -139,3 +139,25 @@ export function repairActions(repair: Pick<RepairView, 'allowedEvents'>): { type
   const order = Object.keys(repairActionLabels) as RepairDialogEvent[]
   return order.filter((type) => allowed.includes(type)).map((type) => ({ type, primary: type === primary }))
 }
+
+/** Remedies completed by a recorded completion; a Repair completes through its Collected event. */
+export type CompletableRemedy = 'Replacement' | 'Refund'
+
+export const isCompletableRemedy = (remedy: RemedyType | undefined): remedy is CompletableRemedy =>
+  remedy === 'Replacement' || remedy === 'Refund'
+
+/** Copy of the completion card per remedy (FR-034, FR-035). */
+export const completionCopy: Record<CompletableRemedy, { done: string; pending: string; hint: string; dateLabel: string }> = {
+  Replacement: {
+    done: 'Replacement handed to customer',
+    pending: 'The replacement has not been handed to the customer yet.',
+    hint: 'Record the date the replacement was handed to the customer.',
+    dateLabel: 'Handed to customer on',
+  },
+  Refund: {
+    done: 'Refund completed',
+    pending: 'The refund has not been completed yet.',
+    hint: 'Record the date and reference of the refund completed through the refund option.',
+    dateLabel: 'Refund completed on',
+  },
+}

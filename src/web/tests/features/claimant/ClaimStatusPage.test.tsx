@@ -224,6 +224,38 @@ describe('ClaimStatusPage', () => {
     expect(screen.queryByRole('list', { name: 'Repair progress' })).not.toBeInTheDocument()
   })
 
+  it.each([
+    ['Replacement', false, 'Replacement on its way'],
+    ['Replacement', true, 'Replacement handed over'],
+    ['Refund', false, 'Refund being processed'],
+    ['Refund', true, 'Refund completed'],
+  ])('shows the %s label (completed: %s) without repair steps or a centre', async (kind, completed, label) => {
+    respondWith({ status: 'Approved', remedy: { remedy: kind, label, completed, steps: [] } })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent(`Remedy: ${kind}`)
+    expect(within(remedy).getByText(label)).toBeInTheDocument()
+    expect(within(remedy).queryByRole('list', { name: 'Repair progress' })).not.toBeInTheDocument()
+    expect(within(remedy).queryByRole('heading', { name: 'Repair centre' })).not.toBeInTheDocument()
+    const callout = within(remedy).queryByRole('status')
+    if (completed) expect(callout).toHaveTextContent(label)
+    else expect(callout).not.toBeInTheDocument()
+  })
+
+  it('never shows the refund reference or who recorded the completion', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: { remedy: 'Refund', label: 'Refund completed', completed: true, steps: [], reference: 'RF-99881', recordedBy: '[AGENT]' },
+    })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('Refund completed')
+    expect(document.body).not.toHaveTextContent('RF-99881')
+    expect(document.body).not.toHaveTextContent('[AGENT]')
+  })
+
   it('never shows staff-only remedy fields even if the response carries them', async () => {
     const remedy = repairRemedy('AtRepairCentre') as Record<string, unknown>
     respondWith({

@@ -5,18 +5,19 @@ import { formatDateTime, remedyStatePresentation } from '../../shared/presentati
 import { ActorBadge, Alert, Badge, Button, Card, cx, EmptyState, Timeline, TimelineItem } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
 import { claimQueryKey, type ClaimDetail } from '../claims/claimDetail'
+import { CompletionCard } from './CompletionCard'
 import { RemedyDialog } from './RemedyDialog'
 import { RepairCard } from './RepairCard'
 import { RepairEventsTimeline } from './RepairEventsTimeline'
 import type { RemedyHistoryEntry, RemedyView } from './remedyQueries'
-import { decideRemedyParam, pendingReasonText, remedyLabel, remedyList, remedyOrigin, scenarioLabel } from './remedyView'
+import { decideRemedyParam, isCompletableRemedy, pendingReasonText, remedyLabel, remedyList, remedyOrigin, scenarioLabel } from './remedyView'
 import styles from './RemedyTab.module.css'
 
 export interface RemedyTabProps {
   detail: ClaimDetail
   /** Only reviewers decide a remedy; agents and auditors see the card read-only. */
   isReviewer: boolean
-  /** Claims agents and reviewers record repair updates; auditors see the repair read-only. */
+  /** Claims agents and reviewers record repair updates and completions; auditors see them read-only. */
   canRecordRepair?: boolean
 }
 
@@ -141,7 +142,8 @@ function RemedyCard({ remedy, canDecide, onDecide }: { remedy: RemedyView; canDe
  * `/staff/claims/:claimId/remedy` (002 ui-screens.md §2): the remedy card with its origin line, policy
  * basis, history and, while a reviewer must choose, the `warn` banner with **Decide remedy** for
  * reviewers. The remedy is never an AI output (FR-014): no violet, no AI tag. When the remedy is Repair,
- * the repair card follows and the right column holds the repair events.
+ * the repair card follows and the right column holds the repair events; for Replacement and Refund the
+ * completion card follows.
  */
 export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: RemedyTabProps) {
   const queryClient = useQueryClient()
@@ -152,6 +154,7 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
   const dialogOpen = canDecide && search.has(decideRemedyParam)
 
   const repair = remedy?.remedy === 'Repair' ? detail.repair : undefined
+  const completable = remedy && remedy.state !== 'AwaitingDecision' && isCompletableRemedy(remedy.remedy) ? { ...remedy, remedy: remedy.remedy } : undefined
   const reload = () => queryClient.refetchQueries({ queryKey: claimQueryKey(detail.claimId) })
 
   if (!remedy) return <EmptyState message="This claim has no remedy yet. The remedy is set when the claim is approved." />
@@ -180,6 +183,7 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
         {decided && <Alert tone="ok" title="Remedy decided" />}
         <RemedyCard remedy={remedy} canDecide={canDecide} onDecide={openDialog} />
         {repair && <RepairCard claimId={detail.claimId} repair={repair} canAct={canRecordRepair} onReload={reload} />}
+        {completable && <CompletionCard claimId={detail.claimId} remedy={completable} canAct={canRecordRepair} onReload={reload} />}
       </div>
       <div className={styles.column}>{repair && <RepairEventsTimeline events={repair.events} />}</div>
       {dialogOpen && (
