@@ -5,6 +5,7 @@ using Warranty.Application.Actions;
 using Warranty.Application.Claims;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Review;
 using Warranty.Guardrails.Rules;
 
@@ -13,7 +14,8 @@ namespace Warranty.Application.Review;
 /// <summary>
 /// A reviewer decision request (contracts/rest-api.openapi.yaml, <c>ReviewDecisionRequest</c>) with the
 /// <c>If-Match</c> value it was sent with. The reviewer is the principal of <see cref="ITenantContext"/>,
-/// never a request field.
+/// never a request field. <c>Remedy</c> and <c>ProtectionPlanConfirmed</c> are the 002 additions (T228): an approval
+/// may omit the remedy only when the remedy preview gives exactly one remedy; both must be absent otherwise.
 /// </summary>
 public sealed record RecordReviewDecisionCommand(
     Guid ClaimId,
@@ -21,7 +23,9 @@ public sealed record RecordReviewDecisionCommand(
     ReviewDecisionKind Decision,
     string? Justification,
     string? ClaimantExplanation,
-    IReadOnlyList<RequestedItem>? RequestedItems);
+    IReadOnlyList<RequestedItem>? RequestedItems,
+    RemedyType? Remedy = null,
+    bool? ProtectionPlanConfirmed = null);
 
 /// <summary>Outcome of <see cref="RecordReviewDecision.ExecuteAsync"/>.</summary>
 public abstract record RecordReviewDecisionResult

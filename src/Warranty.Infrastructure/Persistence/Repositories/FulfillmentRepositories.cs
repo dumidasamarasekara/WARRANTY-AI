@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Fulfillment;
+using Warranty.Infrastructure.Persistence.Configurations;
 
 namespace Warranty.Infrastructure.Persistence.Repositories;
 
@@ -12,6 +13,12 @@ internal sealed class RemedyRepository(WarrantyDbContext db) : IRemedyRepository
 {
     public Task<ClaimRemedy?> GetAsync(Guid claimId, CancellationToken ct)
         => db.ClaimRemedies.SingleOrDefaultAsync(r => r.ClaimId == claimId, ct);
+
+    public async Task<uint?> GetRowVersionAsync(Guid claimId, CancellationToken ct)
+        => await db.ClaimRemedies.AsNoTracking()
+            .Where(r => r.ClaimId == claimId)
+            .Select(r => (uint?)EF.Property<uint>(r, ClaimRemedyConfiguration.RowVersion))
+            .SingleOrDefaultAsync(ct);
 
     public void Add(ClaimRemedy remedy) => db.ClaimRemedies.Add(remedy);
 

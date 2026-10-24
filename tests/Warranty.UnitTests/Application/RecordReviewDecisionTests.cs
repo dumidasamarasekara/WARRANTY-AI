@@ -16,7 +16,10 @@ using Warranty.Domain.Adjudication;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
 using Warranty.Domain.Review;
+using Warranty.Guardrails.Remedies;
 
 namespace Warranty.UnitTests.Application;
 
@@ -24,7 +27,8 @@ namespace Warranty.UnitTests.Application;
 /// Reviewer decisions (T087): <see cref="RecordReviewDecision"/> with the real <see cref="ActionExecutor"/>
 /// behind it — separation of duties, the If-Match row-version check, the UnderReview precondition,
 /// <c>overridesAi</c> and the justification / claimant explanation / requested items rules (including
-/// the claimant text screen), the claim transitions and the <c>ReviewerDecided</c> trail entry.
+/// the claimant text screen), the claim transitions and the <c>ReviewerDecided</c> trail entry; from 002 (T221/T228)
+/// the remedy chosen with an approval and the protection plan confirmation.
 /// </summary>
 public sealed class RecordReviewDecisionTests
 {
@@ -528,6 +532,145 @@ public sealed class RecordReviewDecisionTests
         _reviews.DidNotReceiveWithAnyArgs().Add(default!);
         _entries.ShouldBeEmpty();
     }
+
+    // ── Remedy with the approval (002 FR-011, FR-013, T228) ────────────────────────────────────
+
+    private const string PendingRemedy = "Pending T228";
+
+    private static readonly Guid PolicyId = Guid.Parse("0199b000-0000-7000-8000-0000000004b1");
+    private static readonly Guid VersionId = Guid.Parse("0199b000-0000-7000-8000-0000000004b2");
+
+    private static readonly RemedyRules SingleRepairRules = new(new RemedyChoice(RemedyType.Repair, null), null, null, null);
+
+    private static readonly RemedyRules ChoiceRules =
+        new(new RemedyChoice(null, [RemedyType.Refund, RemedyType.Replacement]), null, null, null);
+
+    private readonly IPolicyRepository _policies = Substitute.For<IPolicyRepository>();
+
+    [Fact(Skip = PendingRemedy)]
+    public async Task Approving_without_a_remedy_is_accepted_when_the_preview_gives_one_remedy()
+    {
+        UseRemedyRules(SingleRepairRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.Approve));
+
+        var result = await ExecuteWithRemedy(claim, ReviewDecisionKind.Approve, remedy: null, claimantExplanation: ApproveText);
+
+        result.ShouldBeOfType<RecordReviewDecisionResult.Recorded>().ClaimStatus.ShouldBe(ClaimStatus.Approved);
+    }
+
+    [Fact(Skip = PendingRemedy)]
+    public async Task Approving_without_a_remedy_is_refused_naming_the_allowed_remedies_when_the_preview_gives_a_choice()
+    {
+        UseRemedyRules(ChoiceRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.Approve));
+
+        var result = await ExecuteWithRemedy(claim, ReviewDecisionKind.Approve, remedy: null, claimantExplanation: ApproveText);
+
+        var message = ShouldBeInvalid(result, "remedy");
+        message.ShouldContain("Refund");
+        message.ShouldContain("Replacement");
+        ShouldBeUnchanged(claim);
+    }
+
+    [Theory(Skip = PendingRemedy)]
+    [InlineData("single", RemedyType.Refund, "Repair")]
+    [InlineData("choice", RemedyType.Repair, "Refund")]
+    public async Task Approving_with_a_remedy_outside_the_preview_is_refused_naming_the_allowed_remedies(
+        string rules, RemedyType remedy, string named)
+    {
+        UseRemedyRules(rules == "single" ? SingleRepairRules : ChoiceRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.Approve));
+
+        var result = await ExecuteWithRemedy(claim, ReviewDecisionKind.Approve, remedy, claimantExplanation: ApproveText);
+
+        ShouldBeInvalid(result, "remedy").ShouldContain(named);
+        ShouldBeUnchanged(claim);
+    }
+
+    [Theory(Skip = PendingRemedy)]
+    [InlineData("single", RemedyType.Repair)]
+    [InlineData("choice", RemedyType.Refund)]
+    [InlineData("choice", RemedyType.Replacement)]
+    public async Task Approving_with_one_of_the_allowed_remedies_is_recorded(string rules, RemedyType remedy)
+    {
+        UseRemedyRules(rules == "single" ? SingleRepairRules : ChoiceRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.Approve));
+
+        var result = await ExecuteWithRemedy(claim, ReviewDecisionKind.Approve, remedy, claimantExplanation: ApproveText);
+
+        result.ShouldBeOfType<RecordReviewDecisionResult.Recorded>();
+        claim.Status.ShouldBe(ClaimStatus.Approved);
+        claim.FinalDecidedBy.ShouldBe(DecidedBy.Reviewer);
+    }
+
+    [Theory(Skip = PendingRemedy)]
+    [InlineData(ReviewDecisionKind.Reject, "remedy")]
+    [InlineData(ReviewDecisionKind.Reject, "protectionPlanConfirmed")]
+    [InlineData(ReviewDecisionKind.RequestInformation, "remedy")]
+    [InlineData(ReviewDecisionKind.RequestInformation, "protectionPlanConfirmed")]
+    public async Task Reject_and_request_information_refuse_the_remedy_fields(ReviewDecisionKind kind, string field)
+    {
+        UseRemedyRules(SingleRepairRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.HumanReview));
+        var reject = kind == ReviewDecisionKind.Reject;
+
+        var result = await ExecuteWithRemedy(
+            claim, kind,
+            remedy: field == "remedy" ? RemedyType.Repair : null,
+            protectionPlanConfirmed: field == "protectionPlanConfirmed" ? true : null,
+            justification: Justification,
+            claimantExplanation: reject ? RejectText : null,
+            requestedItems: reject ? null : [new RequestedItem("INVOICE", "Please send the invoice.")]);
+
+        ShouldBeInvalid(result, field);
+        ShouldBeUnchanged(claim);
+    }
+
+    [Fact(Skip = PendingRemedy)]
+    public async Task Self_review_is_refused_before_the_remedy_is_looked_at()
+    {
+        UseRemedyRules(ChoiceRules);
+        var claim = ArrangeUnderReview(Valid(AiDecision.Approve), submittedBy: ReviewerSub);
+
+        var result = await ExecuteWithRemedy(claim, ReviewDecisionKind.Approve, RemedyType.Repair, claimantExplanation: ApproveText);
+
+        result.ShouldBeOfType<RecordReviewDecisionResult.SelfReviewRefused>();
+        await _securityEvents.Received(1).RecordAsync(
+            SecurityEventKind.SelfReviewRefused, ReviewerName, claim.Id.ToString(), Arg.Any<object?>(), Arg.Any<CancellationToken>());
+        ShouldBeUnchanged(claim);
+    }
+
+    /// <summary>The claim's applicable policy version (NA, open-ended) carries <paramref name="rules"/>.</summary>
+    private void UseRemedyRules(RemedyRules rules)
+    {
+        var terms = new CoverageTerms(
+            new Dictionary<Region, int> { [Region.NA] = 12, [Region.EU] = 24 }, new Dictionary<string, int>(),
+            AccidentalDamageTerms.NotCovered, [ExclusionCode.AccidentalDamage, ExclusionCode.LiquidDamage]);
+        var version = PolicyVersion.Create(
+            VersionId, Tenant, PolicyId, 2, new DateOnly(2025, 1, 1), null, [Region.NA, Region.EU], [], terms,
+            "tenant-aurora/policies/AUR-WP-v2.md", "checksum", rules);
+        _policies.GetVersionsAsync(Arg.Any<CancellationToken>()).Returns([version]);
+        _policies.GetVersionAsync(VersionId, Arg.Any<CancellationToken>()).Returns(version);
+    }
+
+    /// <summary>
+    /// Runs the use case with the 002 request fields. Pending T228, which gives <see cref="RecordReviewDecision"/> the
+    /// policy repository and the <see cref="RemedyPolicyEvaluator"/> to compute the remedy preview, and T225, which
+    /// gives the executor its remedy ports (see <c>ActionExecutorRemedyTests.Executor</c>). The command is
+    /// <c>new RecordReviewDecisionCommand(claim.Id, ValidIfMatch, decision, justification, claimantExplanation,
+    /// requestedItems, remedy, protectionPlanConfirmed)</c>.
+    /// </summary>
+    private Task<RecordReviewDecisionResult> ExecuteWithRemedy(
+        Claim claim,
+        ReviewDecisionKind decision,
+        RemedyType? remedy,
+        bool? protectionPlanConfirmed = null,
+        string? justification = null,
+        string? claimantExplanation = null,
+        IReadOnlyList<RequestedItem>? requestedItems = null)
+        => throw new NotImplementedException(
+            $"{PendingRemedy}: {_policies} and a {nameof(RemedyPolicyEvaluator)} are not constructor arguments yet "
+            + $"({new RecordReviewDecisionCommand(claim.Id, ValidIfMatch, decision, justification, claimantExplanation, requestedItems, remedy, protectionPlanConfirmed)}).");
 
     // ── ETag and registration ──────────────────────────────────────────────────────────────────
 
