@@ -45,6 +45,8 @@ export type RepairEvent = RepairView['events'][number]
 
 export type RepairEventType = Schemas['RepairEventType']
 
+export type RepairStatus = Schemas['RepairStatus']
+
 export type RepairEventRequest = Schemas['RepairEventRequest']
 
 export type RepairCentre = Schemas['RepairCentre']

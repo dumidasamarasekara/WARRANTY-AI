@@ -1,23 +1,29 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { useMe } from '../../app/staffQueries'
 import { ApiProblem } from '../../shared/api/client'
-import { formatMoney } from '../../shared/presentation'
+import { formatDateTime, formatMoney, repairStatusPresentation } from '../../shared/presentation'
 import { Button, Dialog, Select, TextArea, TextInput } from '../../shared/ui'
 import {
   useRecordRepairEvent,
   useRepairCentres,
   type RepairEventRequest,
+  type RepairStatus,
   type RepairView,
   type ReportSource,
 } from './remedyQueries'
 import {
+  correctableFieldLabels,
+  correctableFields,
   failedAttemptsText,
   isAboveEconomicLimit,
   productLocationLabels,
   repairActionLabels,
+  repairEventName,
   repairReasonLimits,
+  repairStatuses,
   reportSourceLabel,
   reportSources,
+  type CorrectableField,
   type RepairDialogEvent,
 } from './remedyView'
 import styles from './RemedyTab.module.css'
@@ -52,6 +58,8 @@ const fields = [
   'centreReference',
   'estimateAmount',
   'productLocation',
+  'correctsSeq',
+  'toStatus',
 ] as const
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -72,8 +80,13 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
   const [reportedAt, setReportedAt] = useState(() => localDateTime(now))
   const [source, setSource] = useState<ReportSource | ''>('')
   const [note, setNote] = useState('')
-  const [handedOverOn, setHandedOverOn] = useState(() => localDate(now))
-  const [centreReference, setCentreReference] = useState('')
+  const correcting = type === 'Correction'
+  // A correction starts from the current values; a hand-over from today.
+  const [handedOverOn, setHandedOverOn] = useState(() => (correcting && repair.handedOverOn) || localDate(now))
+  const [centreReference, setCentreReference] = useState(() => (correcting && repair.centreReference) || '')
+  const [correctsSeq, setCorrectsSeq] = useState('')
+  const [correctField, setCorrectField] = useState<CorrectableField | ''>('')
+  const [correctedStatus, setCorrectedStatus] = useState<RepairStatus | ''>('')
   const [repairCentreId, setRepairCentreId] = useState('')
   const [reason, setReason] = useState('')
   const [estimateAmount, setEstimateAmount] = useState('')
@@ -82,7 +95,8 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
   const currency = useMe().data?.tenantCurrency
   const [reloading, setReloading] = useState(false)
   const record = useRecordRepairEvent()
-  const centres = useRepairCentres(claimId, type === 'CentreChanged')
+  const choosesCentre = type === 'CentreChanged' || type === 'Transferred'
+  const centres = useRepairCentres(claimId, choosesCentre)
 
   const title = repairActionLabels[type]
   const reported = reportedAt ? new Date(reportedAt) : undefined
@@ -97,10 +111,25 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
 
   let eventValid = true
   if (type === 'HandedOver') eventValid = handedOverOn !== '' && handedOverOn <= localDate(now)
-  if (type === 'CentreChanged') eventValid = repairCentreId !== '' && reasonValid
+  if (choosesCentre) eventValid = repairCentreId !== '' && reasonValid
   if (type === 'RepairFailed') eventValid = reasonValid
   if (type === 'EstimateReported') eventValid = estimateValid
   if (type === 'NewAttemptStarted') eventValid = productLocation !== ''
+
+  const correctable = repair.events.filter((event) => correctableFields(event).length > 0).sort((a, b) => a.seq - b.seq)
+  const corrected = correctable.find((event) => String(event.seq) === correctsSeq)
+  const fieldOptions = corrected ? correctableFields(corrected) : []
+  if (correcting) {
+    const fieldValid =
+      correctField === 'handedOverOn'
+        ? handedOverOn !== '' && handedOverOn <= localDate(now)
+        : correctField === 'centreReference'
+          ? centreReference.trim() !== ''
+          : correctField === 'estimateAmount'
+            ? estimateValid
+            : correctField === 'toStatus' && correctedStatus !== ''
+    eventValid = corrected !== undefined && fieldOptions.includes(correctField as CorrectableField) && fieldValid && reasonValid
+  }
   const valid = reportedValid && source !== '' && trimmedNote.length <= repairReasonLimits.max && eventValid
 
   const errors = Object.fromEntries(fields.map((field) => [field, fieldError(problem, field)])) as Record<
@@ -120,13 +149,21 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
       request.handedOverOn = handedOverOn
       if (centreReference.trim()) request.centreReference = centreReference.trim()
     }
-    if (type === 'CentreChanged') {
+    if (choosesCentre) {
       request.repairCentreId = repairCentreId
       request.reason = trimmedReason
     }
     if (type === 'RepairFailed') request.reason = trimmedReason
     if (type === 'EstimateReported') request.estimateAmount = estimate
     if (type === 'NewAttemptStarted' && productLocation) request.productLocation = productLocation
+    if (correcting && corrected) {
+      request.correctsSeq = corrected.seq
+      request.reason = trimmedReason
+      if (correctField === 'handedOverOn') request.handedOverOn = handedOverOn
+      if (correctField === 'centreReference') request.centreReference = centreReference.trim()
+      if (correctField === 'estimateAmount') request.estimateAmount = estimate
+      if (correctField === 'toStatus' && correctedStatus) request.toStatus = correctedStatus
+    }
     setProblem(null)
     record.mutate(
       { claimId, etag: repair.etag, request },
@@ -192,6 +229,58 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
     />
   )
 
+  const handedOverOnField = (
+    <TextInput
+      type="date"
+      label="Handed over on"
+      required
+      max={localDate(now)}
+      value={handedOverOn}
+      error={errors.handedOverOn}
+      onChange={(event) => {
+        setHandedOverOn(event.target.value)
+        setNow(new Date())
+        clearFieldError('handedOverOn')
+      }}
+    />
+  )
+
+  const centreReferenceField = (label: string, required: boolean) => (
+    <TextInput
+      label={label}
+      hint="The repair centre’s own reference for this product."
+      required={required}
+      value={centreReference}
+      error={errors.centreReference}
+      onChange={(event) => {
+        setCentreReference(event.target.value)
+        clearFieldError('centreReference')
+      }}
+    />
+  )
+
+  const estimateField = (
+    <TextInput
+      type="number"
+      label={currency ? `Estimate (${currency})` : 'Estimate'}
+      hint={
+        repair.economicLimitAmount === undefined
+          ? 'The repair centre’s cost estimate. The policy has no economic limit.'
+          : `The repair centre’s cost estimate. Economic limit: ${money(repair.economicLimitAmount)}.`
+      }
+      required
+      min={0.01}
+      step={0.01}
+      inputMode="decimal"
+      value={estimateAmount}
+      error={errors.estimateAmount ?? (estimateAmount.trim() !== '' && !estimateValid ? 'Enter an amount above zero.' : undefined)}
+      onChange={(event) => {
+        setEstimateAmount(event.target.value)
+        clearFieldError('estimateAmount')
+      }}
+    />
+  )
+
   return (
     <Dialog
       open
@@ -246,33 +335,78 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
 
         {type === 'HandedOver' && (
           <>
-            <TextInput
-              type="date"
-              label="Handed over on"
-              required
-              max={localDate(now)}
-              value={handedOverOn}
-              error={errors.handedOverOn}
-              onChange={(event) => {
-                setHandedOverOn(event.target.value)
-                setNow(new Date())
-                clearFieldError('handedOverOn')
-              }}
-            />
-            <TextInput
-              label="Centre reference (optional)"
-              hint="The repair centre’s own reference for this product."
-              value={centreReference}
-              error={errors.centreReference}
-              onChange={(event) => {
-                setCentreReference(event.target.value)
-                clearFieldError('centreReference')
-              }}
-            />
+            {handedOverOnField}
+            {centreReferenceField('Centre reference (optional)', false)}
           </>
         )}
 
-        {type === 'CentreChanged' && (
+        {correcting && (
+          <>
+            <Select
+              label="Entry to correct"
+              required
+              value={correctsSeq}
+              error={errors.correctsSeq}
+              onChange={(event) => {
+                setCorrectsSeq(event.target.value)
+                const next = correctable.find((entry) => String(entry.seq) === event.target.value)
+                const nextFields = next ? correctableFields(next) : []
+                setCorrectField(nextFields.length === 1 ? nextFields[0]! : '')
+                clearFieldError('correctsSeq')
+              }}
+            >
+              <option value="">{correctable.length === 0 ? 'No entry can be corrected' : 'Choose an entry'}</option>
+              {correctable.map((entry) => (
+                <option key={entry.seq} value={entry.seq}>
+                  {repairEventName(entry)} · reported {formatDateTime(entry.reportedAt)}
+                </option>
+              ))}
+            </Select>
+            {fieldOptions.length > 1 && (
+              <Select
+                label="What to correct"
+                required
+                value={correctField}
+                onChange={(event) => setCorrectField(event.target.value as CorrectableField | '')}
+              >
+                <option value="">Choose a field</option>
+                {fieldOptions.map((field) => (
+                  <option key={field} value={field}>
+                    {correctableFieldLabels[field]}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {correctField === 'handedOverOn' && handedOverOnField}
+            {correctField === 'centreReference' && centreReferenceField('Centre reference', true)}
+            {correctField === 'estimateAmount' && estimateField}
+            {correctField === 'toStatus' && corrected && (
+              <Select
+                label="Correct status"
+                required
+                value={correctedStatus}
+                error={errors.toStatus}
+                onChange={(event) => {
+                  setCorrectedStatus(event.target.value as RepairStatus | '')
+                  clearFieldError('toStatus')
+                }}
+              >
+                <option value="">Choose a status</option>
+                {repairStatuses
+                  .filter((status) => status !== corrected.toStatus)
+                  .map((status) => (
+                    <option key={status} value={status}>
+                      {repairStatusPresentation(status).label}
+                    </option>
+                  ))}
+              </Select>
+            )}
+            {reasonField}
+            <p className={styles.note}>The original entry stays in the history, shown struck through.</p>
+          </>
+        )}
+
+        {choosesCentre && (
           <>
             <Select
               label="New repair centre"
@@ -295,33 +429,15 @@ export function RepairEventDialog({ claimId, repair, type, onClose, onRecorded, 
               ))}
             </Select>
             {reasonField}
+            {type === 'Transferred' && (
+              <p className={styles.note}>
+                The repair goes back to Awaiting hand-over at the new centre. Failed attempts stay {failedAttemptsText(repair)}.
+              </p>
+            )}
           </>
         )}
 
-        {type === 'EstimateReported' && (
-          <TextInput
-            type="number"
-            label={currency ? `Estimate (${currency})` : 'Estimate'}
-            hint={
-              repair.economicLimitAmount === undefined
-                ? 'The repair centre’s cost estimate. The policy has no economic limit.'
-                : `The repair centre’s cost estimate. Economic limit: ${money(repair.economicLimitAmount)}.`
-            }
-            required
-            min={0.01}
-            step={0.01}
-            inputMode="decimal"
-            value={estimateAmount}
-            error={
-              errors.estimateAmount ??
-              (estimateAmount.trim() !== '' && !estimateValid ? 'Enter an amount above zero.' : undefined)
-            }
-            onChange={(event) => {
-              setEstimateAmount(event.target.value)
-              clearFieldError('estimateAmount')
-            }}
-          />
-        )}
+        {type === 'EstimateReported' && estimateField}
         {type === 'EstimateReported' && aboveLimit && (
           <p className={styles.note} role="status">
             Above the economic limit: the repair becomes Repair not possible and a reviewer decides the remedy.

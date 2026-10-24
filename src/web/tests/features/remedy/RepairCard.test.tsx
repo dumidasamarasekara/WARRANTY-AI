@@ -9,6 +9,8 @@ import { ClaimDetailPage } from '../../../src/features/claims/ClaimDetailPage'
 import type { ClaimDetail } from '../../../src/features/claims/claimDetail'
 import type { RemedyView, RepairCentre, RepairView } from '../../../src/features/remedy/remedyQueries'
 import {
+  correctableFields,
+  correctedBy,
   estimateText,
   failedAttemptsText,
   isAboveEconomicLimit,
@@ -204,6 +206,8 @@ describe('repair actions', () => {
       { type: 'EstimateReported', primary: false },
       { type: 'MarkedReady', primary: true },
       { type: 'RepairFailed', primary: false },
+      { type: 'Transferred', primary: false },
+      { type: 'Correction', primary: false },
     ])
     expect(repairActions({ allowedEvents: ['Collected'] })).toEqual([{ type: 'Collected', primary: true }])
     expect(repairActions({ allowedEvents: ['NewAttemptStarted'] })).toEqual([{ type: 'NewAttemptStarted', primary: true }])
@@ -250,7 +254,7 @@ describe('RepairCard', () => {
     const card = await repairCard()
     expect(card.getByText('At repair centre')).toBeInTheDocument()
     expect(card.getByText('NRC-4411')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Record estimate', 'Mark ready', 'Repair failed'])
+    expect(actionNames()).toEqual(['Record estimate', 'Mark ready', 'Repair failed', 'Transfer', 'Correct an entry'])
     expect(screen.getByRole('button', { name: 'Mark ready' }).className).toMatch(/primary/)
     expect(screen.getByRole('button', { name: 'Repair failed' }).className).not.toMatch(/primary/)
     expect(screen.queryByRole('button', { name: 'Record hand-over' })).not.toBeInTheDocument()
@@ -317,7 +321,7 @@ describe('Repair attempts and estimates (US3)', () => {
 
     const card = await repairCard()
     expect(card.getByText('Repair not possible')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Start new attempt'])
+    expect(actionNames()).toEqual(['Start new attempt', 'Correct an entry'])
     expect(screen.getByRole('button', { name: 'Start new attempt' }).className).toMatch(/primary/)
   })
 
@@ -548,5 +552,147 @@ describe('Repair event dialogs', () => {
 
     await user.click(dialog.getByRole('button', { name: 'Record hand-over' }))
     await vi.waitFor(() => expect(events.map((event) => event.ifMatch)).toEqual(['"p-1"', '"p-9"']))
+  })
+})
+
+const correctedHandOver: RepairView = {
+  ...atCentre,
+  handedOverOn: '2026-10-14',
+  events: [
+    ...atCentre.events,
+    {
+      seq: 2,
+      type: 'Correction',
+      reportedAt: '2026-10-16T08:00:00Z',
+      recordedAt: '2026-10-16T08:05:00Z',
+      source: 'Email',
+      actor: '[REVIEWER]',
+      correctsSeq: 1,
+    },
+  ],
+  etag: '"p-5"',
+}
+
+describe('Transfers and corrections (US5)', () => {
+  it('knows which fields an entry can correct and which entries were corrected', () => {
+    expect(correctableFields({ type: 'HandedOver', toStatus: 'AtRepairCentre' })).toEqual(['handedOverOn', 'centreReference', 'toStatus'])
+    expect(correctableFields({ type: 'EstimateReported' })).toEqual(['estimateAmount'])
+    expect(correctableFields({ type: 'MarkedReady', toStatus: 'ReadyForCollection' })).toEqual(['toStatus'])
+    expect(correctableFields({ type: 'Correction', toStatus: 'AtRepairCentre' })).toEqual([])
+    expect(correctableFields({ type: 'CentreChanged' })).toEqual([])
+    expect(correctedBy([{ seq: 1 }, { seq: 4, correctsSeq: 1 }, { seq: 3, correctsSeq: 1 }])).toEqual(new Map([[1, 4]]))
+  })
+
+  it('transfers the repair to another centre with a reason', async () => {
+    detail = approvedClaim({ ...atCentre, failedAttempts: 1 })
+    onEvent(() => HttpResponse.json({ ...awaitingHandover, activeCentre: southCentre, failedAttempts: 1 } as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Transfer')
+    expect(dialog.getByText(/Failed attempts stay 1 of 2/)).toBeInTheDocument()
+    const centreSelect = dialog.getByRole('combobox', { name: /New repair centre/ })
+    await vi.waitFor(() => expect(within(centreSelect).getByRole('option', { name: /South Repair Centre/ })).toBeInTheDocument())
+    expect(within(centreSelect).queryByRole('option', { name: /North Repair Centre/ })).not.toBeInTheDocument()
+
+    await user.selectOptions(centreSelect, southCentre.id)
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Transfer' })
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The north centre has no spare parts.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"p-2"')
+    expect(events[0]!.body).toMatchObject({
+      type: 'Transferred',
+      source: 'Phone',
+      repairCentreId: southCentre.id,
+      reason: 'The north centre has no spare parts.',
+    })
+  })
+
+  it('corrects the hand-over date of an entry with a reason', async () => {
+    detail = approvedClaim(atCentre)
+    onEvent(() => HttpResponse.json(correctedHandOver as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    const submit = dialog.getByRole('button', { name: 'Correct an entry' })
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Entry to correct/ }), '1')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /What to correct/ }), 'handedOverOn')
+    const date = dialog.getByLabelText(/Handed over on/)
+    expect(date).toHaveValue('2026-10-15')
+    await user.clear(date)
+    await user.type(date, '2026-10-14')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The centre gave the wrong drop-off date.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"p-2"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['correctsSeq', 'handedOverOn', 'reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({
+      type: 'Correction',
+      source: 'Email',
+      correctsSeq: 1,
+      handedOverOn: '2026-10-14',
+      reason: 'The centre gave the wrong drop-off date.',
+    })
+  })
+
+  it('corrects the status of a mark-ready entry', async () => {
+    const ready: RepairView = {
+      ...atCentre,
+      status: 'ReadyForCollection',
+      allowedEvents: ['Collected', 'Correction'],
+      events: [
+        ...atCentre.events,
+        {
+          seq: 2,
+          type: 'MarkedReady',
+          fromStatus: 'AtRepairCentre',
+          toStatus: 'ReadyForCollection',
+          reportedAt: '2026-10-16T09:10:00Z',
+          recordedAt: '2026-10-16T09:14:00Z',
+          source: 'Phone',
+          actor: '[AGENT]',
+        },
+      ],
+      etag: '"p-6"',
+    }
+    detail = approvedClaim(ready)
+    onEvent(() => HttpResponse.json(atCentre as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Entry to correct/ }), '2')
+    expect(dialog.queryByRole('combobox', { name: /What to correct/ })).not.toBeInTheDocument()
+    const status = dialog.getByRole('combobox', { name: /Correct status/ })
+    expect(within(status).queryByRole('option', { name: 'Ready for collection' })).not.toBeInTheDocument()
+    await user.selectOptions(status, 'AtRepairCentre')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'Marked ready on the wrong claim.')
+    await user.click(dialog.getByRole('button', { name: 'Correct an entry' }))
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.body).toMatchObject({ type: 'Correction', correctsSeq: 2, toStatus: 'AtRepairCentre' })
+    expect(events[0]!.body).not.toHaveProperty('handedOverOn')
+  })
+
+  it('shows the corrected entry struck through, linked to its correction', async () => {
+    detail = approvedClaim(correctedHandOver)
+    renderTab(['auditor'])
+
+    const timeline = within(await screen.findByRole('list', { name: 'Repair events' }))
+    const original = timeline.getByText('Handed over')
+    expect(original.className).toMatch(/corrected/)
+    expect(timeline.getByText('Customer dropped it off in the morning.').closest('div')!.className).toMatch(/corrected/)
+    expect(timeline.getByRole('link', { name: 'entry 2' })).toHaveAttribute('href', '#repair-event-2')
+
+    const correction = timeline.getByText('Correction')
+    expect(correction.className).not.toMatch(/corrected/)
+    expect(timeline.getByRole('link', { name: 'Entry 1 · Handed over' })).toHaveAttribute('href', '#repair-event-1')
+    expect(document.getElementById('repair-event-1')).toHaveTextContent('Handed over')
   })
 })
