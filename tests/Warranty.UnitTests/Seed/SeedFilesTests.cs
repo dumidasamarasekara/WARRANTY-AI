@@ -1,9 +1,11 @@
+using System.Text.Json;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
 using Warranty.Domain.Policies;
 using Warranty.MigrationService.Seeding;
+using Warranty.UnitTests.Domain;
 
 namespace Warranty.UnitTests.Seed;
 
@@ -86,6 +88,11 @@ public sealed class SeedFilesTests
     [InlineData("  repairFailed: { afterFailedAttempts: 0, remedy: Refund }", "attempts 0")]
     [InlineData("  protectionPlan: { liftsAccidentalDamageExclusion: true }", "plan lifting the exclusion without a remedy")]
     [InlineData("  coveredDefect: Repair", "a row that is not an object")]
+    [InlineData("  replacement: { minimumCoverMonths: -1 }", "minimum replacement cover -1")]
+    [InlineData("  replacement: { minimumCoverMonths: 37 }", "minimum replacement cover 37")]
+    [InlineData("  replacement: { productRule: AnyModel }", "unknown product rule")]
+    [InlineData("  replacement: { returnRule: Never }", "unknown return rule")]
+    [InlineData("  replacementNotAvailable: { remedy: Refund, allowed: [Repair, Refund] }", "not-available row with remedy and allowed together")]
     public void An_invalid_remedies_block_is_rejected_before_anything_is_written(string row, string reason)
     {
         var root = CopyOfSeed();
@@ -181,8 +188,7 @@ public sealed class SeedFilesTests
 
     /// <summary>
     /// Feature 003 (T302): the embedded schema accepts the optional <c>replacement</c> and
-    /// <c>replacementNotAvailable</c> members (research R1). The ingestion parser reads them only from T311/T312 on,
-    /// so these cases check the schema step alone.
+    /// <c>replacementNotAvailable</c> members (research R1); these cases check the schema step alone.
     /// </summary>
     [Theory]
     [InlineData("  replacement: { productRule: SameCategoryAtLeastClaimValue, returnRule: AtCollection, minimumCoverMonths: 0 }\n  replacementNotAvailable: { remedy: Refund }")]
@@ -214,6 +220,91 @@ public sealed class SeedFilesTests
 
     private static string PolicyWith(string block)
         => $"---\ndocumentType: WarrantyPolicy\n{block}\n---\n# Policy\n";
+
+    /// <summary>Feature 003 (T313): each seeded policy version carries its tenant's replacement rules of tasks.md "Fixed identifiers".</summary>
+    [Fact]
+    public void The_repository_seed_loads_the_replacement_rules_of_each_policy_version()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+
+        foreach (var (tenant, expected) in new[] { (seed.Tenants[0], RemedyRulesContract.AuroraWithReplacement), (seed.Tenants[1], RemedyRulesContract.BorealisWithReplacement) })
+        {
+            tenant.PolicyRemedies.ShouldNotBeEmpty(tenant.Tenant.Slug);
+            foreach (var version in tenant.PolicyRemedies)
+            {
+                RemedyRulesContract.ShouldBeSameRules(version.RemedyRules.ShouldNotBeNull(version.BlobPath), expected);
+            }
+        }
+    }
+
+    [Fact]
+    public void An_empty_replacement_member_loads_as_the_defaults_and_a_missing_one_as_none()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            var v1 = Path.Combine(root, "tenants", "aurora", "policies", "AUR-WP-v1.md");
+            File.WriteAllText(v1, WithRemedies(File.ReadAllText(v1), "remedies:\n  coveredDefect: { remedy: Repair }\n  replacement: {}"));
+            var v2 = Path.Combine(root, "tenants", "aurora", "policies", "AUR-WP-v2.md");
+            File.WriteAllText(v2, WithRemedies(File.ReadAllText(v2), "remedies:\n  coveredDefect: { remedy: Repair }"));
+
+            var remedies = SeedFiles.Load(root).Tenants[0].PolicyRemedies;
+
+            remedies[0].RemedyRules!.Replacement.ShouldBe(ReplacementRules.Default);
+            remedies[0].RemedyRules!.ReplacementNotAvailable.ShouldBeNull();
+            (remedies[1].RemedyRules!.Replacement, remedies[1].RemedyRules!.ReplacementNotAvailable).ShouldBe((null, null));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>Feature 003 (research R14): Aurora sells AUR-TAB11, the equivalent tablet a reviewer can approve.</summary>
+    [Fact]
+    public void The_repository_seed_loads_AUR_TAB11_with_its_catalog_serials()
+    {
+        var aurora = SeedFiles.Load(SeedRoot()).Tenants[0];
+
+        aurora.Products.ShouldContain(new ProductSeed(Guid.Parse("11111111-0001-7000-8000-000000000004"), "AUR-TAB11", "Aurora Tab 11", "tablet", 520m));
+        aurora.Serials.Count(s => s.ModelCode == "AUR-TAB11").ShouldBeGreaterThanOrEqualTo(15);
+    }
+
+    /// <summary>
+    /// Feature 003 (T312): <c>issuesReplacements</c> is read from <c>service-centers.json</c> and defaults to false
+    /// (FR-007). Read through the loaded record's JSON form so the test compiles before the member exists.
+    /// </summary>
+    [Fact(Skip = "Pending T312")]
+    public void Service_centers_read_whether_they_issue_replacements_defaulting_to_no()
+    {
+        var root = CopyOfSeed();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "tenants", "borealis", "service-centers.json"), """
+                [
+                  { "id": "22222222-0003-7000-8000-000000000001", "region": "NA", "name": "Issuer", "capabilities": ["tablet"],
+                    "address": "1 Test Lane", "openingHours": "Mon–Fri 09:00–17:00", "issuesReplacements": true },
+                  { "id": "22222222-0003-7000-8000-000000000002", "region": "NA", "name": "Repairs only", "capabilities": ["tablet"],
+                    "address": "2 Test Lane", "openingHours": "Mon–Fri 09:00–17:00" }
+                ]
+                """);
+
+            var centers = SeedFiles.Load(root).Tenants[1].ServiceCenters
+                .Select(c => JsonSerializer.SerializeToElement(c, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+                .ToList();
+
+            centers.Select(c => c.GetProperty("issuesReplacements").GetBoolean()).ShouldBe([true, false]);
+            SeedFiles.Load(SeedRoot()).Tenants
+                .SelectMany(t => t.ServiceCenters)
+                .Where(c => c.IsActive)
+                .Select(c => JsonSerializer.SerializeToElement(c, new JsonSerializerOptions(JsonSerializerDefaults.Web)).GetProperty("issuesReplacements").GetBoolean())
+                .ShouldAllBe(issues => issues);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     [Fact]
     public void Service_centers_read_address_hours_contact_activity_and_priority_with_defaults()
