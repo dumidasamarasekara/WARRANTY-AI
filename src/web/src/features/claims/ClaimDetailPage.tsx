@@ -56,11 +56,14 @@ import {
   type Recommendation,
 } from './claimDetail'
 import { DecisionTracePage } from '../trace/DecisionTracePage'
+import { RemedyTab } from '../remedy/RemedyTab'
 import { EvidenceThumbnail, EvidenceViewer } from './EvidenceViewer'
 
-type TabKey = 'case' | 'decision' | 'evidence' | 'trace'
+export type ClaimTabKey = 'case' | 'decision' | 'evidence' | 'remedy' | 'trace'
 
-const tabKeys: readonly TabKey[] = ['case', 'decision', 'evidence', 'trace']
+type TabKey = ClaimTabKey
+
+const tabKeys: readonly TabKey[] = ['case', 'decision', 'evidence', 'remedy', 'trace']
 
 interface Context {
   detail: ClaimDetail
@@ -651,11 +654,14 @@ function EvidenceTab({ detail }: Context) {
   )
 }
 
-/** `/staff/claims/:claimId/(case|decision|evidence|trace)`: the claim workspace (ui-design.md §6.3, FR-033). */
-export function ClaimDetailPage() {
+/**
+ * `/staff/claims/:claimId/(case|decision|evidence|remedy|trace)`: the claim workspace (ui-design.md §6.3,
+ * FR-033; Remedy tab 002 ui-screens.md §2). A route may fix the tab through `tab`.
+ */
+export function ClaimDetailPage({ tab: routeTab }: { tab?: ClaimTabKey } = {}) {
   const params = useParams()
   const claimId = params.claimId ?? ''
-  const tabParam = (params['*'] ?? '').split('/')[0] as TabKey
+  const tabParam = routeTab ?? ((params['*'] ?? '').split('/')[0] as TabKey)
   const session = useStaffSession()
   const me = useMe()
   const claim = useClaimDetail(claimId)
@@ -670,13 +676,17 @@ export function ClaimDetailPage() {
   const canTrace = isReviewer || roles.includes('auditor')
   const detail = claim.data
   const basePath = `/staff/claims/${encodeURIComponent(detail.claimId)}`
-  const tab: TabKey = tabKeys.includes(tabParam) && (tabParam !== 'trace' || canTrace) ? tabParam : 'case'
+  // The Remedy tab is shown for Approved claims to every staff role.
+  const hasRemedyTab = detail.status === 'Approved' || detail.remedy !== undefined
+  const tab: TabKey =
+    tabKeys.includes(tabParam) && (tabParam !== 'trace' || canTrace) && (tabParam !== 'remedy' || hasRemedyTab) ? tabParam : 'case'
 
   const tabs: TabItem[] = [
     { key: 'case', label: 'Case file', to: `${basePath}/case` },
     { key: 'decision', label: 'AI decision', to: `${basePath}/decision` },
     { key: 'evidence', label: 'Evidence', to: `${basePath}/evidence` },
   ]
+  if (hasRemedyTab) tabs.push({ key: 'remedy', label: 'Remedy', to: `${basePath}/remedy` })
   if (canTrace) tabs.push({ key: 'trace', label: 'Decision trace', to: `${basePath}/trace` })
 
   const context: Context = {
@@ -695,6 +705,7 @@ export function ClaimDetailPage() {
       {tab === 'case' && <CaseFile {...context} />}
       {tab === 'decision' && <AiDecisionTab {...context} />}
       {tab === 'evidence' && <EvidenceTab {...context} />}
+      {tab === 'remedy' && <RemedyTab detail={detail} isReviewer={isReviewer} />}
       {tab === 'trace' && <DecisionTracePage claimId={detail.claimId} reference={detail.reference} />}
     </section>
   )
