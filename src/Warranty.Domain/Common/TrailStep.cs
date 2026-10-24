@@ -34,4 +34,12 @@ public enum TrailStep
     RepairStatusUpdated,
     RepairAttemptEnded,
     RemedyCompleted,
+
+    // Replacement fulfilment and the faulty-product return (003).
+    ReplacementLocationAssigned,
+    FaultyProductReturned,
+    ReplacementModelProposed,
+    ReplacementModelDecided,
+    ReplacementStatusUpdated,
+    ReplacementUnitRegistered,
 }

@@ -24,7 +24,7 @@ public sealed class WireNameTests
             [
                 "SOURCE_INCONSISTENCY", "PRODUCT_NOT_IN_CATALOG", "SERIAL_MISMATCH_PHOTO", "DUPLICATE_SERIAL_CLAIM",
                 "EVIDENCE_REUSED", "DAMAGE_INCONSISTENT_WITH_DESCRIPTION", "PURCHASE_DATE_ANOMALY",
-                "MANIPULATION_ATTEMPT", "OTHER",
+                "MANIPULATION_ATTEMPT", "OTHER", "PRODUCT_RETURNED_AND_REPLACED",
             ],
             ignoreOrder: true);
 
@@ -72,8 +72,16 @@ public sealed class WireNameTests
             ignoreOrder: true);
 
     [Fact]
-    public void TrailStep_has_the_22_data_model_steps_and_the_7_remedy_steps()
-        => WireName.All<TrailStep>().Count.ShouldBe(29);
+    public void TrailStep_has_the_22_data_model_steps_the_7_remedy_steps_and_the_6_replacement_steps()
+        => WireName.All<TrailStep>().Count.ShouldBe(35);
+
+    [Fact]
+    public void The_replacement_trail_steps_use_data_model_names()
+        => WireName.All<TrailStep>().TakeLast(6).ShouldBe(
+            [
+                "ReplacementLocationAssigned", "FaultyProductReturned", "ReplacementModelProposed", "ReplacementModelDecided",
+                "ReplacementStatusUpdated", "ReplacementUnitRegistered",
+            ]);
 
     [Fact]
     public void RemedyScenario_and_pending_reason_include_the_replacement_not_available_values()
