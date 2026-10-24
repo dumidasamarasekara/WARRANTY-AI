@@ -52,7 +52,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
                            where r.claim_id = c.id and f.kind = 'PhotoAnalysis'
                              and jsonb_exists(f.result -> 'damageTypes', 'CRACKED_SCREEN')) as shows_accidental_damage
             from claims.claims c
-            where c.tenant_id = '22222222-2222-7222-8222-222222222222' and c.serial_number = 'BS11-24-0015'
+            where c.tenant_id = '22222222-2222-7222-8222-222222222222' and c.serial_number = 'BS11-24-0015' and c.reference = 'HSTBR00001'
             """, connection);
         await using var reader = await command.ExecuteReaderAsync(Ct);
         var rows = new List<(string Status, string? Outcome, DateTimeOffset? FinalizedAt, bool Accidental)>();
@@ -62,8 +62,9 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
                 reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2), reader.GetBoolean(3)));
         }
 
-        // Only the seeded history claim before any R14 claim is submitted; R14's own claim may already exist.
-        var history = rows.Where(r => r.Accidental).ToList().ShouldHaveSingleItem();
+        // The seeded history claim (R14's own claim on the same serial may already exist and is not read here).
+        var history = rows.ShouldHaveSingleItem();
+        history.Accidental.ShouldBeTrue("its photo analysis shows accidental damage");
         (history.Status, history.Outcome).ShouldBe(("Approved", "Approved"));
         (DateTimeOffset.UtcNow - history.FinalizedAt.ShouldNotBeNull()).TotalDays.ShouldBeGreaterThan(90, "no duplicate-claim signal");
     }
