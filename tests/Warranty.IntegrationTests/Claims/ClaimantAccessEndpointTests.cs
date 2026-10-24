@@ -12,12 +12,17 @@ namespace Warranty.IntegrationTests.Claims;
 /// Claimant access and status on the claimant channel (T058, FR-037, FR-037a): reference + submitted
 /// contact → a claim-scoped token for the channel's tenant, the claimant view, and <c>GET
 /// /api/public/tenant</c>. The claims are freshly submitted, so the view is checked in whatever status
-/// adjudication has reached.
+/// adjudication has reached; the remedy section (002 T242) is checked on the seeded remedy scenario R1.
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
 public sealed class ClaimantAccessEndpointTests(WarrantyAppFixture fixture)
 {
     private static readonly string[] ViewProperties = ["reference", "status", "submittedAt", "productName", "outcomeExplanation", "requestedItems"];
+
+    /// <summary>Seeded remedy scenario R1 (T222): Aurora, remedy Repair, repair awaiting hand-over at Springfield.</summary>
+    private static readonly Guid SeededRepairClaim = Guid.Parse("11111111-0005-7000-8000-000000000001");
+
+    private const string SeededRepairReference = "RMDYR1A001";
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -107,6 +112,43 @@ public sealed class ClaimantAccessEndpointTests(WarrantyAppFixture fixture)
     }
 
     [Fact]
+    public async Task An_approved_repair_claim_shows_the_remedy_with_the_centres_public_details_and_no_staff_only_fields()
+    {
+        var token = fixture.IssueClaimantToken(TestStaffUsers.AuroraTenantId, SeededRepairClaim);
+        using var client = fixture.CreateClaimantClient(WarrantyAppFixture.AuroraHost, token);
+
+        using var response = await client.GetAsync($"/api/public/claims/{SeededRepairReference}", Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync(Ct);
+        var view = JsonSerializer.Deserialize<JsonElement>(body);
+        view.EnumerateObject().Select(p => p.Name).ShouldBeSubsetOf([.. ViewProperties, "remedy"]);
+
+        var remedy = view.GetProperty("remedy");
+        remedy.EnumerateObject().Select(p => p.Name).ShouldBe(["remedy", "label", "completed", "repairCentre", "steps"], ignoreOrder: true);
+        remedy.GetProperty("remedy").GetString().ShouldBe("Repair");
+        remedy.GetProperty("label").GetString().ShouldBe("Take your product to the repair centre");
+        remedy.GetProperty("completed").GetBoolean().ShouldBeFalse();
+        remedy.GetProperty("steps").EnumerateArray()
+            .Select(s => $"{s.GetProperty("title").GetString()}:{s.GetProperty("state").GetString()}")
+            .ShouldBe(["Handed over:current", "With repair centre:upcoming", "Ready for collection:upcoming", "Collected:upcoming"]);
+
+        var (address, openingHours, contact) = await SpringfieldAsync();
+        var centre = remedy.GetProperty("repairCentre");
+        centre.EnumerateObject().Select(p => p.Name).ShouldBe(["name", "address", "openingHours"], ignoreOrder: true);
+        centre.GetProperty("name").GetString().ShouldBe("Aurora Service Center Springfield");
+        centre.GetProperty("address").GetString().ShouldBe(address);
+        centre.GetProperty("openingHours").GetString().ShouldBe(openingHours);
+
+        // FR-041: no centre contact, reference, notes or staff names anywhere in the claimant view.
+        body.ShouldNotContain(contact, Case.Insensitive);
+        foreach (var staffOnly in new[] { "contact", "centreReference", "note", "reason", "actor", "recordedBy", "serviceCenterId" })
+        {
+            body.ShouldNotContain($"\"{staffOnly}\"", Case.Insensitive);
+        }
+    }
+
+    [Fact]
     public async Task The_public_tenant_info_is_the_channel_tenants_display_name()
     {
         var expected = await ScalarAsync<string>("select display_name from tenancy.tenants where id = @id", TestStaffUsers.AuroraTenantId);
@@ -163,6 +205,20 @@ public sealed class ClaimantAccessEndpointTests(WarrantyAppFixture fixture)
         command.Parameters.AddWithValue("target", target);
         command.Parameters.AddWithValue("tenant", tenantId);
         return (long)(await command.ExecuteScalarAsync(Ct))!;
+    }
+
+    /// <summary>The seeded Springfield centre's address, opening hours and staff-only contact.</summary>
+    private async Task<(string Address, string OpeningHours, string Contact)> SpringfieldAsync()
+    {
+        await using var connection = new NpgsqlConnection(fixture.OwnerConnectionString());
+        await connection.OpenAsync(Ct);
+        await using var command = new NpgsqlCommand(
+            "select address, opening_hours, contact from integration.service_centers where tenant_id = @tenant and name = 'Aurora Service Center Springfield'",
+            connection);
+        command.Parameters.AddWithValue("tenant", TestStaffUsers.AuroraTenantId);
+        await using var reader = await command.ExecuteReaderAsync(Ct);
+        (await reader.ReadAsync(Ct)).ShouldBeTrue();
+        return (reader.GetString(0), reader.GetString(1), reader.GetString(2));
     }
 
     private async Task<T> ScalarAsync<T>(string sql, object id)

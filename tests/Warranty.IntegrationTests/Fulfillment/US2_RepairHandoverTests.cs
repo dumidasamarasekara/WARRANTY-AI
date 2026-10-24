@@ -19,7 +19,7 @@ namespace Warranty.IntegrationTests.Fulfillment;
 /// escalated (it matches no recording) and approved by <c>reviewer.aurora</c>, which sets remedy Repair by policy and
 /// a repair awaiting hand-over at the suggested centre (US1, T225/T228). The seeded R1 and R2 claims only get requests
 /// that must be refused, so other tests can keep reading them. All pending T241, which needs the US1 approval path
-/// and T238 – T240; the claimant parts also need T242.
+/// and T238 – T240.
 /// </para>
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
@@ -27,7 +27,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 {
     private const string PendingRepairEvents = "Pending T241";
-    private const string PendingClaimantRemedy = "Pending T241 and T242";
     private const string PendingAttemptEnded = "Pending T248";
 
     private const string ReadyTemplate = "RepairReadyForCollection";
@@ -43,7 +42,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R5: the hand-over -------------------------------------------------------------------------
 
-    [Fact(Skip = PendingClaimantRemedy)]
+    [Fact(Skip = PendingRepairEvents)]
     public async Task R5_recording_the_hand_over_puts_the_repair_at_the_centre_and_the_claimant_sees_the_centre_but_not_the_reference()
     {
         var (claimId, reference) = await ApprovedRepairClaimAsync();
@@ -158,7 +157,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
         await ShouldBeReadyOnceAsync(claimId, attemptId);
     }
 
-    [Fact(Skip = PendingClaimantRemedy)]
+    [Fact(Skip = PendingRepairEvents)]
     public async Task R7_collection_completes_the_repair_and_the_remedy_and_the_claimant_sees_Collected()
     {
         var (claimId, reference) = await HandedOverClaimAsync();

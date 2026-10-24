@@ -4,15 +4,18 @@ using System.Text.Json.Serialization;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Persistence;
+using Warranty.Application.Fulfillment;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
+using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Integration;
 
 namespace Warranty.Application.Claims;
 
 /// <summary>
 /// The claimant's view of a claim (contracts/rest-api.openapi.yaml, <c>ClaimantClaimView</c>; FR-037):
 /// status, product, the claimant-facing explanation of a final outcome and the items requested from
-/// the claimant. It has no risk signals, fraud indicators, internal reasoning or internal IDs.
+/// the claimant and, once approved, the remedy (002 FR-039 – FR-041). It has no risk signals, fraud indicators, internal reasoning or internal IDs.
 /// </summary>
 public sealed record ClaimantClaimView(
     string Reference,
@@ -20,7 +23,8 @@ public sealed record ClaimantClaimView(
     DateTimeOffset SubmittedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ProductName,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OutcomeExplanation,
-    IReadOnlyList<ClaimantRequestedItem> RequestedItems);
+    IReadOnlyList<ClaimantRequestedItem> RequestedItems,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ClaimantRemedyView? Remedy = null);
 
 public sealed record ClaimantRequestedItem(string Item, string Reason);
 
@@ -42,7 +46,13 @@ public sealed record ClaimantAccessResult(Guid? ClaimId)
 /// another tenant is simply unknown here.
 /// </summary>
 public sealed class ClaimantAccess(
-    ITenantContext tenant, IClaimRepository claims, ICatalogRepository catalog, ISecurityEventWriter securityEvents)
+    ITenantContext tenant,
+    IClaimRepository claims,
+    ICatalogRepository catalog,
+    ISecurityEventWriter securityEvents,
+    IRemedyRepository remedies,
+    IRepairRepository repairs,
+    IIntegrationRepository integration)
 {
     /// <summary>The actor recorded on claimant security events.</summary>
     public const string ClaimantChannelActor = "claimant channel";
@@ -93,7 +103,42 @@ public sealed class ClaimantAccess(
             claim.Status.IsFinal() ? claim.FinalExplanation : null,
             claim.Status == ClaimStatus.PendingInformation
                 ? RequestedItemCatalog.ForClaimant(claim.RequestedItems).Select(i => new ClaimantRequestedItem(i.Item, i.Reason)).ToList()
-                : []);
+                : [],
+            await GetRemedyAsync(claim.Id, claim.Region, ct));
+    }
+
+    /// <summary>The claimant's remedy section (null when the claim has no remedy): only the active centre's public details.</summary>
+    private async Task<ClaimantRemedyView?> GetRemedyAsync(Guid claimId, Region? region, CancellationToken ct)
+    {
+        var remedy = await remedies.GetAsync(claimId, ct);
+        if (remedy is null)
+        {
+            return null;
+        }
+
+        var repair = remedy.Remedy == RemedyType.Repair || remedy.State == RemedyState.AwaitingDecision
+            ? await repairs.GetByClaimAsync(claimId, ct)
+            : null;
+        var centre = remedy.Remedy == RemedyType.Repair && repair?.ActiveHandover is { } handover
+            ? await FindCentreAsync(handover.ServiceCenterId, region, ct)
+            : null;
+        return ClaimantRemedyProjection.Project(remedy, repair, centre);
+    }
+
+    /// <summary>The centre with <paramref name="centreId"/>, looked up in the claim's region first (inactive centres included).</summary>
+    private async Task<ServiceCenter?> FindCentreAsync(Guid centreId, Region? region, CancellationToken ct)
+    {
+        IEnumerable<Region> regions = region is { } r ? [r, .. Enum.GetValues<Region>().Where(x => x != r)] : Enum.GetValues<Region>();
+        foreach (var candidate in regions)
+        {
+            var centre = (await integration.GetServiceCentersAsync(candidate, ct)).FirstOrDefault(s => s.Id == centreId);
+            if (centre is not null)
+            {
+                return centre;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
