@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Warranty.Domain.Claims;
 
@@ -6,7 +7,7 @@ namespace Warranty.Domain.Fulfillment;
 /// <summary>
 /// The repair of an approved claim whose remedy is Repair (<c>claims.repairs</c>), one per claim. Owns
 /// its hand-overs, attempts and append-only events; status changes follow the repair state machine in
-/// data-model.md and go only through this aggregate (US3 and US5 transitions are added in T247 and T256).
+/// data-model.md and go only through this aggregate (the US5 transitions are added in T256).
 /// </summary>
 public sealed class Repair
 {
@@ -106,14 +107,16 @@ public sealed class Repair
 
     /// <summary>
     /// The event types allowed from the current status (drives <c>RepairView.allowedEvents</c> and the 409 detail).
-    /// US2 events; T247 and T256 add the US3 and US5 events. A hand-over needs an active centre.
+    /// US2 and US3 events; T256 adds the US5 events. A hand-over needs an active centre; a new attempt follows only a
+    /// failure (whether the attempt limit allows it is decided by the remedy evaluation of the use case).
     /// </summary>
     public IReadOnlyList<RepairEventType> AllowedEvents() => Status switch
     {
         RepairStatus.AwaitingHandover when ActiveHandoverId is not null => [RepairEventType.CentreChanged, RepairEventType.HandedOver],
         RepairStatus.AwaitingHandover => [RepairEventType.CentreChanged],
-        RepairStatus.AtRepairCentre => [RepairEventType.MarkedReady],
+        RepairStatus.AtRepairCentre => [RepairEventType.EstimateReported, RepairEventType.MarkedReady, RepairEventType.RepairFailed],
         RepairStatus.ReadyForCollection => [RepairEventType.Collected],
+        RepairStatus.RepairNotPossible when NotPossibleReason == RepairNotPossibleReason.Failed => [RepairEventType.NewAttemptStarted],
         _ => [],
     };
 
@@ -231,28 +234,134 @@ public sealed class Repair
             report,
             new Dictionary<string, object?> { ["attemptId"] = attempt.Id, ["attemptSeq"] = attempt.Seq });
     }
+
     /// <summary>
-    /// <see cref="RepairEventType.EstimateReported"/> at the repair centre: stays <see cref="RepairStatus.AtRepairCentre"/>, or
-    /// becomes <see cref="RepairStatus.RepairNotPossible"/> (<see cref="RepairNotPossibleReason.NotEconomical"/>) only when
-    /// <paramref name="economicLimitAmount"/> is set and the estimate is strictly above it. Pending T247.
+    /// <see cref="RepairEventType.EstimateReported"/> at the repair centre: the estimate is kept on the open attempt and the repair
+    /// stays <see cref="RepairStatus.AtRepairCentre"/>, or becomes <see cref="RepairStatus.RepairNotPossible"/>
+    /// (<see cref="RepairNotPossibleReason.NotEconomical"/>, the attempt ends as <see cref="AttemptResult.NotEconomical"/>) only when
+    /// <paramref name="economicLimitAmount"/> is set and the estimate is strictly above it (FR-004). Never counted as a failure (FR-029).
     /// </summary>
     public RepairEvent RecordEstimate(decimal estimateAmount, decimal? economicLimitAmount, RepairReport report)
-        => throw new NotImplementedException($"Pending T247 ({estimateAmount}, {economicLimitAmount}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentOutOfRangeException.ThrowIfNegative(estimateAmount);
+        Require(RepairEventType.EstimateReported, RepairStatus.AtRepairCentre);
+        var attempt = OpenAttempt(RepairEventType.EstimateReported);
+
+        var notEconomical = economicLimitAmount is { } limit && estimateAmount > limit;
+        attempt.ReportEstimate(estimateAmount);
+        if (notEconomical)
+        {
+            attempt.EndNotEconomical(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The estimate of {estimateAmount:0.00} is above the economic limit of {economicLimitAmount:0.00}."),
+                report.RecordedAt);
+            Status = RepairStatus.RepairNotPossible;
+            NotPossibleReason = RepairNotPossibleReason.NotEconomical;
+        }
+
+        return Append(
+            RepairEventType.EstimateReported,
+            RepairStatus.AtRepairCentre,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["attemptId"] = attempt.Id,
+                ["attemptSeq"] = attempt.Seq,
+                ["estimateAmount"] = estimateAmount,
+                ["economicLimitAmount"] = economicLimitAmount,
+                ["notEconomical"] = notEconomical,
+            });
+    }
 
     /// <summary>
     /// <see cref="RepairEventType.RepairFailed"/>: <see cref="RepairStatus.AtRepairCentre"/> → <see cref="RepairStatus.RepairNotPossible"/>
-    /// (<see cref="RepairNotPossibleReason.Failed"/>); reason required; <see cref="FailedAttempts"/> + 1. Pending T247.
+    /// (<see cref="RepairNotPossibleReason.Failed"/>); reason required; the open attempt ends as <see cref="AttemptResult.Failed"/> and
+    /// <see cref="FailedAttempts"/> + 1 (FR-029). Whether the limit is reached is decided by the remedy evaluation of the use case.
     /// </summary>
     public RepairEvent RecordFailure(string reason, RepairReport report)
-        => throw new NotImplementedException($"Pending T247 ({reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required for a failed repair.", nameof(reason));
+        }
+
+        Require(RepairEventType.RepairFailed, RepairStatus.AtRepairCentre);
+        var attempt = OpenAttempt(RepairEventType.RepairFailed);
+
+        attempt.EndFailed(reason.Trim(), report.RecordedAt);
+        FailedAttempts++;
+        Status = RepairStatus.RepairNotPossible;
+        NotPossibleReason = RepairNotPossibleReason.Failed;
+        return Append(
+            RepairEventType.RepairFailed,
+            RepairStatus.AtRepairCentre,
+            RepairStatus.RepairNotPossible,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["attemptId"] = attempt.Id,
+                ["attemptSeq"] = attempt.Seq,
+                ["reason"] = attempt.FailureReason,
+                ["failedAttempts"] = FailedAttempts,
+            });
+    }
 
     /// <summary>
-    /// <see cref="RepairEventType.NewAttemptStarted"/> after a failure below the limit (the limit is checked by the use
-    /// case): → <see cref="RepairStatus.AtRepairCentre"/> with a new open attempt when the product stayed at the centre,
-    /// or → <see cref="RepairStatus.AwaitingHandover"/> when it was returned to the customer. Pending T247.
+    /// <see cref="RepairEventType.NewAttemptStarted"/> after a failure below the limit (the limit is checked by the use case):
+    /// → <see cref="RepairStatus.AtRepairCentre"/> with the next attempt open at the active centre when the product stayed there,
+    /// or → <see cref="RepairStatus.AwaitingHandover"/> when it was returned to the customer (the next hand-over opens the attempt).
+    /// The failed attempts are kept and the count is unchanged.
     /// </summary>
     public RepairEvent StartNewAttempt(ProductLocation productLocation, RepairReport report)
-        => throw new NotImplementedException($"Pending T247 ({productLocation}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (!Enum.IsDefined(productLocation))
+        {
+            throw new ArgumentException("The product location must be AtCentre or ReturnedToCustomer.", nameof(productLocation));
+        }
+
+        if (Status != RepairStatus.RepairNotPossible || NotPossibleReason != RepairNotPossibleReason.Failed)
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.NewAttemptStarted} on a repair in status {Status}"
+                + (NotPossibleReason is { } reason ? $" ({reason})" : string.Empty)
+                + $"; allowed events: {Describe(AllowedEvents())}.");
+        }
+
+        var handover = ActiveHandover
+            ?? throw new InvalidClaimTransitionException(
+                $"Cannot record {RepairEventType.NewAttemptStarted} on a repair in status {Status} without an active repair centre.");
+
+        RepairAttempt? attempt = null;
+        if (productLocation == ProductLocation.AtCentre)
+        {
+            attempt = StartAttempt(handover.ServiceCenterId, report.RecordedAt);
+            Status = RepairStatus.AtRepairCentre;
+        }
+        else
+        {
+            Status = RepairStatus.AwaitingHandover;
+        }
+
+        NotPossibleReason = null;
+        return Append(
+            RepairEventType.NewAttemptStarted,
+            RepairStatus.RepairNotPossible,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["productLocation"] = productLocation.ToString(),
+                ["serviceCenterId"] = handover.ServiceCenterId,
+                ["attemptId"] = attempt?.Id,
+                ["attemptSeq"] = attempt?.Seq,
+                ["failedAttempts"] = FailedAttempts,
+            });
+    }
 
     /// <summary>
     /// <see cref="RepairEventType.Transferred"/>: from <see cref="RepairStatus.AwaitingHandover"/> or
@@ -318,6 +427,11 @@ public sealed class Repair
     internal static string Describe(IReadOnlyList<RepairEventType> events)
         => events.Count == 0 ? "none" : string.Join(", ", events);
 
+    /// <summary>The open attempt of a repair at the centre; refuses <paramref name="type"/> when none is open.</summary>
+    private RepairAttempt OpenAttempt(RepairEventType type)
+        => CurrentAttempt is { IsOpen: true } open
+            ? open
+            : throw new InvalidClaimTransitionException($"Cannot record {type} on a repair in status {Status} without an open attempt.");
     /// <summary>Refuses <paramref name="type"/> unless the repair is in <paramref name="from"/>, naming the status and the allowed events.</summary>
     private void Require(RepairEventType type, RepairStatus from)
     {

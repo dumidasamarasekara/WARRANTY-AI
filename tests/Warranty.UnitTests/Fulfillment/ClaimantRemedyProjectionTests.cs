@@ -14,8 +14,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class ClaimantRemedyProjectionTests
 {
-    private const string PendingWithFailure = "Pending T247";
-
     private const string StaffSub = "0b9e7a52-1f2c-4c1a-9a01-a0000000a001";
     private const string StaffNote = "Staff-only note: customer called twice about the delay";
     private const string CentreReference = "JOB-1001";
@@ -45,7 +43,7 @@ public sealed class ClaimantRemedyProjectionTests
         Row("repairAtRepairCentre", RemedyType.Repair, "With repair centre", false),
         Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false),
         Row("repairCollected", RemedyType.Repair, "Collected", true),
-        Row("repairNotPossible", null, "Repair not possible. Your claim is being reviewed.", false, PendingWithFailure),
+        Row("repairNotPossible", null, "Repair not possible. Your claim is being reviewed.", false),
         Row("replacementInProgress", RemedyType.Replacement, "Replacement on its way", false),
         Row("replacementCompleted", RemedyType.Replacement, "Replacement handed over", true),
         Row("refundInProgress", RemedyType.Refund, "Refund being processed", false),
@@ -139,7 +137,7 @@ public sealed class ClaimantRemedyProjectionTests
         ShouldHaveNoStaffOnlyData(view, StaffNote, CentreReference, ChangeReason, StaffSub, "555-0101", CentreContact);
     }
 
-    [Fact(Skip = PendingWithFailure)]
+    [Fact]
     public void The_view_after_a_failed_repair_has_no_failure_reason()
     {
         var (remedy, repair) = Arrange("repairNotPossible");

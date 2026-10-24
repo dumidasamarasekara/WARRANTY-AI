@@ -69,6 +69,20 @@ public sealed class RepairAttempt
         EndedAt = endedAt;
     }
 
+    /// <summary>Keeps the latest estimate the centre reported for this open attempt.</summary>
+    internal void ReportEstimate(decimal estimateAmount)
+    {
+        RequireOpen();
+        ArgumentOutOfRangeException.ThrowIfNegative(estimateAmount);
+        EstimateAmount = estimateAmount;
+    }
+
+    /// <summary>The repair did not fix the product: the open attempt ends as <see cref="AttemptResult.Failed"/> with its reason.</summary>
+    internal void EndFailed(string reason, DateTimeOffset endedAt) => End(AttemptResult.Failed, reason, endedAt);
+
+    /// <summary>The estimate is above the economic limit: the open attempt ends as <see cref="AttemptResult.NotEconomical"/>.</summary>
+    internal void EndNotEconomical(string reason, DateTimeOffset endedAt) => End(AttemptResult.NotEconomical, reason, endedAt);
+
     /// <summary>The customer collected the product: a <see cref="AttemptResult.Ready"/> attempt becomes <see cref="AttemptResult.Collected"/>.</summary>
     internal void MarkCollected()
     {
@@ -78,5 +92,22 @@ public sealed class RepairAttempt
         }
 
         Result = AttemptResult.Collected;
+    }
+
+    private void End(AttemptResult result, string reason, DateTimeOffset endedAt)
+    {
+        RequireOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        Result = result;
+        FailureReason = reason.Trim();
+        EndedAt = endedAt;
+    }
+
+    private void RequireOpen()
+    {
+        if (!IsOpen)
+        {
+            throw new InvalidOperationException($"Repair attempt {Seq} is not open ({Result}).");
+        }
     }
 }

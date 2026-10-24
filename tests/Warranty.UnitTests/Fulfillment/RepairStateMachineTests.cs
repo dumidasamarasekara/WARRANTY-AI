@@ -16,9 +16,7 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class RepairStateMachineTests
 {
-    private const string PendingUs3 = "Pending T247";
     private const string PendingUs5 = "Pending T256";
-    private const string PendingUs3AndUs5 = "Pending T247 and T256";
 
     private const string Actor = "agent-sub-t234";
     private const string Reason = "The customer asked for a centre closer to home.";
@@ -81,7 +79,7 @@ public sealed class RepairStateMachineTests
         from type in AppliedEvents
         select new TheoryDataRow<Stage, RepairEventType, bool>(stage, type, Allowed.ContainsKey((stage, type)))
         {
-            Skip = SkipFor(stage, type),
+            Skip = SkipFor(type),
         };
 
     /// <summary>The full list per status of the table (all stories), including Correction everywhere except Collected.</summary>
@@ -145,7 +143,16 @@ public sealed class RepairStateMachineTests
         repair.AllowedEvents().Where(Us2Events.Contains).ShouldBe(expected, ignoreOrder: true);
     }
 
-    [Theory(Skip = PendingUs3AndUs5)]
+    [Theory]
+    [MemberData(nameof(FullAllowedEvents))]
+    public void Allowed_events_list_the_US2_and_US3_events_of_each_status(Stage stage, RepairEventType[] expected)
+    {
+        RepairEventType[] known = [.. Us2Events, .. Us3Events];
+
+        RepairAt(stage).AllowedEvents().Where(known.Contains).ShouldBe(expected.Where(known.Contains), ignoreOrder: true);
+    }
+
+    [Theory(Skip = PendingUs5)]
     [MemberData(nameof(FullAllowedEvents))]
     public void Allowed_events_list_every_event_of_the_table_for_each_status(Stage stage, RepairEventType[] expected)
     {
@@ -167,7 +174,7 @@ public sealed class RepairStateMachineTests
         var eventCount = repair.Events.Count;
 
         repair.AllowedEvents().ShouldBeEmpty();
-        foreach (var type in Us2Events)
+        foreach (var type in Us2Events.Concat(Us3Events))
         {
             Should.Throw<InvalidOperationException>(() => Apply(repair, type));
         }
@@ -252,17 +259,9 @@ public sealed class RepairStateMachineTests
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    private static string? SkipFor(Stage stage, RepairEventType type)
+    private static string? SkipFor(RepairEventType type)
     {
-        var needsUs3 = Us3Events.Contains(type) || stage is Stage.NotPossibleFailed or Stage.NotPossibleNotEconomical;
-        var needsUs5 = type is RepairEventType.Transferred or RepairEventType.Correction;
-        return (needsUs3, needsUs5) switch
-        {
-            (true, true) => PendingUs3AndUs5,
-            (true, false) => PendingUs3,
-            (false, true) => PendingUs5,
-            _ => null,
-        };
+        return type is RepairEventType.Transferred or RepairEventType.Correction ? PendingUs5 : null;
     }
 
     /// <summary>A report by <see cref="Actor"/> by phone, <paramref name="day"/> days after the hand-over.</summary>
