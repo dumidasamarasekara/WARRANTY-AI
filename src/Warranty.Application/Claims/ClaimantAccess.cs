@@ -52,6 +52,7 @@ public sealed class ClaimantAccess(
     ISecurityEventWriter securityEvents,
     IRemedyRepository remedies,
     IRepairRepository repairs,
+    IReplacementRepository replacements,
     IIntegrationRepository integration)
 {
     /// <summary>The actor recorded on claimant security events.</summary>
@@ -107,7 +108,10 @@ public sealed class ClaimantAccess(
             await GetRemedyAsync(claim.Id, claim.Region, ct));
     }
 
-    /// <summary>The claimant's remedy section (null when the claim has no remedy): only the active centre's public details.</summary>
+    /// <summary>
+    /// The claimant's remedy section (null when the claim has no remedy): only the active centre's or replacement
+    /// location's public details, and the replacement's status and model name (003).
+    /// </summary>
     private async Task<ClaimantRemedyView?> GetRemedyAsync(Guid claimId, Region? region, CancellationToken ct)
     {
         var remedy = await remedies.GetAsync(claimId, ct);
@@ -122,7 +126,27 @@ public sealed class ClaimantAccess(
         var centre = remedy.Remedy == RemedyType.Repair && repair?.ActiveHandover is { } handover
             ? await FindCentreAsync(handover.ServiceCenterId, region, ct)
             : null;
-        return ClaimantRemedyProjection.Project(remedy, repair, centre);
+        var replacement = remedy.Remedy == RemedyType.Replacement || remedy.State == RemedyState.AwaitingDecision
+            ? await GetReplacementFactsAsync(claimId, region, ct)
+            : null;
+        return ClaimantRemedyProjection.Project(remedy, repair, centre, replacement);
+    }
+
+    /// <summary>
+    /// What the claimant sees of the claim's replacement (null when it has none, 003): its status, rules, return state,
+    /// the active location and the current unit's model. Serial numbers, notes, reasons and staff names stay behind (FR-034).
+    /// </summary>
+    private async Task<ClaimantReplacementFacts?> GetReplacementFactsAsync(Guid claimId, Region? region, CancellationToken ct)
+    {
+        var replacement = await replacements.GetByClaimAsync(claimId, ct);
+        if (replacement is null)
+        {
+            return null;
+        }
+
+        var location = replacement.ActiveLocation is { } active ? await FindCentreAsync(active.ServiceCenterId, region, ct) : null;
+        var model = replacement.CurrentUnit is { } unit ? await catalog.GetProductAsync(unit.ProductId, ct) : null;
+        return new ClaimantReplacementFacts(replacement.Status, replacement.ReturnRule, replacement.ReturnState, location, model);
     }
 
     /// <summary>The centre with <paramref name="centreId"/>, looked up in the claim's region first (inactive centres included).</summary>

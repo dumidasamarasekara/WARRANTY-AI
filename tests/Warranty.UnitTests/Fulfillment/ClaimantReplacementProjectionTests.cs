@@ -19,7 +19,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class ClaimantReplacementProjectionTests
 {
-    private const string Pending = "Pending T330";
     private const string LocationContact = "replacement-desk@springfield-location.test";
     private const string OtherContact = "555-0303";
 
@@ -59,8 +58,9 @@ public sealed class ClaimantReplacementProjectionTests
     ];
 
     /// <summary>
-    /// Replacement timeline per state: the step of the current status is <c>current</c>, earlier ones <c>done</c>
-    /// (as 002's Repair timeline); <c>Product returned</c> appears only under <c>BeforeReservation</c> or when the
+    /// Replacement timeline per state: the step of the current status is <c>current</c> (awaiting a unit or ready for
+    /// collection: <c>Ready for collection</c>), earlier ones <c>done</c>, all done once handed over (as 002's Repair
+    /// timeline); <c>Product returned</c> appears only under <c>BeforeReservation</c> or when the
     /// product is held by a repair centre.
     /// </summary>
     public static IEnumerable<TheoryDataRow<string, string[], string[]>> ReplacementSteps =>
@@ -68,7 +68,7 @@ public sealed class ClaimantReplacementProjectionTests
         Steps("awaitingReturn", ["Product returned", "Ready for collection", "Handed to you"], ["current", "upcoming", "upcoming"]),
         Steps("awaitingReturnWithMismatch", ["Product returned", "Ready for collection", "Handed to you"], ["current", "upcoming", "upcoming"]),
         Steps("awaitingUnitAfterReturn", ["Product returned", "Ready for collection", "Handed to you"], ["done", "current", "upcoming"]),
-        Steps("readyForCollectionAfterReturn", ["Product returned", "Ready for collection", "Handed to you"], ["done", "done", "current"]),
+        Steps("readyForCollectionAfterReturn", ["Product returned", "Ready for collection", "Handed to you"], ["done", "current", "upcoming"]),
         Steps("handedToCustomerAfterReturn", ["Product returned", "Ready for collection", "Handed to you"], ["done", "done", "done"]),
         Steps("awaitingUnit", ["Ready for collection", "Handed to you"], ["current", "upcoming"]),
         Steps("awaitingUnitWithReturnMismatch", ["Ready for collection", "Handed to you"], ["current", "upcoming"]),
@@ -76,7 +76,7 @@ public sealed class ClaimantReplacementProjectionTests
         Steps("readyForCollectionReturnedEarly", ["Ready for collection", "Handed to you"], ["current", "upcoming"]),
         Steps("handedToCustomer", ["Ready for collection", "Handed to you"], ["done", "done"]),
         Steps("awaitingUnitHeldByRepairCentre", ["Product returned", "Ready for collection", "Handed to you"], ["done", "current", "upcoming"]),
-        Steps("readyForCollectionHeldByRepairCentre", ["Product returned", "Ready for collection", "Handed to you"], ["done", "done", "current"]),
+        Steps("readyForCollectionHeldByRepairCentre", ["Product returned", "Ready for collection", "Handed to you"], ["done", "current", "upcoming"]),
         Steps("handedToCustomerHeldByRepairCentre", ["Product returned", "Ready for collection", "Handed to you"], ["done", "done", "done"]),
     ];
 
@@ -94,11 +94,11 @@ public sealed class ClaimantReplacementProjectionTests
         (view.Remedy, view.Label, view.Completed).ShouldBe((remedy, label, completed));
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_claim_without_a_remedy_has_no_remedy_view_even_with_a_replacement()
         => ClaimantRemedyProjection.Project(null, null, null, Facts(ReplacementStatus.AwaitingUnit)).ShouldBeNull();
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_repair_or_refund_without_a_replacement_keeps_its_002_view()
     {
         var (remedy, repair, _) = Arrange("cancelledForRepair");
@@ -128,10 +128,10 @@ public sealed class ClaimantReplacementProjectionTests
     }
 
     [Theory]
-    [InlineData("awaitingReturn", Skip = Pending)]
-    [InlineData("awaitingUnit", Skip = Pending)]
-    [InlineData("readyForCollection", Skip = Pending)]
-    [InlineData("handedToCustomer", Skip = Pending)]
+    [InlineData("awaitingReturn")]
+    [InlineData("awaitingUnit")]
+    [InlineData("readyForCollection")]
+    [InlineData("handedToCustomer")]
     public void A_replacement_shows_the_location_name_address_and_opening_hours(string state)
     {
         var (claimRemedy, repair, replacement) = Arrange(state);
@@ -141,7 +141,7 @@ public sealed class ClaimantReplacementProjectionTests
         view.Location.ShouldBe(new ClaimantRepairCentreView(Location.Name, Location.Address, Location.OpeningHours));
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_replacement_without_an_assigned_location_has_no_location_card()
     {
         var view = ClaimantRemedyProjection.Project(ReplacementByPolicy(), null, null, Facts(ReplacementStatus.AwaitingUnit) with { ActiveLocation = null })
@@ -153,8 +153,8 @@ public sealed class ClaimantReplacementProjectionTests
     }
 
     [Theory]
-    [InlineData("readyForCollection", Skip = Pending)]
-    [InlineData("handedToCustomer", Skip = Pending)]
+    [InlineData("readyForCollection")]
+    [InlineData("handedToCustomer")]
     public void A_reserved_or_handed_over_unit_shows_its_model_name(string state)
     {
         var (claimRemedy, repair, replacement) = Arrange(state);
@@ -164,7 +164,7 @@ public sealed class ClaimantReplacementProjectionTests
         view.ReplacementModelName.ShouldBe(UnitModel.Name);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void No_model_name_is_shown_while_no_unit_is_reserved()
     {
         // The current unit was refused by the customer: the replacement is awaiting a new unit again.
@@ -176,8 +176,8 @@ public sealed class ClaimantReplacementProjectionTests
     }
 
     [Theory]
-    [InlineData("notAvailable", Skip = Pending)]
-    [InlineData("cancelledForRefund", Skip = Pending)]
+    [InlineData("notAvailable")]
+    [InlineData("cancelledForRefund")]
     public void A_replacement_that_is_not_available_or_cancelled_has_no_replacement_steps_location_or_model(string state)
     {
         var (claimRemedy, repair, replacement) = Arrange(state);
@@ -189,7 +189,7 @@ public sealed class ClaimantReplacementProjectionTests
         view.RepairCentre.ShouldBeNull();
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public void A_replacement_cancelled_for_a_repair_shows_the_repair_timeline_and_centre()
     {
         var (remedy, repair, replacement) = Arrange("cancelledForRepair");
@@ -204,12 +204,12 @@ public sealed class ClaimantReplacementProjectionTests
     // ── Staff-only data never reaches the claimant (FR-034) ────────────────────────────────────
 
     [Theory]
-    [InlineData("awaitingReturn", Skip = Pending)]
-    [InlineData("awaitingUnitWithReturnMismatch", Skip = Pending)]
-    [InlineData("awaitingUnitHeldByRepairCentre", Skip = Pending)]
-    [InlineData("readyForCollection", Skip = Pending)]
-    [InlineData("handedToCustomer", Skip = Pending)]
-    [InlineData("notAvailable", Skip = Pending)]
+    [InlineData("awaitingReturn")]
+    [InlineData("awaitingUnitWithReturnMismatch")]
+    [InlineData("awaitingUnitHeldByRepairCentre")]
+    [InlineData("readyForCollection")]
+    [InlineData("handedToCustomer")]
+    [InlineData("notAvailable")]
     public void The_view_has_no_serial_numbers_notes_return_checks_reasons_contacts_or_staff_names(string state)
     {
         var (claimRemedy, repair, replacement) = Arrange(state);
@@ -220,10 +220,10 @@ public sealed class ClaimantReplacementProjectionTests
     }
 
     [Theory]
-    [InlineData(ReplacementReturnRule.BeforeReservation, ReplacementStatus.AwaitingReturn, ReturnState.NotYetReturned, ReturnState.Mismatch, Skip = Pending)]
-    [InlineData(ReplacementReturnRule.AtCollection, ReplacementStatus.AwaitingUnit, ReturnState.NotYetReturned, ReturnState.Mismatch, Skip = Pending)]
-    [InlineData(ReplacementReturnRule.BeforeReservation, ReplacementStatus.AwaitingUnit, ReturnState.Returned, ReturnState.Accepted, Skip = Pending)]
-    [InlineData(ReplacementReturnRule.AtCollection, ReplacementStatus.ReadyForCollection, ReturnState.Returned, ReturnState.Mismatch, Skip = Pending)]
+    [InlineData(ReplacementReturnRule.BeforeReservation, ReplacementStatus.AwaitingReturn, ReturnState.NotYetReturned, ReturnState.Mismatch)]
+    [InlineData(ReplacementReturnRule.AtCollection, ReplacementStatus.AwaitingUnit, ReturnState.NotYetReturned, ReturnState.Mismatch)]
+    [InlineData(ReplacementReturnRule.BeforeReservation, ReplacementStatus.AwaitingUnit, ReturnState.Returned, ReturnState.Accepted)]
+    [InlineData(ReplacementReturnRule.AtCollection, ReplacementStatus.ReadyForCollection, ReturnState.Returned, ReturnState.Mismatch)]
     public void A_return_check_result_does_not_change_the_view(
         ReplacementReturnRule returnRule, ReplacementStatus status, ReturnState passed, ReturnState checkedState)
     {
@@ -240,10 +240,10 @@ public sealed class ClaimantReplacementProjectionTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     private static TheoryDataRow<string, RemedyType?, string, bool> Row(string state, RemedyType? remedy, string label, bool completed)
-        => new(state, remedy, label, completed) { Skip = Pending };
+        => new(state, remedy, label, completed);
 
     private static TheoryDataRow<string, string[], string[]> Steps(string state, string[] titles, string[] stepStates)
-        => new(state, titles, stepStates) { Skip = Pending };
+        => new(state, titles, stepStates);
 
     /// <summary>
     /// The serialized view (as the API writes it) contains none of <paramref name="staffOnly"/>, no return check result

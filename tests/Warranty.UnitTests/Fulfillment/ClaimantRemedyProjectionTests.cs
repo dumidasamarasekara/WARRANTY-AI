@@ -44,7 +44,8 @@ public sealed class ClaimantRemedyProjectionTests
         Row("repairReadyForCollection", RemedyType.Repair, "Ready for collection", false),
         Row("repairCollected", RemedyType.Repair, "Collected", true),
         Row("repairNotPossible", null, "Repair not possible. Your claim is being reviewed.", false),
-        Row("replacementInProgress", RemedyType.Replacement, "Replacement on its way", false),
+        // 003 contracts/ui-screens.md §5 replaces 002's "Replacement on its way" (replacements are collected).
+        Row("replacementInProgress",RemedyType.Replacement, "We are preparing your replacement", false),
         Row("replacementCompleted", RemedyType.Replacement, "Replacement handed over", true),
         Row("refundInProgress", RemedyType.Refund, "Refund being processed", false),
         Row("refundCompleted", RemedyType.Refund, "Refund completed", true),
