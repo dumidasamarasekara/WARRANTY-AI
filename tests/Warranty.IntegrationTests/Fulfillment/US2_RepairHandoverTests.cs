@@ -18,16 +18,13 @@ namespace Warranty.IntegrationTests.Fulfillment;
 /// R5 and R7 change the repair, so they use fresh Aurora claims: a synthetic claim submitted by <c>agent.aurora</c>,
 /// escalated (it matches no recording) and approved by <c>reviewer.aurora</c>, which sets remedy Repair by policy and
 /// a repair awaiting hand-over at the suggested centre (US1, T225/T228). The seeded R1 and R2 claims only get requests
-/// that must be refused, so other tests can keep reading them. R17 also needs the remedy-decisions endpoint of T230.
+/// that must be refused, so other tests can keep reading them.
 /// </para>
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
 [Trait("Feature", "002")]
 public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 {
-    /// <summary>R17 also posts to the remedy-decisions endpoint (T230).</summary>
-    private const string PendingRemedyDecisions = "Pending T230";
-
     private const string ReadyTemplate = "RepairReadyForCollection";
     private const string StaffNote = "Customer phoned twice about the delay; staff-only note.";
 
@@ -219,7 +216,7 @@ public sealed class US2_RepairHandoverTests(WarrantyAppFixture fixture)
 
     // ---- R17: the auditor ---------------------------------------------------------------------------
 
-    [Fact(Skip = PendingRemedyDecisions)]
+    [Fact]
     public async Task R17_an_auditor_reads_the_repair_and_its_trail_but_cannot_record_events_or_decide_the_remedy()
     {
         var (claimId, _) = await HandedOverClaimAsync();
