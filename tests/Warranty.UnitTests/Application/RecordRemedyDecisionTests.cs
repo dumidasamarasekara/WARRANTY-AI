@@ -322,6 +322,25 @@ public sealed class RecordRemedyDecisionTests
     }
 
     [Fact]
+    public async Task After_the_repair_limit_the_reviewer_confirms_the_single_recommended_remedy_with_a_reason()
+    {
+        // FR-031: a single remedy of the repairFailed row is not applied automatically; the reviewer confirms it.
+        var (claim, remedy) = ArrangeRepairFailedLimit();
+        var decisions = new List<RemedyDecision>();
+        _remedies.WhenForAnyArgs(r => r.AddDecision(default!)).Do(call => decisions.Add(call.Arg<RemedyDecision>()));
+
+        var result = await Execute(claim, RemedyType.Replacement, Reason, executor: RealExecutor());
+
+        result.ShouldBeOfType<RecordRemedyDecisionResult.Recorded>();
+        (remedy.State, remedy.Remedy, remedy.Scenario).ShouldBe((RemedyState.InProgress, RemedyType.Replacement, RemedyScenario.RepairFailed));
+        var decided = decisions.ShouldHaveSingleItem();
+        (decided.Seq, decided.Kind, decided.TableRow, decided.DecidedBy, decided.Reason).ShouldBe(
+            (4, RemedyDecisionKind.Decided, "repairFailed", RemedyDecidedBy.Reviewer, Reason));
+        _refunds.ReceivedCalls().ShouldBeEmpty();
+        claim.Status.ShouldBe(ClaimStatus.Approved);
+    }
+
+    [Fact]
     public void The_application_registers_the_use_case_per_scope()
     {
         var services = new ServiceCollection();

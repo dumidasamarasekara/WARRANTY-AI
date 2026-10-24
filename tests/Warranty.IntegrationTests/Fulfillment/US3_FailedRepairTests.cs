@@ -25,9 +25,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 {
-    /// <summary>The queue lists remedy items from T228; the reviewer confirms a remedy after a failure from T249.</summary>
-    private const string PendingReviewerConfirmation = "Pending T249";
-
     private const string FirstFailure = "The display flickers again after the panel was replaced.";
     private const string SecondFailure = "The new panel shows the same fault after one day of use.";
     private const string ConfirmationReason = "Two repairs failed; the Borealis policy gives the customer a refund.";
@@ -78,7 +75,7 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
 
     // ---- R9: the reviewer confirms the remedy after the limit -----------------------------------------
 
-    [Fact(Skip = PendingReviewerConfirmation)]
+    [Fact]
     public async Task R9_the_Borealis_reviewer_confirms_the_refund_from_the_queue_and_the_history_keeps_the_repair()
     {
         var remedy = await FailTwiceAsync(TestStaffUsers.AgentBorealis, R9Borealis);
@@ -96,7 +93,13 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
             new JsonObject { ["remedy"] = "Refund", ["reason"] = ConfirmationReason });
 
         confirmed.Status.ShouldBe(HttpStatusCode.Created, confirmed.Body);
-        var after = (await DetailAsync(TestStaffUsers.ReviewerBorealis, R9Borealis)).GetProperty("remedy");
+        var detail = await DetailAsync(TestStaffUsers.ReviewerBorealis, R9Borealis);
+        var after = detail.GetProperty("remedy");
+
+        // The repair is closed: it keeps its status and attempts, and no further repair event is allowed (T249).
+        var closed = detail.GetProperty("repair");
+        closed.GetProperty("status").GetString().ShouldBe("RepairNotPossible");
+        closed.GetProperty("allowedEvents").EnumerateArray().ShouldBeEmpty();
         (after.GetProperty("state").GetString(), after.GetProperty("remedy").GetString()).ShouldBe(("InProgress", "Refund"));
         (await ClaimStatusAsync(R9Borealis)).ShouldBe(Approved);
 
