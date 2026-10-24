@@ -32,7 +32,7 @@ public sealed class ProtectionPlanCheckTests
 
     // ── Escalation: plan stated, accidental damage, the version lets a plan lift the exclusion ──────────────────
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void Accidental_damage_after_the_included_incident_with_a_plan_goes_to_review_with_the_plan_reason()
     {
         var scenario = BeyondAllowanceByIncident(PlanLiftsExclusion);
@@ -44,7 +44,7 @@ public sealed class ProtectionPlanCheckTests
         PlanCheck(outcome).Actual.ShouldNotBeNull().ShouldContain("allowance is used up");
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void Accidental_damage_after_the_allowance_window_with_a_plan_goes_to_review_with_the_plan_reason()
     {
         var scenario = GuardrailScenario.ApproveAccidentalDamage(PlanLiftsExclusion);
@@ -57,7 +57,7 @@ public sealed class ProtectionPlanCheckTests
         PlanCheck(outcome).Actual.ShouldNotBeNull().ShouldContain("allowance ended");
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void An_evidenced_accidental_damage_exclusion_that_a_plan_lifts_goes_to_review_instead_of_an_automatic_rejection()
     {
         var withoutPlan = GuardrailScenario.RejectOnExclusion(PlanLiftsExclusion, GuardrailScenario.AccidentalExclusion, "CRACKED_SCREEN");
@@ -70,7 +70,7 @@ public sealed class ProtectionPlanCheckTests
         ShouldEscalateForThePlan(scenario.Evaluate());
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void A_cited_accidental_damage_exclusion_counts_as_accidental_damage_even_without_a_photo_showing_it()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(PlanLiftsExclusion, GuardrailScenario.AccidentalExclusion, "NONE_VISIBLE");
@@ -79,7 +79,7 @@ public sealed class ProtectionPlanCheckTests
         ShouldEscalateForThePlan(scenario.Evaluate());
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void The_plan_reason_is_added_to_the_other_escalation_reasons()
     {
         var scenario = BeyondAllowanceByIncident(PlanLiftsExclusion);
@@ -95,7 +95,7 @@ public sealed class ProtectionPlanCheckTests
 
     // ── The check is recorded on every evaluation ────────────────────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void The_check_is_recorded_last_and_passes_when_no_plan_is_stated()
     {
         var outcome = GuardrailScenario.ClearApprove(PlanLiftsExclusion).Evaluate();
@@ -105,7 +105,7 @@ public sealed class ProtectionPlanCheckTests
         outcome.Disposition.ShouldBe(Disposition.AutoApprove);
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void The_check_passes_and_says_why_when_the_version_does_not_let_a_plan_lift_the_exclusion()
     {
         var scenario = GuardrailScenario.RejectOnExclusion(PlanDoesNotLift, GuardrailScenario.AccidentalExclusion, "CRACKED_SCREEN");
@@ -117,7 +117,7 @@ public sealed class ProtectionPlanCheckTests
         check.Message.ShouldNotBeNull().ShouldContain("does not let a protection plan lift");
     }
 
-    [Fact(Skip = "Pending T261")]
+    [Fact]
     public void The_check_does_not_apply_when_intake_short_circuits()
     {
         var scenario = BeyondAllowanceByIncident(PlanLiftsExclusion);

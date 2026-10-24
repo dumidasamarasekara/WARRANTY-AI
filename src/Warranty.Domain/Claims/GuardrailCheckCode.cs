@@ -63,4 +63,11 @@ public enum GuardrailCheckCode
     /// <summary>The AI's claimant explanation contains no risk/fraud terms or reference IDs (research R25).</summary>
     [JsonStringEnumMemberName("CLAIMANT_TEXT_SAFE")]
     ClaimantTextSafe,
+
+    /// <summary>
+    /// Fails when the claim relies on a stated protection plan to lift an accidental-damage exclusion or allowance
+    /// that the applicable version lets a plan lift; a reviewer must check the plan (002 FR-006, FR-037, research R9).
+    /// </summary>
+    [JsonStringEnumMemberName("PROTECTION_PLAN_NOT_RELIED_ON")]
+    ProtectionPlanNotReliedOn,
 }

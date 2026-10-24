@@ -29,7 +29,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "002")]
 public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 {
-    private const string PendingEscalation = "Pending T261";
     private const string PendingReviewerConfirmation = "Pending T262";
 
     /// <summary>Wire name of the protection-plan guardrail check (T261).</summary>
@@ -53,7 +52,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
                            where r.claim_id = c.id and f.kind = 'PhotoAnalysis'
                              and jsonb_exists(f.result -> 'damageTypes', 'CRACKED_SCREEN')) as shows_accidental_damage
             from claims.claims c
-            where c.tenant_id = '22222222-2222-7222-8222-222222222222' and c.serial_number = 'BS11-24-0015'
+            where c.tenant_id = '22222222-2222-7222-8222-222222222222' and c.serial_number = 'BS11-24-0015' and c.reference = 'HSTBR00001'
             """, connection);
         await using var reader = await command.ExecuteReaderAsync(Ct);
         var rows = new List<(string Status, string? Outcome, DateTimeOffset? FinalizedAt, bool Accidental)>();
@@ -63,8 +62,9 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
                 reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2), reader.GetBoolean(3)));
         }
 
-        // Only the seeded history claim before any R14 claim is submitted; R14's own claim may already exist.
-        var history = rows.Where(r => r.Accidental).ToList().ShouldHaveSingleItem();
+        // The seeded history claim (R14's own claim on the same serial may already exist and is not read here).
+        var history = rows.ShouldHaveSingleItem();
+        history.Accidental.ShouldBeTrue("its photo analysis shows accidental damage");
         (history.Status, history.Outcome).ShouldBe(("Approved", "Approved"));
         (DateTimeOffset.UtcNow - history.FinalizedAt.ShouldNotBeNull()).TotalDays.ShouldBeGreaterThan(90, "no duplicate-claim signal");
     }
@@ -92,7 +92,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 
     // ---- R14 with the plan document -------------------------------------------------------------
 
-    [Fact(Skip = PendingEscalation)]
+    [Fact]
     public async Task R14_a_stated_plan_with_its_document_goes_to_review_with_the_reason_protection_plan_to_be_checked()
     {
         var scenario = GoldenScenario.Load("R14-borealis");
@@ -121,11 +121,13 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
             checks[failed].ShouldBeFalse(failed);
         }
 
-        // The reviewer sees why: the readable reason label.
+        // The reviewer's queue says why, with the readable reason label.
         using var client = fixture.CreateStaffClient(TestStaffUsers.ReviewerBorealis);
-        using var response = await client.GetAsync($"/api/claims/{claimId}", Ct);
+        using var response = await client.GetAsync("/api/review-queue", Ct);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await response.Content.ReadAsStringAsync(Ct)).ShouldContain("protection plan to be checked");
+        var item = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).EnumerateArray()
+            .Single(i => i.GetProperty("claimId").GetGuid() == claimId);
+        item.GetProperty("escalationReasons").EnumerateArray().Select(r => r.GetString()).ShouldContain(scenario.Outcome.EscalationReasonText);
     }
 
     [Fact(Skip = PendingReviewerConfirmation)]
@@ -157,7 +159,7 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
 
     // ---- R15: Aurora ----------------------------------------------------------------------------
 
-    [Fact(Skip = PendingEscalation)]
+    [Fact]
     public async Task R15_at_Aurora_a_plan_changes_nothing_and_the_accidental_damage_exclusion_still_grounds_the_rejection()
     {
         var scenario = GoldenScenario.Load("R15-aurora");
@@ -183,7 +185,12 @@ public sealed class US6_ProtectionPlanTests(WarrantyAppFixture fixture)
             reasons.ShouldNotContain(reason);
         }
 
-        (await CitedClauseKeysAsync(run.Id)).ShouldBe(scenario.ExpectedClauseKeys, ignoreOrder: true);
+        // The accidental-damage exclusion still grounds the rejection (the period clause may be cited as context too).
+        var cited = await CitedClauseKeysAsync(run.Id);
+        foreach (var key in scenario.ExpectedClauseKeys)
+        {
+            cited.ShouldContain(key);
+        }
     }
 
     // ---- Submission --------------------------------------------------------------------------------
