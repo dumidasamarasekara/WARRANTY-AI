@@ -1,7 +1,5 @@
-using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Anthropic;
 using Anthropic.Exceptions;
 using Anthropic.Models.Beta;
@@ -23,15 +21,13 @@ namespace Warranty.AI.Gateway.Providers.Anthropic;
 /// <c>tool_choice: auto</c> (never forced) and the server-side refusal fallback. Platform content
 /// (tools, system prompt) sits before the cache breakpoint; case content follows in the messages.
 /// </summary>
-internal sealed partial class AnthropicModelProvider(
+internal sealed class AnthropicModelProvider(
     IAnthropicClient client,
     ImageDownscaler downscaler,
     IOptions<AiGatewayOptions> options,
     ILogger<AnthropicModelProvider> logger) : IModelProvider
 {
     public const string ProviderName = "anthropic";
-
-    private const string UntrustedTag = "untrusted_claim_content";
 
     public string Name => ProviderName;
 
@@ -338,16 +334,8 @@ internal sealed partial class AnthropicModelProvider(
         Strict = true,
     };
 
-    /// <summary>
-    /// Claimant text goes inside a labelled delimiter; any delimiter-like tag inside the text is
-    /// neutralised so the content cannot close the block and pose as instructions.
-    /// </summary>
-    internal static string WrapUntrusted(UntrustedTextPart part)
-    {
-        var label = WebUtility.HtmlEncode(part.Label);
-        var body = UntrustedTagPattern().Replace(part.Text, match => WebUtility.HtmlEncode(match.Value));
-        return $"<{UntrustedTag} label=\"{label}\">\n{body}\n</{UntrustedTag}>";
-    }
+    /// <summary>Claimant text goes inside a labelled delimiter it cannot close (<see cref="UntrustedDelimiter"/>).</summary>
+    internal static string WrapUntrusted(UntrustedTextPart part) => UntrustedDelimiter.Wrap(part);
 
     private static string SchemaInstruction(AiOutputSchema schema)
         => "\n\nReply with only one JSON value, without code fences or any other text, that validates against this JSON Schema ("
@@ -374,9 +362,6 @@ internal sealed partial class AnthropicModelProvider(
 
     private static AiTurnResult Failure(string model, AiFailureKind kind, string message)
         => new(AiStopKind.Failed, new AiMessage(AiRole.Assistant, []), [], null, AiUsage.None(ProviderName, model), new AiFailure(kind, message));
-
-    [GeneratedRegex($"</?\\s*{UntrustedTag}", RegexOptions.IgnoreCase)]
-    private static partial Regex UntrustedTagPattern();
 
     private sealed class UnsupportedContentException(string message) : Exception(message);
 }

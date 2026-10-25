@@ -17,6 +17,8 @@ public sealed class AiGatewayOptions
 
     public AnthropicProviderOptions Anthropic { get; set; } = new();
 
+    public OllamaProviderOptions Ollama { get; set; } = new();
+
     public ReplayProviderOptions Replay { get; set; } = new();
 
     public RateLimitOptions RateLimits { get; set; } = new();
@@ -109,6 +111,42 @@ public sealed class AnthropicProviderOptions
     public int MaxRetries { get; set; } = 2;
 
     /// <summary>The provider does not train on API inputs (FR-006a); routes to a provider without it are refused.</summary>
+    public bool NoTraining { get; set; }
+}
+
+/// <summary>
+/// The <c>AiGateway:Ollama</c> provider section: chat models served by a self-hosted Ollama server, for
+/// local runs without a paid API. Embeddings keep their own connection string (research R5).
+/// </summary>
+public sealed class OllamaProviderOptions
+{
+    public const string DefaultEndpoint = "http://localhost:11434";
+
+    /// <summary>The Ollama server for chat routes.</summary>
+    public Uri Endpoint { get; set; } = new(DefaultEndpoint);
+
+    /// <summary>
+    /// The context window loaded per request (<c>num_ctx</c>). Ollama's own default is far smaller than
+    /// a claim's prompt, and it silently drops the start of a prompt that does not fit.
+    /// </summary>
+    public int ContextLength { get; set; } = 12_288;
+
+    /// <summary>How long Ollama keeps the model loaded after a call (e.g. <c>10m</c>); empty uses the server default.</summary>
+    public string? KeepAlive { get; set; } = "10m";
+
+    /// <summary>Sampling temperature; low, so the same claim gets the same answer.</summary>
+    public double Temperature { get; set; } = 0.1;
+
+    /// <summary>Sent as <c>think</c> to models that report the thinking capability; false keeps turns fast.</summary>
+    public bool Think { get; set; }
+
+    /// <summary>PDF pages rendered to images per document (Ollama models accept images, not PDFs).</summary>
+    public int MaxPdfPages { get; set; } = 3;
+
+    /// <summary>
+    /// The provider does not train on inputs (FR-006a). Self-hosted models run on this machine, but the
+    /// declaration is still explicit, as for every chat provider.
+    /// </summary>
     public bool NoTraining { get; set; }
 }
 

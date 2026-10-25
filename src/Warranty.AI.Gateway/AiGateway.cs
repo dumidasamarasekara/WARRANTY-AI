@@ -68,7 +68,9 @@ internal sealed class AiGateway(
         var providerName = options.Value.Mode == AiGatewayOptions.ReplayMode ? AiGatewayOptions.ReplayMode : route.Options.Provider;
         var provider = providers.FirstOrDefault(p => p.Name == providerName)
                        ?? throw new InvalidOperationException($"AI provider '{providerName}' is not registered.");
-        var timeout = request.Timeout > TimeSpan.Zero ? request.Timeout : TimeSpan.FromSeconds(route.Options.TimeoutSeconds);
+        // The route's configured timeout is a floor: a caller's default never cuts a slower deployment short.
+        var routeTimeout = TimeSpan.FromSeconds(route.Options.TimeoutSeconds);
+        var timeout = request.Timeout > routeTimeout ? request.Timeout : routeTimeout;
         var maxTokens = Math.Min(request.MaxTokensOverride ?? route.Options.MaxTokens, route.Profile.MaxOutputTokens);
         var resolved = new ResolvedTurnRequest(
             request, route, template, template.Render(request.PromptVariables), Redact(request.Conversation.Messages), maxTokens);
