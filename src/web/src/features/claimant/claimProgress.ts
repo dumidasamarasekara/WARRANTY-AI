@@ -109,23 +109,43 @@ export function remedyStepPresentation(state: ClaimantRemedyStepState): { state:
 export function isReadyForCollection(remedy: ClaimantRemedyView): boolean {
   return remedy.steps.some((step) => step.title === 'Ready for collection' && step.state === 'current')
 }
-const fulfilmentLabels: Record<'Replacement' | 'Refund', { inProgress: string; completed: string }> = {
-  Replacement: { inProgress: 'Replacement on its way', completed: 'Replacement handed over' },
-  Refund: { inProgress: 'Refund being processed', completed: 'Refund completed' },
-}
 
 /**
- * The claimant label of a remedy (002 data-model.md "Claimant projection"): Replacement and Refund read
- * from `completed`; every other remedy shows the label the API computed.
+ * The claimant label of a remedy (002 and 003 data-model.md "Claimant projection"): a Refund reads from `completed`;
+ * every other remedy shows the label the API computed. A Replacement's label follows its collection ("We are preparing
+ * your replacement", "Your replacement is ready for collection"); it is never "on its way" (003 ui-screens.md §5).
  */
 export function claimantRemedyLabel(remedy: ClaimantRemedyView): string {
-  if (remedy.remedy === 'Replacement' || remedy.remedy === 'Refund') {
-    const labels = fulfilmentLabels[remedy.remedy]
-    return remedy.completed ? labels.completed : labels.inProgress
-  }
+  if (remedy.remedy === 'Refund') return remedy.completed ? 'Refund completed' : 'Refund being processed'
   return remedy.label
 }
 
 /** A Replacement or Refund that is done: the label becomes an `ok` callout. */
 export const isFulfilmentCompleted = (remedy: ClaimantRemedyView) =>
   (remedy.remedy === 'Replacement' || remedy.remedy === 'Refund') && remedy.completed === true
+
+/** The API's claimant label of a replacement waiting at its location (003 data-model.md "Claimant projection"). */
+export const replacementReadyLabel = 'Your replacement is ready for collection'
+
+const replacementStep = (remedy: ClaimantRemedyView, title: string) => remedy.replacementSteps?.find((step) => step.title === title)
+
+/** The policy wants the faulty product before a unit is reserved, and it has not been returned yet. */
+export const isAwaitingReturn = (remedy: ClaimantRemedyView) =>
+  remedy.remedy === 'Replacement' && replacementStep(remedy, 'Product returned')?.state === 'current'
+
+/**
+ * A unit waits for the customer at the location: the location card becomes an `ok` callout with the model name. The
+ * timeline marks "Ready for collection" current from the moment a unit is being prepared, so readiness reads from the
+ * label and the model name, which the API only sends once a unit is reserved.
+ */
+export const isReplacementReady = (remedy: ClaimantRemedyView) =>
+  remedy.remedy === 'Replacement' &&
+  remedy.completed !== true &&
+  (remedy.label === replacementReadyLabel || remedy.replacementModelName !== undefined)
+
+/**
+ * The faulty product comes back when the replacement is collected (return rule `AtCollection`): the timeline has a
+ * "Product returned" step only when the product had to be returned first or a repair centre holds it.
+ */
+export const bringsFaultyProductAtCollection = (remedy: ClaimantRemedyView) =>
+  remedy.remedy === 'Replacement' && replacementStep(remedy, 'Product returned') === undefined

@@ -19,14 +19,19 @@ import {
 } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
 import {
+  bringsFaultyProductAtCollection,
   claimantRemedyLabel,
   claimProgressSteps,
+  isAwaitingReturn,
   isFulfilmentCompleted,
   isReadyForCollection,
+  isReplacementReady,
   isTransientStatus,
   nextSteps,
   remedyStepPresentation,
+  replacementReadyLabel,
   statusPollIntervalMs,
+  type ClaimantRemedyStepState,
 } from './claimProgress'
 import styles from './ClaimStatusPage.module.css'
 import { SupplementForm } from './SupplementForm'
@@ -114,24 +119,63 @@ function WhatHappensNext({ claim }: { claim: ClaimantClaimView }) {
   )
 }
 
-/** The repair centre's public details only — never its contact, reference or notes (FR-041). */
-function RepairCentreDetails({ centre }: { centre: NonNullable<ClaimantRemedyView['repairCentre']> }) {
+/** A repair centre's or replacement location's public details only — never its contact, reference or notes (FR-041). */
+function PlaceDetails({ place }: { place: NonNullable<ClaimantRemedyView['repairCentre']> }) {
   return (
     <div className={styles.centre}>
-      <p className={styles.centreName}>{centre.name}</p>
-      {centre.address && <p className={styles.centreAddress}>{centre.address}</p>}
-      {centre.openingHours && <p className={styles.stepText}>Opening hours: {centre.openingHours}</p>}
+      <p className={styles.centreName}>{place.name}</p>
+      {place.address && <p className={styles.centreAddress}>{place.address}</p>}
+      {place.openingHours && <p className={styles.stepText}>Opening hours: {place.openingHours}</p>}
     </div>
   )
 }
 
+function ProgressTimeline({ label, steps }: { label: string; steps: readonly { title: string; state: ClaimantRemedyStepState }[] }) {
+  return (
+    <Timeline label={label}>
+      {steps.map((step) => {
+        const { state, tone } = remedyStepPresentation(step.state)
+        return (
+          <TimelineItem key={step.title} tone={tone}>
+            <p className={styles.stepTitle}>
+              {step.title} <span className={styles.stepMeta}>{state}</span>
+            </p>
+          </TimelineItem>
+        )
+      })}
+    </Timeline>
+  )
+}
+
 /**
- * The remedy section of an approved claim (002 contracts/ui-screens.md §5), built only from
- * `ClaimantClaimView.remedy`: the remedy line and label, the four Repair steps and the repair centre.
+ * Where the claimant goes for a replacement (003 ui-screens.md §4): "Please bring your product to" while the policy
+ * wants the faulty product first, an `ok` callout with the model name once a unit is ready, otherwise the location.
+ */
+function ReplacementLocation({ remedy, location }: { remedy: ClaimantRemedyView; location: NonNullable<ClaimantRemedyView['location']> }) {
+  if (isReplacementReady(remedy)) {
+    return (
+      <Alert tone="ok" title={replacementReadyLabel}>
+        {remedy.replacementModelName && <p className={styles.product}>{remedy.replacementModelName}</p>}
+        <PlaceDetails place={location} />
+        {bringsFaultyProductAtCollection(remedy) && <p className={styles.stepText}>Please bring your faulty product with you.</p>}
+      </Alert>
+    )
+  }
+  return (
+    <Card title={isAwaitingReturn(remedy) ? 'Please bring your product to' : 'Where to collect your replacement'} titleAs="h3">
+      <PlaceDetails place={location} />
+    </Card>
+  )
+}
+
+/**
+ * The remedy section of an approved claim (002 contracts/ui-screens.md §5, 003 §4), built only from
+ * `ClaimantClaimView.remedy`: the remedy line and label, then the four Repair steps and the repair centre, or the
+ * replacement steps and the location. Never serial numbers, notes, reasons, return check results or staff names.
  */
 function RemedySection({ remedy }: { remedy: ClaimantRemedyView }) {
   if (!remedy.remedy) {
-    // A remedy is being decided, also after "Repair not possible": the label text only.
+    // A remedy is being decided, also after "Repair not possible" or "Replacement not possible": the label text only.
     return (
       <section className={cx(styles.banner, tones.pending)} aria-label="Remedy">
         <p className={styles.bannerBody}>{remedy.label}</p>
@@ -140,39 +184,35 @@ function RemedySection({ remedy }: { remedy: ClaimantRemedyView }) {
   }
 
   const ready = isReadyForCollection(remedy)
+  const completed = isFulfilmentCompleted(remedy)
+  const replacementSteps = remedy.replacementSteps ?? []
   return (
     <Card title="Your remedy" titleAs="h2" padding="lg">
       <div className={styles.remedy} aria-label="Remedy" role="region">
         <p className={styles.remedyLine}>Remedy: {remedy.remedy}</p>
-        {isFulfilmentCompleted(remedy) ? (
+        {completed ? (
           <Alert tone="ok" title={claimantRemedyLabel(remedy)} />
         ) : (
-          <p className={styles.stepText}>{claimantRemedyLabel(remedy)}</p>
+          // A ready replacement says so in its location callout.
+          !isReplacementReady(remedy) && <p className={styles.stepText}>{claimantRemedyLabel(remedy)}</p>
         )}
-        {remedy.steps.length > 0 && (
-          <Timeline label="Repair progress">
-            {remedy.steps.map((step) => {
-              const { state, tone } = remedyStepPresentation(step.state)
-              return (
-                <TimelineItem key={step.title} tone={tone}>
-                  <p className={styles.stepTitle}>
-                    {step.title} <span className={styles.stepMeta}>{state}</span>
-                  </p>
-                </TimelineItem>
-              )
-            })}
-          </Timeline>
-        )}
+        {remedy.steps.length > 0 && <ProgressTimeline label="Repair progress" steps={remedy.steps} />}
         {remedy.repairCentre &&
           (ready ? (
             <Alert tone="ok" title="Your product is ready for collection">
-              <RepairCentreDetails centre={remedy.repairCentre} />
+              <PlaceDetails place={remedy.repairCentre} />
             </Alert>
           ) : (
             <Card title="Repair centre" titleAs="h3">
-              <RepairCentreDetails centre={remedy.repairCentre} />
+              <PlaceDetails place={remedy.repairCentre} />
             </Card>
           ))}
+        {remedy.remedy === 'Replacement' && replacementSteps.length > 0 && (
+          <ProgressTimeline label="Replacement progress" steps={replacementSteps} />
+        )}
+        {remedy.remedy === 'Replacement' && remedy.location && !completed && (
+          <ReplacementLocation remedy={remedy} location={remedy.location} />
+        )}
       </div>
     </Card>
   )
