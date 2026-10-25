@@ -180,7 +180,10 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
         // The claimant sees that the repair is not possible, without the estimate or the staff's names.
         var claimant = await ClaimantViewAsync(WarrantyAppFixture.BorealisHost, R10Reference, BorealisCustomer);
         claimant.GetProperty("remedy").GetProperty("label").GetString().ShouldBe("Repair not possible. Your claim is being reviewed.");
-        claimant.GetRawText().ShouldNotContain("288");
+        // Not "288" in the text: a timestamp's fraction of a second can contain it. No number is the estimate or the limit,
+        // and no text has "288.0", which a timestamp cannot (its only dot is after the seconds, at most 59).
+        Numbers(claimant).ShouldNotContain(n => n == 288.00m || n == 288.01m);
+        claimant.GetRawText().ShouldNotContain("288.0");
         claimant.GetRawText().ShouldNotContain(TestStaffUsers.AgentBorealis.Username);
     }
 
@@ -268,6 +271,15 @@ public sealed class US3_FailedRepairTests(WarrantyAppFixture fixture)
     private static string ETagOf(JsonElement repair) => repair.GetProperty("etag").GetString().ShouldNotBeNull();
 
     private static List<string> Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToList();
+
+    /// <summary>Every number in a JSON value, at any depth.</summary>
+    private static IEnumerable<decimal> Numbers(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Number => [element.GetDecimal()],
+        JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(Numbers),
+        _ => [],
+    };
 
     // ---- API ---------------------------------------------------------------------------------------
 
