@@ -88,6 +88,52 @@ export function useRecordRepairEvent() {
     onSuccess: (_repair, { claimId }) => queryClient.invalidateQueries({ queryKey: claimQueryKey(claimId) }),
   })
 }
+
+export type ReplacementView = Schemas['ReplacementView']
+
+export type ReplacementEvent = ReplacementView['events'][number]
+
+export type ReplacementEventType = Schemas['ReplacementEventType']
+
+export type ReplacementEventRequest = Schemas['ReplacementEventRequest']
+
+export const replacementLocationsQueryKey = (claimId: string) => ['claims', claimId, 'replacement-locations'] as const
+
+/** `GET /api/claims/{claimId}/replacement-locations`: eligible locations, those serving the claim first (003). */
+export function useReplacementLocations(claimId: string, enabled = true) {
+  return useQuery({
+    queryKey: replacementLocationsQueryKey(claimId),
+    queryFn: () => unwrap(api.GET('/api/claims/{claimId}/replacement-locations', { params: { path: { claimId } } })),
+    enabled,
+  })
+}
+
+export interface RecordReplacementEventInput {
+  claimId: string
+  /** `ReplacementView.etag`, sent as `If-Match`. */
+  etag: string
+  request: ReplacementEventRequest
+}
+
+/**
+ * `POST /api/claims/{claimId}/replacement/events` with `If-Match`; failures throw an `ApiProblem` (409 with the
+ * current status and allowed events, 412 when the replacement changed, 403 for a reviewer-only event). A recorded
+ * event reloads the claim.
+ */
+export function useRecordReplacementEvent() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ claimId, etag, request }: RecordReplacementEventInput) =>
+      unwrap(
+        api.POST('/api/claims/{claimId}/replacement/events', {
+          params: { path: { claimId }, header: { 'If-Match': etag } },
+          body: request,
+        }),
+      ),
+    onSuccess: (_replacement, { claimId }) => queryClient.invalidateQueries({ queryKey: claimQueryKey(claimId) }),
+  })
+}
+
 export type RemedyCompletionRequest = Schemas['RemedyCompletionRequest']
 
 export type RemedyCompletion = NonNullable<RemedyView['completion']>
