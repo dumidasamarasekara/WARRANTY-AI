@@ -9,6 +9,8 @@ import { CompletionCard } from './CompletionCard'
 import { RemedyDialog } from './RemedyDialog'
 import { RepairCard } from './RepairCard'
 import { RepairEventsTimeline } from './RepairEventsTimeline'
+import { ReplacementCard } from './ReplacementCard'
+import { ReplacementEventsTimeline } from './ReplacementEventsTimeline'
 import type { RemedyHistoryEntry, RemedyView } from './remedyQueries'
 import { decideRemedyParam, isCompletableRemedy, pendingReasonText, remedyLabel, remedyList, remedyOrigin, scenarioLabel } from './remedyView'
 import styles from './RemedyTab.module.css'
@@ -17,7 +19,7 @@ export interface RemedyTabProps {
   detail: ClaimDetail
   /** Only reviewers decide a remedy; agents and auditors see the card read-only. */
   isReviewer: boolean
-  /** Claims agents and reviewers record repair updates and completions; auditors see them read-only. */
+  /** Claims agents and reviewers record repair and replacement updates and completions; auditors see them read-only. */
   canRecordRepair?: boolean
 }
 
@@ -142,8 +144,9 @@ function RemedyCard({ remedy, canDecide, onDecide }: { remedy: RemedyView; canDe
  * `/staff/claims/:claimId/remedy` (002 ui-screens.md §2): the remedy card with its origin line, policy
  * basis, history and, while a reviewer must choose, the `warn` banner with **Decide remedy** for
  * reviewers. The remedy is never an AI output (FR-014): no violet, no AI tag. When the remedy is Repair,
- * the repair card follows and the right column holds the repair events; for Refund, and for a Replacement without a
- * replacement (decided before 003), the completion card follows; a claim's replacement has its own card (003 T332).
+ * the repair card follows and the right column holds the repair events; when the claim has a replacement (003), the
+ * replacement card follows and the right column holds the replacement events; for Refund, and for a Replacement without
+ * a replacement (decided before 003), the completion card follows.
  */
 export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: RemedyTabProps) {
   const queryClient = useQueryClient()
@@ -156,6 +159,7 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
   // After a failed or uneconomical repair the remedy waits for a reviewer with no remedy set; the repair
   // (its attempts and estimate) stays visible until another remedy is decided.
   const repair = remedy?.remedy === 'Repair' || remedy?.state === 'AwaitingDecision' ? detail.repair : undefined
+  const replacement = detail.replacement
   const completable = remedy && remedy.state !== 'AwaitingDecision' && isCompletableRemedy(remedy.remedy) ? { ...remedy, remedy: remedy.remedy } : undefined
   const reload = () => queryClient.refetchQueries({ queryKey: claimQueryKey(detail.claimId) })
 
@@ -185,17 +189,30 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
         {decided && <Alert tone="ok" title="Remedy decided" />}
         <RemedyCard remedy={remedy} canDecide={canDecide} onDecide={openDialog} />
         {repair && <RepairCard claimId={detail.claimId} repair={repair} canAct={canRecordRepair} onReload={reload} />}
+        {replacement && (
+          <ReplacementCard
+            claimId={detail.claimId}
+            replacement={replacement}
+            remedy={remedy}
+            claimedModel={{ modelCode: detail.product.modelCode, name: detail.product.name }}
+            canAct={canRecordRepair}
+            onReload={reload}
+          />
+        )}
         {completable && (
           <CompletionCard
             claimId={detail.claimId}
             remedy={completable}
             canAct={canRecordRepair}
-            hasReplacement={detail.replacement !== undefined}
+            hasReplacement={replacement !== undefined}
             onReload={reload}
           />
         )}
       </div>
-      <div className={styles.column}>{repair && <RepairEventsTimeline events={repair.events} />}</div>
+      <div className={styles.column}>
+        {repair && <RepairEventsTimeline events={repair.events} />}
+        {replacement && <ReplacementEventsTimeline events={replacement.events} />}
+      </div>
       {dialogOpen && (
         <RemedyDialog
           claimId={detail.claimId}
