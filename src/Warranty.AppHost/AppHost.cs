@@ -30,8 +30,12 @@ var storage = builder.AddAzureStorage("storage")
 var blobs = storage.AddBlobs("blobs");
 
 // Fixed port: the SPA and the realm's redirect URIs use http://localhost:8080 as the issuer.
+// No HTTPS certificate: with a .NET dev certificate present, Aspire would otherwise serve 8080 over TLS.
+#pragma warning disable ASPIRECERTIFICATES001 // Experimental API.
 var keycloak = builder.AddKeycloak("keycloak", port: 8080)
+    .WithoutHttpsCertificate()
     .WithRealmImport(Path.Combine(repoRoot, "infra", "keycloak"));
+#pragma warning restore ASPIRECERTIFICATES001
 
 var ollama = builder.AddOllama("ollama")
     .WithDataVolume();
