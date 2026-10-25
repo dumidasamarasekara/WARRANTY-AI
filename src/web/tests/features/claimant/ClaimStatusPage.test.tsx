@@ -57,6 +57,34 @@ function repairRemedy(stage: RepairStage) {
     })),
   }
 }
+type ReplacementStage = 'AwaitingReturn' | 'AwaitingUnit' | 'ReadyForCollection' | 'HandedToCustomer'
+const replacementLabels: Record<ReplacementStage, [string, number]> = {
+  AwaitingReturn: ['Please bring your product to the location below', 0],
+  AwaitingUnit: ['We are preparing your replacement', 1],
+  ReadyForCollection: ['Your replacement is ready for collection', 1],
+  HandedToCustomer: ['Replacement handed over', 3],
+}
+
+/**
+ * `ClaimantRemedyView` for a Replacement, as the API projects it (003 data-model.md "Claimant projection"): "Product
+ * returned" only when the faulty product had to come back first.
+ */
+function replacementRemedy(stage: ReplacementStage, returnFirst = false) {
+  const [label, current] = replacementLabels[stage]
+  const ready = stage === 'ReadyForCollection' || stage === 'HandedToCustomer'
+  return {
+    remedy: 'Replacement',
+    label,
+    completed: stage === 'HandedToCustomer',
+    steps: [],
+    location: { name: 'North Service Point', address: '1 Service Street, Springfield', openingHours: 'Mon–Fri 09:00–17:00' },
+    ...(ready ? { replacementModelName: 'Aurora Tab 10' } : {}),
+    replacementSteps: ['Product returned', 'Ready for collection', 'Handed to you']
+      .map((title, i) => ({ title, state: i < current ? 'done' : i === current ? 'current' : 'upcoming' }))
+      .slice(returnFirst ? 0 : 1),
+  }
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 beforeEach(async () => {
   statusRequests = []
@@ -244,7 +272,7 @@ describe('ClaimStatusPage', () => {
   })
 
   it.each([
-    ['Replacement', false, 'Replacement on its way'],
+    ['Replacement', false, 'We are preparing your replacement'],
     ['Replacement', true, 'Replacement handed over'],
     ['Refund', false, 'Refund being processed'],
     ['Refund', true, 'Refund completed'],
@@ -260,6 +288,100 @@ describe('ClaimStatusPage', () => {
     const callout = within(remedy).queryByRole('status')
     if (completed) expect(callout).toHaveTextContent(label)
     else expect(callout).not.toBeInTheDocument()
+  })
+
+  it('shows a replacement being prepared with its steps and the location, without "on its way"', async () => {
+    respondWith({ status: 'Approved', remedy: replacementRemedy('AwaitingUnit') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('Remedy: Replacement')
+    expect(remedy).toHaveTextContent('We are preparing your replacement')
+    const steps = within(within(remedy).getByRole('list', { name: 'Replacement progress' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.textContent)).toEqual(['Ready for collection In progress', 'Handed to you Next'])
+    const location = within(remedy).getByRole('heading', { name: 'Where to collect your replacement' }).closest('section, div')!.parentElement!
+    expect(location).toHaveTextContent('North Service Point')
+    expect(location).toHaveTextContent('1 Service Street, Springfield')
+    expect(location).toHaveTextContent('Opening hours: Mon–Fri 09:00–17:00')
+    expect(within(remedy).queryByRole('status')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/shipped|on its way|delivered/i)
+  })
+
+  it('asks the claimant to bring the product first when the policy wants it before reservation', async () => {
+    respondWith({ status: 'Approved', remedy: replacementRemedy('AwaitingReturn', true) })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('Please bring your product to the location below')
+    const steps = within(within(remedy).getByRole('list', { name: 'Replacement progress' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.textContent)).toEqual(['Product returned In progress', 'Ready for collection Next', 'Handed to you Next'])
+    const card = within(remedy).getByRole('heading', { name: 'Please bring your product to' }).closest('section, div')!.parentElement!
+    expect(card).toHaveTextContent('North Service Point')
+  })
+
+  it('turns the location into a ready callout with the model and asks for the faulty product under AtCollection', async () => {
+    respondWith({ status: 'Approved', remedy: replacementRemedy('ReadyForCollection') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    const callout = within(remedy).getByRole('status')
+    expect(callout).toHaveTextContent('Your replacement is ready for collection')
+    expect(callout).toHaveTextContent('Aurora Tab 10')
+    expect(callout).toHaveTextContent('North Service Point')
+    expect(callout).toHaveTextContent('Opening hours: Mon–Fri 09:00–17:00')
+    expect(callout).toHaveTextContent('Please bring your faulty product with you.')
+    expect(within(remedy).getAllByText('Your replacement is ready for collection')).toHaveLength(1)
+  })
+
+  it('does not ask for the faulty product again when it was returned before reservation', async () => {
+    respondWith({ status: 'Approved', remedy: replacementRemedy('ReadyForCollection', true) })
+    renderStatus()
+
+    const callout = within(await screen.findByRole('region', { name: 'Remedy' })).getByRole('status')
+    expect(callout).toHaveTextContent('Your replacement is ready for collection')
+    expect(callout).not.toHaveTextContent('Please bring your faulty product')
+  })
+
+  it('shows a handed-over replacement as done, without the location card', async () => {
+    respondWith({ status: 'Approved', remedy: replacementRemedy('HandedToCustomer') })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(within(remedy).getByRole('status')).toHaveTextContent('Replacement handed over')
+    const steps = within(within(remedy).getByRole('list', { name: 'Replacement progress' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.textContent)).toEqual(['Ready for collection Done', 'Handed to you Done'])
+    expect(remedy).not.toHaveTextContent('North Service Point')
+  })
+
+  it('says "Replacement not possible" in a pending banner with the label only', async () => {
+    const label = 'Replacement not possible. Your claim is being reviewed.'
+    respondWith({ status: 'Approved', remedy: { label, completed: false, steps: [] } })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy.textContent).toBe(label)
+    expect(remedy.className).toMatch(/pending/)
+  })
+
+  it('never shows serial numbers or staff-only replacement fields even if the response carries them', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        ...replacementRemedy('ReadyForCollection'),
+        serialNumber: 'AT10-9001',
+        currentUnit: { serialNumber: 'AT10-9001' },
+        serialSeen: 'AT10-0001',
+        note: 'Unit put aside at the counter.',
+        reason: 'The customer lives in the south.',
+        contact: '[LOCATION CONTACT]',
+        recordedBy: '[AGENT]',
+      },
+    })
+    renderStatus()
+
+    await screen.findByRole('region', { name: 'Remedy' })
+    const page = document.body.textContent ?? ''
+    expect(page).not.toMatch(/AT10-9001|AT10-0001|Unit put aside|lives in the south|\[LOCATION CONTACT\]|\[AGENT\]/)
   })
 
   it('never shows the refund reference or who recorded the completion', async () => {
