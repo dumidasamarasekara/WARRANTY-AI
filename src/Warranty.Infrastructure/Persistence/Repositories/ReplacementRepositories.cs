@@ -31,6 +31,16 @@ internal sealed class ReplacementRepository(WarrantyDbContext db) : IReplacement
 
     public void Add(Replacement replacement) => db.Replacements.Add(replacement);
 
+    public async Task<IReadOnlyList<Replacement>> ListReturnMismatchesAsync(CancellationToken ct)
+        => await db.Replacements.AsNoTracking()
+            .Include(r => r.Return)
+            .Where(r => r.ReturnState == ReturnState.Mismatch
+                && (r.Status == ReplacementStatus.AwaitingReturn
+                    || r.Status == ReplacementStatus.AwaitingUnit
+                    || r.Status == ReplacementStatus.ReadyForCollection))
+            .OrderBy(r => r.UpdatedAt)
+            .ToListAsync(ct);
+
     public void AddEvent(ReplacementEvent replacementEvent)
     {
         ArgumentNullException.ThrowIfNull(replacementEvent);

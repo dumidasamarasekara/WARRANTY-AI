@@ -193,7 +193,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
 
     // ---- X8: a returned product that does not match ----------------------------------------------------
 
-    [Fact(Skip = "Pending T338")]
+    [Fact]
     public async Task X8_a_mismatching_return_stays_awaiting_return_goes_to_the_review_queue_and_the_reviewer_accepts_it()
     {
         var agent = TestStaffUsers.AgentBorealis;

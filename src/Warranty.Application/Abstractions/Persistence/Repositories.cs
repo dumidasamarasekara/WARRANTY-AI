@@ -255,6 +255,13 @@ public interface IReplacementRepository
 
     void Add(Replacement replacement);
 
+    /// <summary>
+    /// The open replacements (<see cref="ReplacementStatus.AwaitingReturn"/>, <see cref="ReplacementStatus.AwaitingUnit"/>,
+    /// <see cref="ReplacementStatus.ReadyForCollection"/>) whose returned product does not match the claim
+    /// (<see cref="ReturnState.Mismatch"/>), untracked with their return, oldest change first (the review queue, 003 research R5).
+    /// </summary>
+    Task<IReadOnlyList<Replacement>> ListReturnMismatchesAsync(CancellationToken ct);
+
     /// <summary>Replacement events are append-only: there is no update or delete.</summary>
     void AddEvent(ReplacementEvent replacementEvent);
 }
