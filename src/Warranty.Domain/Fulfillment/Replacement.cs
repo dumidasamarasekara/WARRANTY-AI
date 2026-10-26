@@ -10,7 +10,7 @@ namespace Warranty.Domain.Fulfillment;
 /// claim. Carries the policy version's replacement rules copied at creation, and owns its locations, the
 /// faulty-product return, model proposals, reserved units and append-only events; status changes follow
 /// the replacement state machine in data-model.md and go only through this aggregate (transitions are
-/// added in T325, T336, T337, T343 and T355).
+/// added in T325, T336, T337, T343, T345 and T355).
 /// </summary>
 public sealed class Replacement
 {
@@ -659,10 +659,42 @@ public sealed class Replacement
     /// except <see cref="ReplacementStatus.HandedToCustomer"/> and <see cref="ReplacementStatus.Cancelled"/> →
     /// <see cref="ReplacementStatus.Cancelled"/> (final) with a <see cref="ReportSource.System"/> event referring to the remedy
     /// decision; a reserved current unit ends as <see cref="ReplacementUnitResult.Cancelled"/> and the return stays recorded.
-    /// Pending T345.
+    /// A pending model proposal stays undecided: a cancelled replacement allows no event, so it is never decided.
     /// </summary>
     public ReplacementEvent Cancel(Guid remedyDecisionId, DateTimeOffset cancelledAt)
-        => throw new NotImplementedException($"Pending T345 ({remedyDecisionId}, {cancelledAt}).");
+    {
+        if (remedyDecisionId == Guid.Empty)
+        {
+            throw new ArgumentException("The remedy decision that cancels the replacement is required.", nameof(remedyDecisionId));
+        }
+
+        if (Status is ReplacementStatus.HandedToCustomer or ReplacementStatus.Cancelled)
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record {ReplacementEventType.Cancelled} on a replacement in status {Status}: the status is final.");
+        }
+
+        var from = Status;
+        var unit = CurrentUnit is { IsReserved: true } reserved ? reserved : null;
+        unit?.End(ReplacementUnitResult.Cancelled, reason: null, cancelledAt);
+        SetStatus(ReplacementStatus.Cancelled, cancelledAt);
+        return AppendEvent(
+            ReplacementEventType.Cancelled,
+            from,
+            ReplacementStatus.Cancelled,
+            reportedAt: cancelledAt,
+            recordedAt: cancelledAt,
+            ReportSource.System,
+            ReplacementEvent.SystemActor,
+            note: null,
+            payloadJson: JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["remedyDecisionId"] = remedyDecisionId,
+                ["unitId"] = unit?.Id,
+                ["unitResult"] = unit?.Result.ToString(),
+                ["returnState"] = ReturnState.ToString(),
+            }));
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.Correction"/> of the staff entry with sequence number <paramref name="correctsSeq"/> (any

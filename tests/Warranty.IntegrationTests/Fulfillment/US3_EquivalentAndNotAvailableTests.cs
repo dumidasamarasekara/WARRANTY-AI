@@ -36,7 +36,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "003")]
 public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixture)
 {
-    private const string CancellationPending = "Pending T345";
     private const string ReadyTemplate = "ReplacementReadyForCollection";
     private const string ProposalReason = "No Aurora Tab 10 is left in stock; the Tab 11 is its successor.";
     private const string DeclineReason = "A Tab 10 unit arrives at the location next week.";
@@ -333,7 +332,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         await ConfirmRefundAsync(X12Borealis, reviewer, ["LocationSuggested", "ReturnRecorded", "NotAvailable"]);
     }
 
-    [Fact(Skip = CancellationPending)]
+    [Fact]
     public async Task X12_a_reviewers_change_from_Replacement_to_Refund_before_the_hand_over_cancels_the_replacement()
     {
         // Borealis's uneconomical-repair row allows Refund or Replacement: the reviewer changes the in-progress Replacement.

@@ -10,19 +10,26 @@ public static class RemedyDecisionRules
 {
     /// <summary>
     /// Why the remedy cannot be decided now, or null when it can: a remedy awaiting a decision can always be decided; a
-    /// remedy in progress can be changed until a Repair is handed over to a centre or a Replacement/Refund is
-    /// completed (a completed remedy is final), and only to another remedy.
+    /// remedy in progress can be changed until a Repair is handed over to a centre, a Replacement unit is handed to the
+    /// customer (003 research R13) or a Refund is completed (a completed remedy is final), and only to another remedy.
+    /// Replacement cannot be chosen again once the claim's replacement has ended (not available or cancelled): a claim
+    /// has one replacement. The <paramref name="replacement"/> rules are checked when it is given (the ActionExecutor).
     /// </summary>
-    public static string? WhyNotDecidable(ClaimRemedy remedy, Repair? repair, RemedyType requested)
+    public static string? WhyNotDecidable(ClaimRemedy remedy, Repair? repair, RemedyType requested, Replacement? replacement = null)
     {
         ArgumentNullException.ThrowIfNull(remedy);
         return remedy.State switch
         {
-            RemedyState.AwaitingDecision => null,
             RemedyState.Completed => "The remedy of this claim is completed and can no longer be changed.",
+            _ when requested == RemedyType.Replacement
+                && replacement is { Status: ReplacementStatus.NotAvailable or ReplacementStatus.Cancelled } ended
+                => $"The claim's replacement has ended ({ended.Status}); Replacement cannot be chosen again.",
+            RemedyState.AwaitingDecision => null,
             _ when remedy.Remedy == requested => $"{requested} is already the remedy of this claim.",
             _ when remedy.Remedy == RemedyType.Repair && repair is not null && repair.Status != RepairStatus.AwaitingHandover
                 => "The product was already handed over for repair; the remedy changes only after the repair outcome.",
+            _ when remedy.Remedy == RemedyType.Replacement && replacement is { Status: ReplacementStatus.HandedToCustomer }
+                => "The replacement unit was already handed to the customer; the remedy can no longer be changed.",
             _ => null,
         };
     }
