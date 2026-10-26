@@ -199,7 +199,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 ### Tests for User Story 5 ⚠️ write first, ensure they fail
 
 - [X] T353 [P] [US5] Write `tests/Warranty.UnitTests/Fulfillment/ReplacementMoveCorrectionTests.cs` (one active location after a move, current unit `Released`, refused unit kept and remedy unchanged, a notification per reserved unit, correction keeps the original event and never queues a second notification for the same unit) and unskip the US5 cases of `ReplacementStateMachineTests.cs`
-- [ ] T354 [P] [US5] Write `tests/Warranty.IntegrationTests/Fulfillment/US5_MoveRefusalCorrectionTests.cs` for X16, X17 and a move to a Borealis location from an Aurora claim (404 + `ACCESS_DENIED`)
+- [X] T354 [P] [US5] Write `tests/Warranty.IntegrationTests/Fulfillment/US5_MoveRefusalCorrectionTests.cs` for X16, X17 and a move to a Borealis location from an Aurora claim (404 + `ACCESS_DENIED`)
 
 ### Implementation for User Story 5
 
