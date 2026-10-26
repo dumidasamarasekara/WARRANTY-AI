@@ -13,6 +13,12 @@ public sealed record ReplacementCorrection(
     DateOnly? HandedOverOn = null,
     ReplacementStatus? ToStatus = null)
 {
+    /// <summary>
+    /// With <see cref="SerialSeen"/>: whether the corrected serial matches the claim's serial (the use case's
+    /// <c>EvidenceMatchRules</c> comparison, 001 FR-016); not a corrected value of its own.
+    /// </summary>
+    public bool SerialSeenMatches { get; init; }
+
     /// <summary>How many corrected values are set; a correction needs exactly one.</summary>
     public int ValueCount =>
         (ReturnedOn is null ? 0 : 1) + (SerialSeen is null ? 0 : 1) + (SerialNumber is null ? 0 : 1)

@@ -16,7 +16,7 @@ namespace Warranty.UnitTests.Fulfillment;
 /// ModelApproved, ModelDeclined, NotAvailable) in T343; the system cancellation in T345; US5 (UnitRefused, Moved,
 /// Correction) in T355. A case pending two stories ("Pending T336 and T343") is unskipped by the later of the two.
 /// Corrections are covered by <see cref="Replacement.AllowedEvents"/> and the final statuses here and in detail by
-/// ReplacementMoveCorrectionTests (T353).
+/// <see cref="ReplacementMoveCorrectionTests"/> (T353).
 /// </para>
 /// </summary>
 public sealed class ReplacementStateMachineTests
