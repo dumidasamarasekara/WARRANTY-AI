@@ -214,7 +214,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [X] T358 [P] Update documentation: add feature 003 to `CLAUDE.md` (what it adds, the `Feature=003` trait, the T3xx numbering); note in `specs/002-remedy-repair-handover/spec.md` (FR-034, User Story 4 scenario 1) and `contracts/ui-screens.md` (claimant label "Replacement on its way") that feature 003 supersedes them
-- [ ] T359 Run the full validation: `dotnet build Warranty.slnx`, `dotnet test --solution Warranty.slnx -- --filter-not-trait "Category=Smoke"`, the frontend lint/test/build, quickstart X1–X20 by hand, and the timed walkthroughs for SC-001 (a replacement step under one minute) and SC-007 (auditor explains the replacement from the trail in under 3 minutes); record the results in the PR description
+- [X] T359 Run the full validation: `dotnet build Warranty.slnx`, `dotnet test --solution Warranty.slnx -- --filter-not-trait "Category=Smoke"`, the frontend lint/test/build, quickstart X1–X20 by hand, and the timed walkthroughs for SC-001 (a replacement step under one minute) and SC-007 (auditor explains the replacement from the trail in under 3 minutes); record the results in the PR description
 
 ---
 
