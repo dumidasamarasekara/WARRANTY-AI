@@ -65,7 +65,8 @@ Layout: two columns (1.4fr / 1fr), as the AI decision tab.
   status." with a **Reload** button.
 
 **Left — Completion card** (Replacement or Refund) with **Record completion** (date; reference,
-required for Refund).
+required for Refund). *Feature 003 supersedes this card for Replacement: a Replacement remedy
+shows 003's replacement card (`specs/003-replacement-fulfilment/contracts/ui-screens.md`).*
 
 **Right — Repair events**: `Timeline` of `RepairView.events` with type, reported and recorded
 times, source, actor and note; corrections are linked to the entry they correct and the corrected
@@ -107,6 +108,10 @@ contact you" with the remedy section built from `ClaimantClaimView.remedy`:
 - For "Repair not possible" and while a remedy is being decided: a neutral `pending` banner with
   the label text only.
 - Never shows notes, centre references, failure reasons or staff names (FR-041).
+- *Superseded for Replacement by feature 003: the claimant label "Replacement on its way"
+  (data-model.md "Claimant projection") is no longer used; replacements are collected, and the
+  claimant page shows 003's replacement section and labels
+  (`specs/003-replacement-fulfilment/contracts/ui-screens.md`).*
 
 ## 6. Copy
 

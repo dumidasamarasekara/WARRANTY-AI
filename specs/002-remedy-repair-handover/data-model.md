@@ -252,7 +252,7 @@ risk data (FR-041). Labels:
 | Repair `ReadyForCollection` | Ready for collection |
 | Repair `Collected` | Collected |
 | Repair `RepairNotPossible`, remedy `AwaitingDecision` | Repair not possible. Your claim is being reviewed. |
-| Replacement `InProgress` / `Completed` | Replacement on its way / Replacement handed over |
+| Replacement `InProgress` / `Completed` | Replacement on its way / Replacement handed over (*superseded by feature 003's replacement labels*) |
 | Refund `InProgress` / `Completed` | Refund being processed / Refund completed |
 
 ## Seed data changes (FR-044 – FR-046)
