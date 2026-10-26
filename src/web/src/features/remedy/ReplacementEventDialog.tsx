@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { useMe } from '../../app/staffQueries'
 import { ApiProblem } from '../../shared/api/client'
-import { formatDateTime, formatMoney } from '../../shared/presentation'
+import { formatDateTime, formatMoney, replacementStatusPresentation } from '../../shared/presentation'
 import { Button, Dialog, Select, TextArea, TextInput } from '../../shared/ui'
 import {
   useRecordReplacementEvent,
@@ -15,8 +15,12 @@ import { reportSourceLabel, reportSources } from './remedyView'
 import {
   needsReturnConfirmation,
   replacementActionLabels,
+  replacementCorrectableFieldLabels,
+  replacementCorrectableFields,
+  replacementEventName,
   replacementModelText,
   replacementReasonLimits,
+  type ReplacementCorrectableField,
   type ReplacementDialogEvent,
 } from './replacementView'
 import styles from './RemedyTab.module.css'
@@ -61,6 +65,9 @@ const fields = [
   'serialNumber',
   'handedOverOn',
   'returnConfirmed',
+  'correctsSeq',
+  'correction',
+  'toStatus',
 ] as const
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -79,12 +86,24 @@ const descriptions: Record<ReplacementDialogEvent, string> = {
   ModelDeclined: 'Decline the proposed model: the claimed model remains.',
   ReturnAccepted: 'Accept the returned product although its serial does not match the claim’s.',
   UnitReserved: 'Record the unit the location reserved for the customer.',
+  UnitRefused: 'Record that the customer refused the unit at collection, for example damaged, the wrong model or not working.',
   HandedToCustomer: 'Record that the customer collected the replacement.',
   NotAvailable: 'Record that no replacement unit can be supplied.',
+  Moved: 'Move the replacement to another location.',
+  Correction: 'Correct an entry recorded by mistake. The original entry stays in the history.',
 }
 
 /** Events whose request carries a reason of 10–1000 characters (003 contracts, `ReplacementEventRequest`). */
-const reasonEvents: readonly ReplacementDialogEvent[] = ['LocationChanged', 'ReturnAccepted', 'ModelProposed', 'ModelDeclined', 'NotAvailable']
+const reasonEvents: readonly ReplacementDialogEvent[] = [
+  'LocationChanged',
+  'ReturnAccepted',
+  'ModelProposed',
+  'ModelDeclined',
+  'UnitRefused',
+  'NotAvailable',
+  'Moved',
+  'Correction',
+]
 
 /** The pending model proposal a reviewer decides: the model, the reason, who proposed it and when. */
 function PendingProposal({ proposal }: { proposal: NonNullable<ReplacementView['pendingProposal']> }) {
@@ -131,14 +150,18 @@ export function ReplacementEventDialog({
   const [productId, setProductId] = useState('')
   const [reason, setReason] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
-  const [returnedOn, setReturnedOn] = useState(() => localDate(now))
+  const correcting = type === 'Correction'
+  // A correction of the return date starts from the recorded one; a return from today.
+  const [returnedOn, setReturnedOn] = useState(() => (correcting && replacement.faultyProductReturn?.returnedOn) || localDate(now))
   const [serialSeen, setSerialSeen] = useState('')
   const [handedOverOn, setHandedOverOn] = useState(() => localDate(now))
   const [returnConfirmed, setReturnConfirmed] = useState(false)
+  const [correctsSeq, setCorrectsSeq] = useState('')
+  const [correctField, setCorrectField] = useState<ReplacementCorrectableField | ''>('')
   const [problem, setProblem] = useState<EventProblem | null>(null)
   const [reloading, setReloading] = useState(false)
   const record = useRecordReplacementEvent()
-  const choosesLocation = type === 'LocationChanged'
+  const choosesLocation = type === 'LocationChanged' || type === 'Moved'
   const proposesModel = type === 'ModelProposed'
   const decidesModel = type === 'ModelApproved' || type === 'ModelDeclined'
   const needsReason = reasonEvents.includes(type)
@@ -161,11 +184,30 @@ export function ReplacementEventDialog({
   let eventValid = true
   if (choosesLocation) eventValid = locationId !== '' && reasonValid
   if (type === 'ReturnRecorded') eventValid = returnedOn !== '' && returnedOn <= localDate(now) && trimmedSerialSeen !== ''
-  if (type === 'ReturnAccepted' || type === 'ModelDeclined' || type === 'NotAvailable') eventValid = reasonValid
+  if (type === 'ReturnAccepted' || type === 'ModelDeclined' || type === 'NotAvailable' || type === 'UnitRefused') eventValid = reasonValid
   if (proposesModel) eventValid = productId !== '' && reasonValid
   if (decidesModel && !replacement.pendingProposal) eventValid = false
   if (type === 'UnitReserved') eventValid = trimmedSerial !== ''
   if (type === 'HandedToCustomer') eventValid = handedOverOn !== '' && handedOverOn <= localDate(now) && (!confirmsReturn || returnConfirmed)
+
+  const correctable = replacement.events
+    .filter((entry) => replacementCorrectableFields(entry, replacement).length > 0)
+    .sort((a, b) => a.seq - b.seq)
+  const corrected = correctable.find((entry) => String(entry.seq) === correctsSeq)
+  const fieldOptions = corrected ? replacementCorrectableFields(corrected, replacement) : []
+  // A status correction sends the entry back to the status before it.
+  const sentBackTo = correctField === 'toStatus' ? corrected?.fromStatus : undefined
+  if (correcting) {
+    const fieldValid =
+      correctField === 'returnedOn'
+        ? returnedOn !== '' && returnedOn <= localDate(now)
+        : correctField === 'serialSeen'
+          ? trimmedSerialSeen !== ''
+          : correctField === 'serialNumber'
+            ? trimmedSerial !== ''
+            : correctField === 'toStatus' && sentBackTo !== undefined
+    eventValid = corrected !== undefined && fieldOptions.includes(correctField as ReplacementCorrectableField) && fieldValid && reasonValid
+  }
   const valid = reportedValid && source !== '' && trimmedNote.length <= replacementReasonLimits.max && eventValid
 
   const errors = Object.fromEntries(fields.map((field) => [field, fieldError(problem, field)])) as Record<
@@ -192,6 +234,13 @@ export function ReplacementEventDialog({
     if (type === 'HandedToCustomer') {
       request.handedOverOn = handedOverOn
       if (confirmsReturn) request.returnConfirmed = true
+    }
+    if (correcting && corrected) {
+      request.correctsSeq = corrected.seq
+      if (correctField === 'returnedOn') request.returnedOn = returnedOn
+      if (correctField === 'serialSeen') request.serialSeen = trimmedSerialSeen
+      if (correctField === 'serialNumber') request.serialNumber = trimmedSerial
+      if (correctField === 'toStatus' && sentBackTo) request.toStatus = sentBackTo
     }
     setProblem(null)
     record.mutate(
@@ -319,6 +368,126 @@ export function ReplacementEventDialog({
                 </option>
               ))}
             </Select>
+            {type === 'Moved' && (
+              <p className={styles.note}>
+                {replacement.currentUnit?.result === 'Reserved'
+                  ? 'The unit reserved at the current location is released and the replacement awaits a new unit at the new location. The customer is notified again once a unit is reserved there.'
+                  : 'The current location stays in the history. The remedy does not change.'}
+              </p>
+            )}
+          </>
+        )}
+
+        {type === 'UnitRefused' && replacement.currentUnit && (
+          <>
+            <dl className={styles.facts}>
+              <div>
+                <dt>Refused unit</dt>
+                <dd>
+                  <span className={styles.mono}>{replacement.currentUnit.modelCode}</span> ·{' '}
+                  <span className={styles.mono}>{replacement.currentUnit.serialNumber}</span>
+                </dd>
+              </div>
+            </dl>
+            <p className={styles.note}>
+              The unit stays in the history and the replacement awaits a new unit. The remedy does not change.
+            </p>
+          </>
+        )}
+
+        {correcting && (
+          <>
+            <Select
+              label="Entry to correct"
+              required
+              value={correctsSeq}
+              error={errors.correctsSeq ?? errors.correction}
+              onChange={(event) => {
+                setCorrectsSeq(event.target.value)
+                const next = correctable.find((entry) => String(entry.seq) === event.target.value)
+                const nextFields = next ? replacementCorrectableFields(next, replacement) : []
+                setCorrectField(nextFields.length === 1 ? nextFields[0]! : '')
+                clearFieldError('correctsSeq')
+                clearFieldError('correction')
+              }}
+            >
+              <option value="">{correctable.length === 0 ? 'No entry can be corrected' : 'Choose an entry'}</option>
+              {correctable.map((entry) => (
+                <option key={entry.seq} value={entry.seq}>
+                  {replacementEventName(entry)} · reported {formatDateTime(entry.reportedAt)}
+                </option>
+              ))}
+            </Select>
+            {fieldOptions.length > 1 && (
+              <Select
+                label="What to correct"
+                required
+                value={correctField}
+                onChange={(event) => setCorrectField(event.target.value as ReplacementCorrectableField | '')}
+              >
+                <option value="">Choose what to correct</option>
+                {fieldOptions.map((field) => (
+                  <option key={field} value={field}>
+                    {replacementCorrectableFieldLabels[field]}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {correctField === 'returnedOn' && (
+              <TextInput
+                type="date"
+                label="Correct return date"
+                required
+                max={localDate(now)}
+                value={returnedOn}
+                error={errors.returnedOn}
+                onChange={(event) => {
+                  setReturnedOn(event.target.value)
+                  setNow(new Date())
+                  clearFieldError('returnedOn')
+                }}
+              />
+            )}
+            {correctField === 'serialSeen' && (
+              <>
+                <TextInput
+                  label="Correct serial seen on the returned product"
+                  required
+                  value={serialSeen}
+                  error={errors.serialSeen}
+                  onChange={(event) => {
+                    setSerialSeen(event.target.value)
+                    clearFieldError('serialSeen')
+                  }}
+                />
+                <p className={styles.note}>
+                  The corrected serial is compared with the claim’s again. If it does not match, a claims reviewer must accept the
+                  return.
+                </p>
+              </>
+            )}
+            {correctField === 'serialNumber' && (
+              <TextInput
+                label="Correct serial number of the unit"
+                hint="It must differ from the claimed product’s serial."
+                required
+                value={serialNumber}
+                error={errors.serialNumber}
+                onChange={(event) => {
+                  setSerialNumber(event.target.value)
+                  clearFieldError('serialNumber')
+                }}
+              />
+            )}
+            {correctField === 'toStatus' && corrected && sentBackTo && (
+              <p className={styles.note}>
+                {corrected.type === 'UnitReserved'
+                  ? `The replacement goes back to ${replacementStatusPresentation(sentBackTo).label}. The notification already sent to the customer is not withdrawn; reserving the unit again sends no second one.`
+                  : `The replacement goes back to ${replacementStatusPresentation(sentBackTo).label} with the refused unit reserved again.`}
+                {errors.toStatus && <span className={styles.fieldError}> {errors.toStatus}</span>}
+              </p>
+            )}
+            <p className={styles.note}>The original entry stays in the history, shown struck through.</p>
           </>
         )}
 

@@ -9,6 +9,7 @@ import {
   replacementActions,
   replacementModelText,
   replacementPolicyBasis,
+  replacementUnitResultLabels,
   type ReplacementDialogEvent,
 } from './replacementView'
 import styles from './RemedyTab.module.css'
@@ -157,6 +158,8 @@ export function ReplacementCard({
   const status = replacementStatusPresentation(replacement.status)
   const location = replacement.activeLocation
   const unit = replacement.currentUnit
+  // A unit refused, released by a move or cancelled: no unit is reserved for the customer now.
+  const unitEnded = unit !== undefined && unit.result !== 'Reserved' && unit.result !== 'HandedOver'
   const actions = canAct ? replacementActions(replacement) : []
 
   useEffect(() => {
@@ -215,11 +218,15 @@ export function ReplacementCard({
               <h3 className={styles.sectionLabel}>Unit</h3>
               <dl className={styles.facts}>
                 <div>
-                  <dt>Reserved unit</dt>
-                  <dd>
+                  {/* After a move or a refusal the last unit stays listed with how it ended until a new one is reserved. */}
+                  <dt>{unitEnded ? 'Last unit' : unit?.result === 'HandedOver' ? 'Handed-out unit' : 'Reserved unit'}</dt>
+                  <dd className={unitEnded ? styles.badges : undefined}>
                     {unit ? (
                       <>
-                        <span className={styles.mono}>{unit.modelCode}</span> · <span className={styles.mono}>{unit.serialNumber}</span>
+                        <span>
+                          <span className={styles.mono}>{unit.modelCode}</span> · <span className={styles.mono}>{unit.serialNumber}</span>
+                        </span>
+                        {unitEnded && <Badge tone="system">{replacementUnitResultLabels[unit.result]}</Badge>}
                       </>
                     ) : (
                       '—'

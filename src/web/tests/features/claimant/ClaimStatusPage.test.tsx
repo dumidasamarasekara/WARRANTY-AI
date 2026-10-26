@@ -307,6 +307,26 @@ describe('ClaimStatusPage', () => {
     expect(document.body).not.toHaveTextContent(/shipped|on its way|delivered/i)
   })
 
+  it('shows the new location after staff moved a ready replacement, being prepared again, without the move reason', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        ...replacementRemedy('AwaitingUnit'),
+        location: { name: 'South Service Point', address: '2 Service Street, Shelbyville', openingHours: 'Mon–Sat 10:00–18:00' },
+      },
+    })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    expect(remedy).toHaveTextContent('We are preparing your replacement')
+    const location = within(remedy).getByRole('heading', { name: 'Where to collect your replacement' }).closest('section, div')!.parentElement!
+    expect(location).toHaveTextContent('South Service Point')
+    expect(location).toHaveTextContent('2 Service Street, Shelbyville')
+    expect(location).toHaveTextContent('Opening hours: Mon–Sat 10:00–18:00')
+    expect(remedy).not.toHaveTextContent('North Service Point')
+    expect(within(remedy).queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('asks the claimant to bring the product first when the policy wants it before reservation', async () => {
     respondWith({ status: 'Approved', remedy: replacementRemedy('AwaitingReturn', true) })
     renderStatus()

@@ -45,10 +45,7 @@ export const replacementEventAnchor = (seq: number) => `replacement-event-${seq}
 /** "Entry 3 · Unit reserved": how a correction names the entry it corrects. */
 export const replacementEventName = (event: Pick<ReplacementEvent, 'seq' | 'type'>) => `Entry ${event.seq} · ${replacementEventLabel(event.type)}`
 
-/**
- * Event types the replacement event dialog records, in the button order of ui-screens.md §2. Allowed events without a
- * dialog yet (refusals, moves and corrections come with US5) render no button.
- */
+/** Event types the replacement event dialog records, in the button order of ui-screens.md §2. */
 export const replacementDialogEvents = [
   'LocationChanged',
   'ReturnRecorded',
@@ -57,8 +54,11 @@ export const replacementDialogEvents = [
   'ModelDeclined',
   'ReturnAccepted',
   'UnitReserved',
+  'UnitRefused',
   'HandedToCustomer',
   'NotAvailable',
+  'Moved',
+  'Correction',
 ] as const satisfies readonly ReplacementEventType[]
 
 export type ReplacementDialogEvent = (typeof replacementDialogEvents)[number]
@@ -75,8 +75,11 @@ export const replacementActionLabels: Record<ReplacementDialogEvent, string> = {
   ModelDeclined: 'Decline model',
   ReturnAccepted: 'Accept return',
   UnitReserved: 'Reserve unit',
+  UnitRefused: 'Customer refused unit',
   HandedToCustomer: 'Record hand-over to customer',
   NotAvailable: 'Not available',
+  Moved: 'Move',
+  Correction: 'Correct an entry',
 }
 
 /**
@@ -109,6 +112,54 @@ export const replacementPolicyBasis = (
  */
 export const needsReturnConfirmation = (replacement: Pick<ReplacementView, 'returnRule' | 'returnState'>) =>
   replacement.returnRule === 'AtCollection' && !['Returned', 'HeldByRepairCentre', 'Accepted'].includes(replacement.returnState)
+
+type ReplacementUnitResult = NonNullable<ReplacementView['currentUnit']>['result']
+
+/** How the current unit ended, when it is no longer reserved (staff only). */
+export const replacementUnitResultLabels: Record<ReplacementUnitResult, string> = {
+  Reserved: 'Reserved',
+  HandedOver: 'Handed over',
+  Refused: 'Refused by the customer',
+  Released: 'Released',
+  Cancelled: 'Cancelled',
+}
+
+/** A value a correction can set (`ReplacementEventRequest` "Correction: … the corrected field"). */
+export type ReplacementCorrectableField = 'returnedOn' | 'serialSeen' | 'serialNumber' | 'toStatus'
+
+export const replacementCorrectableFieldLabels: Record<ReplacementCorrectableField, string> = {
+  returnedOn: 'Return date',
+  serialSeen: 'Serial seen on the returned product',
+  serialNumber: 'Serial number of the unit',
+  toStatus: 'Status (recorded too early or by mistake)',
+}
+
+/**
+ * The values a correction of this entry can set (data-model.md, `Correction`); empty for system entries, corrections and
+ * entries that carry nothing to correct. A staff return has its date and serial seen, a reservation its unit's serial;
+ * the latest status change, when it is a reservation or a refusal, can also be sent back to the status before it.
+ */
+export function replacementCorrectableFields(
+  event: Pick<ReplacementEvent, 'seq' | 'type' | 'fromStatus' | 'toStatus' | 'actor' | 'source'>,
+  replacement: Pick<ReplacementView, 'status' | 'events'>,
+): ReplacementCorrectableField[] {
+  if (isSystemEvent(event) || event.type === 'Correction') return []
+  const fields: ReplacementCorrectableField[] = []
+  if (event.type === 'ReturnRecorded') fields.push('returnedOn', 'serialSeen')
+  if (event.type === 'UnitReserved') fields.push('serialNumber')
+  if ((event.type === 'UnitReserved' || event.type === 'UnitRefused') && isLatestStatusChange(event, replacement)) fields.push('toStatus')
+  return fields
+}
+
+/** Whether the entry is the latest change of status and the replacement is still in the status it set. */
+function isLatestStatusChange(
+  event: Pick<ReplacementEvent, 'seq' | 'toStatus'>,
+  replacement: Pick<ReplacementView, 'status' | 'events'>,
+) {
+  const changes = replacement.events.filter((entry) => entry.fromStatus && entry.toStatus && entry.fromStatus !== entry.toStatus)
+  const latest = changes.reduce<number | undefined>((max, entry) => (max === undefined || entry.seq > max ? entry.seq : max), undefined)
+  return latest === event.seq && event.toStatus === replacement.status
+}
 
 /** "Aurora Tab 11 (AUR-TAB11)", or the model code alone when the name is unknown. */
 export const replacementModelText = (model: { modelCode: string; name?: string }) =>
