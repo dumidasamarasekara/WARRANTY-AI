@@ -16,7 +16,8 @@ namespace Warranty.MigrationService.Seeding;
 /// rules of that policy version (<see cref="ReplacementRules.Default"/> when it has none), the first eligible replacement
 /// location of the region (<see cref="IServiceNetwork.ListEligibleAsync"/> for <see cref="ServiceCenterPurpose.Replacement"/>)
 /// with its <see cref="ReplacementEventType.LocationSuggested"/> event and a <see cref="TrailStep.ReplacementLocationAssigned"/>
-/// trail entry, and the initial status of the return rule. Claims whose reference exists are skipped, so every start is idempotent.
+/// trail entry, and the initial status of the return rule. A claim without a decided remedy (X9) keeps the Repair its policy
+/// version gives and gets no replacement. Claims whose reference exists are skipped, so every start is idempotent.
 /// </summary>
 internal sealed class ReplacementScenarioSeeder(
     WarrantyDbContext db,
@@ -34,6 +35,13 @@ internal sealed class ReplacementScenarioSeeder(
     private async Task CreateReplacementAsync(SeededRemedy seeded, CancellationToken ct)
     {
         var claim = seeded.Claim;
+        if (seeded.Remedy == RemedyType.Repair)
+        {
+            // A claim without a decided remedy (X9; a decided one must name Replacement) keeps its policy's Repair, with the
+            // repair the remedy seeder created; its replacement comes from a reviewer's later remedy decision.
+            return;
+        }
+
         if (seeded.Remedy != RemedyType.Replacement)
         {
             throw new InvalidDataException(

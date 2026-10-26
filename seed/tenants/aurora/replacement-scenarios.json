@@ -1,5 +1,5 @@
 {
-  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Aurora reaches Replacement only after two failed repairs (row repairFailed; no repair history is seeded, so the faulty product is not held by a repair centre). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Aurora returns the faulty product at collection, Borealis before reservation. X5 is a second X1-like claim so the refused hand-over is tested before any unit is reserved, independently of X2-X4. Later stories add their claims here (X8-X12, X16, X17).",
+  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim but X9 carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Aurora reaches Replacement only after two failed repairs (row repairFailed; no repair history is seeded, so the faulty product is not held by a repair centre). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Aurora returns the faulty product at collection, Borealis before reservation. X5 is a second X1-like claim so the refused hand-over is tested before any unit is reserved, independently of X2-X4. X9-aurora has no decidedRemedy: it is approved with the remedy its policy version gives (Repair, row coveredDefect) and a repair awaiting hand-over at the first eligible repair centre of the region, exactly as a remedy-scenarios.json claim, and no replacement yet. Staff then take it to its second failed repair with the product kept at the centre (hand-over, RepairFailed, NewAttemptStarted with productLocation AtCentre, RepairFailed: 002 R8) and a claims reviewer confirms Replacement; the replacement then starts with the return held by the repair centre (research R9). Later stories add their claims here (X10-X12, X16, X17).",
   "claims": [
     {
       "scenario": "X1-aurora",
@@ -48,6 +48,23 @@
         "reason": "Two repair attempts did not fix the power fault; the policy gives a replacement.",
         "decidedDaysAgo": -1
       }
+    },
+    {
+      "scenario": "X9-aurora",
+      "id": "11111111-0006-7000-8000-000000000009",
+      "reference": "RPMTX9A001",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0309",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The camera shows a black image and the tablet restarts when the camera app is opened.",
+      "purchasedDaysAgo": -80,
+      "submittedDaysAgo": -15,
+      "approvedDaysAgo": -15,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the camera fault is a manufacturing defect."
     }
   ]
 }

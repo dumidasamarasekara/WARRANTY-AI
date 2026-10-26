@@ -473,18 +473,47 @@ public sealed class SeedFilesTests
         var borealis = seed.Tenants[1].ReplacementScenarios;
 
         aurora.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
-            [("X1-aurora", "RPMTX1A001", "AUR-TAB10", "AT10-24-0301", Region.EU), ("X5", "RPMTX5A001", "AUR-TAB10", "AT10-24-0305", Region.NA)]);
+        [
+            ("X1-aurora", "RPMTX1A001", "AUR-TAB10", "AT10-24-0301", Region.EU), ("X5", "RPMTX5A001", "AUR-TAB10", "AT10-24-0305", Region.NA),
+            ("X9-aurora", "RPMTX9A001", "AUR-TAB10", "AT10-24-0309", Region.NA),
+        ]);
         borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
-            [("X6-borealis", "RPMTX6B001", "BOR-SLATE11", "BS11-24-0306", Region.EU)]);
-        aurora.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairFailed && s.DecidedRemedy.FailedAttempts == 2);
+        [
+            ("X6-borealis", "RPMTX6B001", "BOR-SLATE11", "BS11-24-0306", Region.EU), ("X7-borealis", "RPMTX7B001", "BOR-SLATE11", "BS11-24-0307", Region.EU),
+            ("X8-borealis", "RPMTX8B001", "BOR-SLATE11", "BS11-24-0308", Region.EU),
+        ]);
+        var decidedAtAurora = aurora.Where(s => s.Scenario != "X9-aurora").ToList();
+        decidedAtAurora.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairFailed && s.DecidedRemedy.FailedAttempts == 2);
         borealis.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairNotEconomical && s.DecidedRemedy.EstimateAmount == 350m);
-        aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System && s.DecidedRemedy!.Remedy == RemedyType.Replacement);
+        decidedAtAurora.Concat(borealis).ShouldAllBe(s => s.DecidedRemedy!.Remedy == RemedyType.Replacement);
+        aurora.Concat(borealis).ShouldAllBe(s => s.ApprovedBy == DecidedBy.System);
         aurora[0].Id.ShouldBe(Guid.Parse("11111111-0006-7000-8000-000000000001"));
         borealis[0].Id.ShouldBe(Guid.Parse("22222222-0006-7000-8000-000000000006"));
 
         var (a, b) = (aurora[0], borealis[0]);
         (a.Region, a.PurchasePlace, a.PurchasePrice, a.ProblemDescription, a.PurchasedDaysAgo, a.SubmittedDaysAgo, a.ApprovedDaysAgo, a.DecidedRemedy!.DecidedDaysAgo)
             .ShouldBe((b.Region, b.PurchasePlace, b.PurchasePrice, b.ProblemDescription, b.PurchasedDaysAgo, b.SubmittedDaysAgo, b.ApprovedDaysAgo, b.DecidedRemedy!.DecidedDaysAgo));
+    }
+
+    /// <summary>
+    /// Feature 003 (T334, quickstart X9, research R9): X9-aurora carries no decided remedy — it is seeded with the Repair of its
+    /// policy version, and the replacement comes later from a reviewer's decision after its second failed repair. X7 and X8
+    /// are X6-like Borealis claims with their own serials, so that the return scenarios do not change the seeded X6.
+    /// </summary>
+    [Fact]
+    public void The_X9_claim_carries_no_decided_remedy_and_X7_X8_are_claims_of_their_own()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+        var x9 = seed.Tenants[0].ReplacementScenarios.Single(s => s.Scenario == "X9-aurora");
+        var borealis = seed.Tenants[1].ReplacementScenarios;
+
+        (x9.Id, x9.DecidedRemedy).ShouldBe((Guid.Parse("11111111-0006-7000-8000-000000000009"), (DecidedRemedySeed?)null));
+        borealis.Select(s => s.Id).ShouldBe(
+        [
+            Guid.Parse("22222222-0006-7000-8000-000000000006"), Guid.Parse("22222222-0006-7000-8000-000000000007"),
+            Guid.Parse("22222222-0006-7000-8000-000000000008"),
+        ]);
+        borealis.Select(s => s.SerialNumber).Distinct().Count().ShouldBe(3);
     }
 
     [Fact]
@@ -498,7 +527,7 @@ public sealed class SeedFilesTests
             var seed = SeedFiles.Load(root);
 
             seed.Tenants[1].ReplacementScenarios.ShouldBeEmpty();
-            seed.Tenants[0].ReplacementScenarios.Count.ShouldBe(2);
+            seed.Tenants[0].ReplacementScenarios.Count.ShouldBe(3);
         }
         finally
         {
@@ -514,7 +543,7 @@ public sealed class SeedFilesTests
     [InlineData("id", "\"11111111-0005-7000-8000-000000000001\"", "is used by more than one seeded claim")]
     [InlineData("scenario", "\"X5\"", "replacement scenario X5 is listed more than once")]
     [InlineData("approvedDaysAgo", "1", "submitted and approved in that order")]
-    [InlineData("decidedRemedy", "null", "replacement scenario X1-aurora needs a decided remedy Replacement")]
+    [InlineData("decidedRemedy", "{\"scenario\":\"RepairFailed\",\"failedAttempts\":2,\"remedy\":\"Repair\",\"reason\":\"Two repair attempts did not fix it.\",\"decidedDaysAgo\":-1}", "replacement scenario X1-aurora needs a decided remedy Replacement")]
     [InlineData("decidedRemedy", "{\"scenario\":\"RepairFailed\",\"failedAttempts\":2,\"remedy\":\"Refund\",\"reason\":\"Two repair attempts did not fix it.\",\"decidedDaysAgo\":-1}", "needs a decided remedy Replacement")]
     [InlineData("decidedRemedy", "{\"scenario\":\"RepairFailed\",\"remedy\":\"Replacement\",\"reason\":\"short\",\"decidedDaysAgo\":-1}", "needs a remedy decision reason")]
     public void An_invalid_replacement_scenario_is_rejected_before_anything_is_written(string field, string json, string message)

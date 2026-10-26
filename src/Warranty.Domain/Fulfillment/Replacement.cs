@@ -354,6 +354,17 @@ public sealed class Replacement
     }
 
     /// <summary>
+    /// The <see cref="ReplacementEventType.ReturnRecorded"/> event of the system (research R9, FR-020) when the replacement
+    /// follows a 002 repair whose centre holds the faulty product (<c>Repair.HandoverHoldingProduct</c>): recorded right after
+    /// <see cref="Create"/> in the same transaction, on the repair hand-over's date, with <see cref="ReportSource.System"/>
+    /// referring to <paramref name="repairHandoverId"/>; no location or serial is recorded and the status stays.
+    /// <see cref="ReturnState.HeldByRepairCentre"/> satisfies both return rules, so no staff return and no return confirmation
+    /// at the hand-over are needed. The return is recorded once. Pending T337.
+    /// </summary>
+    public ReplacementEvent RecordHeldReturn(Guid repairHandoverId, DateOnly handedOverOn, DateTimeOffset recordedAt)
+        => throw new NotImplementedException($"Pending T337 ({repairHandoverId}, {handedOverOn}, {recordedAt}).");
+
+    /// <summary>
     /// <see cref="ReplacementEventType.ReturnAccepted"/> (claims reviewer only): a reviewer accepts a returned product whose
     /// serial did not match (<see cref="ReturnState.Mismatch"/> → <see cref="ReturnState.Accepted"/>, reason required);
     /// <see cref="ReplacementStatus.AwaitingReturn"/> → <see cref="ReplacementStatus.AwaitingUnit"/>, any other status stays.

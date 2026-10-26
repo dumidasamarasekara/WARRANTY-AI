@@ -42,19 +42,19 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 7,
-            ["catalog.product_serials"] = 138,
+            ["catalog.product_serials"] = 141,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 15,
-            ["audit.decision_trail_entries"] = 64,
-            ["claims.claim_remedies"] = 12,
-            ["claims.remedy_decisions"] = 24,
-            ["claims.repairs"] = 7,
-            ["claims.repair_handovers"] = 7,
-            ["audit.repair_events"] = 7,
-            ["claims.replacements"] = 3,
-            ["claims.replacement_locations"] = 3,
-            ["audit.replacement_events"] = 3,
+            ["claims.claims"] = 18,
+            ["audit.decision_trail_entries"] = 79,
+            ["claims.claim_remedies"] = 15,
+            ["claims.remedy_decisions"] = 30,
+            ["claims.repairs"] = 8,
+            ["claims.repair_handovers"] = 8,
+            ["audit.repair_events"] = 8,
+            ["claims.replacements"] = 5,
+            ["claims.replacement_locations"] = 5,
+            ["audit.replacement_events"] = 5,
             ["policy.warranty_policies"] = 2,
             ["policy.policy_versions"] = 3,
         });
@@ -281,7 +281,44 @@ public sealed class MigrationServiceTests : IAsyncLifetime
                 + $"Aurora Service Center Springfield (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
             "RPMTX6B001 | Approved | InProgress Replacement | BOR-WP v1 | SameModel/BeforeReservation/6 | AwaitingReturn | NotYetReturned | "
                 + $"Borealis Repair Hub Lyon (Suggested) | 1:LocationSuggested:AwaitingReturn:System | {Trail}",
+            "RPMTX7B001 | Approved | InProgress Replacement | BOR-WP v1 | SameModel/BeforeReservation/6 | AwaitingReturn | NotYetReturned | "
+                + $"Borealis Repair Hub Lyon (Suggested) | 1:LocationSuggested:AwaitingReturn:System | {Trail}",
+            "RPMTX8B001 | Approved | InProgress Replacement | BOR-WP v1 | SameModel/BeforeReservation/6 | AwaitingReturn | NotYetReturned | "
+                + $"Borealis Repair Hub Lyon (Suggested) | 1:LocationSuggested:AwaitingReturn:System | {Trail}",
         ]);
+    }
+
+    /// <summary>
+    /// Feature 003 (T334, quickstart X9): the X9 replacement scenario claim has no decided remedy, so it is Approved with the
+    /// Repair of its own policy version (row <c>coveredDefect</c>) and a repair awaiting hand-over at the first eligible repair
+    /// centre of its region, like a remedy scenario claim, and has no replacement until a reviewer decides one.
+    /// </summary>
+    [Fact]
+    [Trait("Feature", "003")]
+    public async Task The_X9_claim_is_seeded_with_its_policys_repair_and_no_replacement()
+    {
+        (await RunMigrationServiceAsync()).ShouldBe(0);
+        await using var warranty = await OpenAsync("warranty");
+        await using var command = new NpgsqlCommand(
+            """
+            select c.status || ' | ' || cr.state || ' ' || cr.remedy || ' | ' || p.code || ' v' || v.version || ' | '
+                   || (select string_agg(d.kind || ':' || d.table_row, ',' order by d.seq) from claims.remedy_decisions d where d.claim_id = c.id)
+                   || ' | ' || rp.status || ' | ' || sc.name || ' | '
+                   || (select count(*) from claims.replacements r where r.claim_id = c.id)
+            from claims.claims c
+            join claims.claim_remedies cr on cr.claim_id = c.id
+            join policy.policy_versions v on v.id = cr.policy_version_id
+            join policy.warranty_policies p on p.id = v.policy_id
+            join claims.repairs rp on rp.claim_id = c.id
+            join claims.repair_handovers h on h.id = rp.active_handover_id
+            join integration.service_centers sc on sc.id = h.service_center_id
+            where c.reference = 'RPMTX9A001'
+            """,
+            warranty);
+
+        (await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)).ShouldBe(
+            "Approved | InProgress Repair | AUR-WP v2 | Evaluated:coveredDefect,Decided:coveredDefect | AwaitingHandover | "
+            + "Aurora Service Center Springfield | 0");
     }
 
     /// <summary>

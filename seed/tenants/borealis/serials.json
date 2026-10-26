@@ -21,6 +21,8 @@
   { "serialNumber": "BS11-24-0109", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-12", "reservedFor": "R9-borealis (remedy-scenarios.json, reviewer confirms the refund after two failed repairs)" },
   { "serialNumber": "BS11-24-0110", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-12", "reservedFor": "R10-borealis (remedy-scenarios.json, estimate above the economic limit)" },
   { "serialNumber": "BS11-24-0306", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-19", "reservedFor": "X6-borealis (replacement-scenarios.json, same facts as X1-aurora)" },
+  { "serialNumber": "BS11-24-0307", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-19", "reservedFor": "X7-borealis (replacement-scenarios.json, matching return before reservation, then hand-over)" },
+  { "serialNumber": "BS11-24-0308", "modelCode": "BOR-SLATE11", "manufacturedOn": "2024-08-19", "reservedFor": "X8-borealis (replacement-scenarios.json, returned serial does not match; a reviewer accepts the return)" },
 
   { "serialNumber": "BH2-24-0001", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-02" },
   { "serialNumber": "BH2-24-0002", "modelCode": "BOR-HUB2", "manufacturedOn": "2024-05-06", "reservedFor": "golden G-BOR-04" },
