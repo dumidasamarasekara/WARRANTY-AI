@@ -16,7 +16,9 @@ namespace Warranty.AI.Harness.Tools.Implementations;
 /// model code normalized exact, purchase date exact, price within max(1%, 1.00), seller after removing
 /// case, punctuation and legal suffixes. A field the invoice does not show (<c>UNKNOWN</c>, blank, or an
 /// amount of 0, as in the invoice-extraction schema) is <c>NotCompared</c> — never a mismatch. The
-/// invoice is named by its <c>EV-n</c> reference, which must be an invoice of the run's claim.
+/// invoice is named by its <c>EV-n</c> reference, which must be an invoice of the run's claim. For a replacement unit
+/// the customer's invoice shows the serial the unit replaced, so that serial is accepted as an alternative to the
+/// claimed one (<see cref="ClaimedPurchase.OriginalSerial"/>, 003 research R11).
 /// </summary>
 public sealed class InvoiceValidationTool(IClaimRepository claims) : ITool
 {
@@ -73,19 +75,23 @@ public sealed class InvoiceValidationTool(IClaimRepository claims) : ITool
         }
 
         var claim = await ToolSupport.RequireClaimAsync(claims, ctx.ClaimId, ct);
-        var fields = Compare(ClaimedPurchase.From(claim), invoice);
+        var replaced = ctx.Case is { } @case && @case.ClaimId == ctx.ClaimId ? @case.ReplacementCover?.OriginalSerial : null;
+        var fields = Compare(ClaimedPurchase.From(claim) with { OriginalSerial = replaced }, invoice);
         var result = new InvoiceValidationResult(invoiceRef, fields);
         return ToolResult.Ok(result, Summarize(invoiceRef, fields));
     }
 
-    /// <summary>Field-by-field comparison of the claimed purchase with the invoice, in a fixed field order.</summary>
+    /// <summary>
+    /// Field-by-field comparison of the claimed purchase with the invoice, in a fixed field order. The serial matches
+    /// when the invoice shows the claimed serial or, for a replacement unit, the <see cref="ClaimedPurchase.OriginalSerial"/>.
+    /// </summary>
     public static IReadOnlyList<InvoiceFieldCheck> Compare(ClaimedPurchase claim, InvoiceFields invoice)
     {
         ArgumentNullException.ThrowIfNull(claim);
         ArgumentNullException.ThrowIfNull(invoice);
         return
         [
-            new(InvoiceFieldNames.SerialNumber, claim.SerialNumber, invoice.Serial, EvidenceMatchRules.IdentifiersMatch(claim.SerialNumber, invoice.Serial)),
+            new(InvoiceFieldNames.SerialNumber, claim.SerialNumber, invoice.Serial, SerialMatch(claim, invoice.Serial)),
             new(InvoiceFieldNames.ModelCode, claim.ModelCode, invoice.ModelCode, EvidenceMatchRules.IdentifiersMatch(claim.ModelCode, invoice.ModelCode)),
             new(
                 InvoiceFieldNames.PurchaseDate,
@@ -99,6 +105,17 @@ public sealed class InvoiceValidationTool(IClaimRepository claims) : ITool
                 EvidenceMatchRules.PriceMatches(claim.PurchasePrice, invoice.Amount)),
             new(InvoiceFieldNames.Seller, claim.Seller, invoice.Seller, EvidenceMatchRules.SellersMatch(claim.Seller, invoice.Seller)),
         ];
+    }
+
+    /// <summary>The claimed serial against the invoice's; a mismatch becomes a match when the invoice shows the replaced serial.</summary>
+    private static EvidenceMatch SerialMatch(ClaimedPurchase claim, string? invoiceSerial)
+    {
+        var match = EvidenceMatchRules.IdentifiersMatch(claim.SerialNumber, invoiceSerial);
+        return match == EvidenceMatch.Mismatch
+               && claim.OriginalSerial is { } original
+               && EvidenceMatchRules.IdentifiersMatch(original, invoiceSerial) == EvidenceMatch.Match
+            ? EvidenceMatch.Match
+            : match;
     }
 
     /// <summary>
@@ -187,7 +204,9 @@ public sealed record ClaimedPurchase(
     public static ClaimedPurchase From(CaseContext @case)
     {
         ArgumentNullException.ThrowIfNull(@case);
-        return new(@case.SerialNumber, @case.ProductModelCode, @case.PurchaseDate, @case.PurchasePrice, @case.PurchasePlace);
+        return new(
+            @case.SerialNumber, @case.ProductModelCode, @case.PurchaseDate, @case.PurchasePrice, @case.PurchasePlace,
+            @case.ReplacementCover?.OriginalSerial);
     }
 }
 

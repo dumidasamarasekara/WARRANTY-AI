@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Warranty.AI.Harness.Context;
 using Warranty.Application.Abstractions;
+using Warranty.Application.Abstractions.Knowledge;
 
 namespace Warranty.AI.Harness.Tools;
 
@@ -15,9 +16,11 @@ public interface ITool
 
 /// <summary>
 /// Injected by the harness for every invocation. The tenant comes from the run's job context only;
-/// tools never accept tenant input.
+/// tools never accept tenant input. <see cref="Case"/> is the run's case knowledge (deterministic facts such as a
+/// replacement unit's cover, 003 research R11); null outside a run.
 /// </summary>
-public sealed record ToolInvocationContext(ITenantContext Tenant, Guid RunId, Guid ClaimId, string Caller, ReferenceRegistry References);
+public sealed record ToolInvocationContext(
+    ITenantContext Tenant, Guid RunId, Guid ClaimId, string Caller, ReferenceRegistry References, CaseContext? Case = null);
 
 /// <summary>A tool's answer to the model; <see cref="Summary"/> is the short, redacted text stored in <c>aiops.tool_calls</c>.</summary>
 public sealed record ToolResult(bool IsError, JsonElement Content, string Summary)
