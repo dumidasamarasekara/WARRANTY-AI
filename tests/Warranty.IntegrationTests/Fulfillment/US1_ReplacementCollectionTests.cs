@@ -298,7 +298,7 @@ public sealed class US1_ReplacementCollectionTests(WarrantyAppFixture fixture)
         (await AccessDeniedCountAsync(X6)).ShouldBeGreaterThan(deniedBefore);
     }
 
-    [Fact(Skip = "Pending T356")]
+    [Fact]
     public async Task X18_moving_an_Aurora_replacement_to_a_Borealis_location_gets_404_and_changes_nothing()
     {
         var borealisLocation = (await ReplacementRowAsync(X6)).ServiceCenterId.ShouldNotBeNull();

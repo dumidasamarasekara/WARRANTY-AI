@@ -30,8 +30,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class ReplacementMoveCorrectionTests
 {
-    private const string PendingUseCase = "Pending T356";
-
     private const string AgentActor = "agent-sub-t353";
     private const string ReviewerActor = "reviewer-sub-t353";
     private const string AuditorActor = "auditor-sub-t353";
@@ -483,7 +481,7 @@ public sealed class ReplacementMoveCorrectionTests
 
     // ── Through the request (T356): notifications per unit, remedy unchanged, tenant isolation ──
 
-    [Fact(Skip = PendingUseCase)]
+    [Fact]
     public async Task X16_move_reserve_refuse_reserve_queues_one_notification_per_reserved_unit_and_leaves_the_remedy_unchanged()
     {
         var (claim, replacement, remedy) = ArrangeAwaitingUnit();
@@ -517,7 +515,7 @@ public sealed class ReplacementMoveCorrectionTests
             claim.Id, TrailStep.ReplacementLocationAssigned, AgentActor, Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact(Skip = PendingUseCase)]
+    [Fact]
     public async Task A_move_to_a_location_of_another_company_is_404_with_a_security_event_and_changes_nothing()
     {
         var (claim, replacement, _) = ArrangeAwaitingUnit();
@@ -532,7 +530,7 @@ public sealed class ReplacementMoveCorrectionTests
         _replacements.DidNotReceiveWithAnyArgs().AddEvent(default!);
     }
 
-    [Theory(Skip = PendingUseCase)]
+    [Theory]
     [InlineData("Moved", "locationId")]
     [InlineData("Moved", "reason")]
     [InlineData("UnitRefused", "reason")]
@@ -565,7 +563,7 @@ public sealed class ReplacementMoveCorrectionTests
         _replacements.DidNotReceiveWithAnyArgs().AddEvent(default!);
     }
 
-    [Fact(Skip = PendingUseCase)]
+    [Fact]
     public async Task X17_a_serial_correction_applies_to_the_unit_keeps_the_original_entry_and_queues_no_notification()
     {
         var (claim, replacement, _) = ArrangeAwaitingUnit();
@@ -588,7 +586,7 @@ public sealed class ReplacementMoveCorrectionTests
             claim.Id, TrailStep.ReplacementStatusUpdated, AgentActor, Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>());
     }
 
-    [Theory(Skip = PendingUseCase)]
+    [Theory]
     [InlineData(ClaimSerial)]
     [InlineData(" at10-24-5301 ")]
     public async Task A_corrected_unit_serial_follows_the_reservation_rules(string serial)
@@ -604,7 +602,7 @@ public sealed class ReplacementMoveCorrectionTests
         _replacements.DidNotReceiveWithAnyArgs().AddEvent(default!);
     }
 
-    [Fact(Skip = PendingUseCase)]
+    [Fact]
     public async Task A_reservation_sent_back_and_reserved_again_queues_no_second_notification_for_the_unit()
     {
         var (claim, replacement, _) = ArrangeAwaitingUnit();
@@ -622,7 +620,7 @@ public sealed class ReplacementMoveCorrectionTests
         keys.ShouldHaveSingleItem().ShouldBe(replacement.CurrentUnitId!.Value);
     }
 
-    [Fact(Skip = PendingUseCase)]
+    [Fact]
     public async Task A_correction_with_a_return_date_in_the_future_is_refused()
     {
         var (claim, replacement, _) = ArrangeAwaitingUnit();
