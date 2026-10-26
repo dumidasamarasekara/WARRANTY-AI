@@ -37,7 +37,36 @@ public sealed class ReplacementPolicy
     /// <param name="original">The claimed (faulty) product model.</param>
     /// <param name="proposed">The model staff propose to hand out.</param>
     public ModelCheckResult CheckModel(ReplacementRules? rules, ReplacementModel original, ReplacementModel proposed)
-        => throw new NotImplementedException("Pending T342.");
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        ArgumentNullException.ThrowIfNull(proposed);
+
+        if (string.Equals(original.ModelCode, proposed.ModelCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ModelCheckResult(ReplacementModelVerdict.SameModel, null);
+        }
+
+        if ((rules ?? ReplacementRules.Default).ProductRule != ReplacementProductRule.SameCategoryAtLeastClaimValue)
+        {
+            return Refused(ReplacementModelRefusal.SameModelOnly);
+        }
+
+        if (!string.Equals(original.Category, proposed.Category, StringComparison.OrdinalIgnoreCase))
+        {
+            return Refused(ReplacementModelRefusal.OtherCategory);
+        }
+
+        if (original.ClaimValue is not { } originalValue || proposed.ClaimValue is not { } proposedValue)
+        {
+            return Refused(ReplacementModelRefusal.MissingClaimValue);
+        }
+
+        return proposedValue >= originalValue
+            ? new ModelCheckResult(ReplacementModelVerdict.NeedsReviewerApproval, null)
+            : Refused(ReplacementModelRefusal.LowerClaimValue);
+    }
+
+    private static ModelCheckResult Refused(ReplacementModelRefusal refusal) => new(ReplacementModelVerdict.Refused, refusal);
 }
 
 /// <summary>A product model as the replacement rules compare it; <see cref="ClaimValue"/> is null when the catalog has none.</summary>

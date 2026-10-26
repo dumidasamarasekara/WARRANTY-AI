@@ -11,7 +11,7 @@ namespace Warranty.Guardrails.Remedies;
 /// Rules: a missing rule set, row or fact needed for the decision goes to a reviewer with
 /// <see cref="RemedyPendingReason.NoRemedyRule"/>, never to an automatic remedy (FR-012). A single remedy is
 /// set automatically (FR-011) except after the attempt limit or an uneconomical estimate, where a reviewer
-/// confirms it (FR-031, FR-032). Without an economic limit the repair is never uneconomical (FR-004); an
+/// confirms it (FR-031, FR-032), and when a replacement is not available (003 FR-026). Without an economic limit the repair is never uneconomical (FR-004); an
 /// estimate equal to the limit is economical.
 /// </remarks>
 public sealed class RemedyPolicyEvaluator
@@ -39,6 +39,7 @@ public sealed class RemedyPolicyEvaluator
                 : Review(scenario, row, [], RemedyPendingReason.NoRemedyRule),
             RemedyScenario.RepairFailed => RepairFailed(scenario, row, rules.RepairFailed, failedAttempts),
             RemedyScenario.RepairNotEconomical => RepairNotEconomical(scenario, row, rules.RepairNotEconomical, estimate, claimValue),
+            RemedyScenario.ReplacementNotAvailable => ReplacementNotAvailable(scenario, row, rules.ReplacementNotAvailable),
             _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown remedy scenario."),
         };
     }
@@ -50,6 +51,7 @@ public sealed class RemedyPolicyEvaluator
         RemedyScenario.ProtectionPlanDamage => "protectionPlan",
         RemedyScenario.RepairNotEconomical => "repairNotEconomical",
         RemedyScenario.RepairFailed => "repairFailed",
+        RemedyScenario.ReplacementNotAvailable => "replacementNotAvailable",
         _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown remedy scenario."),
     };
 
@@ -96,6 +98,16 @@ public sealed class RemedyPolicyEvaluator
             ? Continue(scenario, row, limit)
             : Review(scenario, row, rule.AllowedRemedies, RemedyPendingReason.RepairNotEconomical, limit);
     }
+
+    /// <summary>
+    /// A replacement that cannot be supplied (003 FR-026, research R2): the row's remedies go to a reviewer with
+    /// <see cref="RemedyPendingReason.ReplacementNotAvailable"/>; a single remedy is the recommendation but is never set
+    /// automatically. A missing row gives no remedy (<see cref="RemedyPendingReason.NoRemedyRule"/>).
+    /// </summary>
+    private static RemedyEvaluation ReplacementNotAvailable(RemedyScenario scenario, string row, RemedyChoice? choice)
+        => choice is null || choice.AllowedRemedies.Count == 0
+            ? Review(scenario, row, [], RemedyPendingReason.NoRemedyRule)
+            : Review(scenario, row, choice.AllowedRemedies, RemedyPendingReason.ReplacementNotAvailable);
 
     private static RemedyEvaluation Review(
         RemedyScenario scenario, string row, IReadOnlyList<RemedyType> allowed, RemedyPendingReason reason, decimal? limit = null)
