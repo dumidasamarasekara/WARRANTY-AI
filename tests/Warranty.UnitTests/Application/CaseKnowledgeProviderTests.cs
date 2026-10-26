@@ -7,6 +7,7 @@ using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Crm;
 using Warranty.Domain.Tenancy;
+using Warranty.Guardrails.Pipeline;
 using Warranty.UnitTests.Infrastructure;
 
 namespace Warranty.UnitTests.Application;
@@ -32,6 +33,7 @@ public sealed class CaseKnowledgeProviderTests
     private readonly ICatalogRepository _catalog = Substitute.For<ICatalogRepository>();
     private readonly ICustomerRepository _customers = Substitute.For<ICustomerRepository>();
     private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
+    private readonly IReplacementSerialRegistry _replacementSerials = Substitute.For<IReplacementSerialRegistry>();
     private readonly Product _product = Product.Create(ProductId, TenantId, ModelCode, "Aurora Tab 10", "tablet", 349m, "NOK");
 
     public CaseKnowledgeProviderTests()
@@ -43,6 +45,8 @@ public sealed class CaseKnowledgeProviderTests
         _catalog.FindSerialAsync(Serial, Arg.Any<CancellationToken>()).Returns(ProductSerial.Create(TenantId, Serial, ProductId));
         _claims.GetEvidenceAsync(ClaimId, Arg.Any<CancellationToken>()).Returns([]);
         _claims.GetHistoryCountsAsync(default, default!, default, default!, default).ReturnsForAnyArgs(ClaimHistoryCounts.None);
+        _replacementSerials.FindBySerialAsync(default!, default).ReturnsForAnyArgs((RegisteredReplacementSerial?)null);
+        _replacementSerials.FindByOriginalSerialAsync(default!, default).ReturnsForAnyArgs([]);
     }
 
     [Theory]
@@ -192,7 +196,7 @@ public sealed class CaseKnowledgeProviderTests
     public async Task An_unresolved_tenant_is_refused_before_any_lookup()
     {
         Arrange("The tablet will not charge since last week.");
-        var unresolved = new CaseKnowledgeProvider(new FakeTenantContext(null), _claims, _catalog, _customers, _tenants);
+        var unresolved = new CaseKnowledgeProvider(new FakeTenantContext(null), _claims, _catalog, _customers, _tenants, _replacementSerials);
 
         await Should.ThrowAsync<InvalidOperationException>(() => unresolved.GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken));
 
@@ -205,11 +209,98 @@ public sealed class CaseKnowledgeProviderTests
         await Should.ThrowAsync<InvalidOperationException>(() => Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken));
 
         Arrange("The tablet will not charge since last week.");
-        var otherTenant = new CaseKnowledgeProvider(new FakeTenantContext(Guid.NewGuid()), _claims, _catalog, _customers, _tenants);
+        var otherTenant = new CaseKnowledgeProvider(new FakeTenantContext(Guid.NewGuid()), _claims, _catalog, _customers, _tenants, _replacementSerials);
         await Should.ThrowAsync<InvalidOperationException>(() => otherTenant.GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken));
     }
 
-    private CaseKnowledgeProvider Provider() => new(new FakeTenantContext(TenantId), _claims, _catalog, _customers, _tenants);
+    // ---- Replacement units (003 FR-029, FR-030, research R11) --------------------------------------------
+
+    /// <summary>The serial the claimed unit replaced (and, for a chain, the serial that one replaced).</summary>
+    private const string OriginalSerial = "SN-TAB-0001";
+    private const string FirstSerial = "SN-TAB-0000";
+
+    [Fact(Skip = "Pending T349")]
+    public async Task A_registered_replacement_unit_carries_its_replacement_cover()
+    {
+        Arrange("The replacement tablet will not charge.");
+        RegisterReplacement(Serial, OriginalSerial, originalPurchaseDate: new DateOnly(2025, 2, 1), coverEndDate: new DateOnly(2027, 2, 1));
+
+        var context = await Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken);
+
+        context.ReplacementCover.ShouldBe(new ReplacementCover(OriginalSerial, new DateOnly(2025, 2, 1), new DateOnly(2027, 2, 1)));
+        context.Product.ShouldNotBeNull("the hand-over registers the unit's serial in the catalog (research R10)");
+        context.History.ReturnedAndReplaced.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_serial_that_is_no_replacement_unit_has_no_replacement_cover()
+    {
+        Arrange("The tablet will not charge since last week.");
+
+        var context = await Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken);
+
+        context.ReplacementCover.ShouldBeNull();
+        context.History.ReturnedAndReplaced.ShouldBeFalse();
+    }
+
+    [Fact(Skip = "Pending T349")]
+    public async Task A_serial_that_was_returned_and_replaced_is_flagged_in_the_history_counts()
+    {
+        Arrange("The tablet will not charge since last week.");
+        _replacementSerials.FindByOriginalSerialAsync(Serial, Arg.Any<CancellationToken>())
+            .Returns([Registration("SN-TAB-0777", Serial, new DateOnly(2026, 2, 1), new DateOnly(2028, 2, 1))]);
+
+        var context = await Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken);
+
+        context.History.ReturnedAndReplaced.ShouldBeTrue();
+        context.ReplacementCover.ShouldBeNull();
+    }
+
+    [Fact(Skip = "Pending T349")]
+    public async Task Accidental_damage_approvals_of_the_original_serial_count_for_the_replacement_unit()
+    {
+        // Borealis allows one accidental-damage incident: a replacement must not reset the allowance (research R11).
+        Arrange("The replacement tablet fell and the screen cracked.");
+        RegisterReplacement(Serial, OriginalSerial, new DateOnly(2025, 2, 1), new DateOnly(2027, 2, 1));
+        _claims.GetHistoryCountsAsync(ClaimId, Serial, Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new ClaimHistoryCounts(1, 0, 2));
+        _claims.GetHistoryCountsAsync(ClaimId, OriginalSerial, Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new ClaimHistoryCounts(4, 1, 2));
+
+        var context = await Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken);
+
+        // Only the accidental-damage count follows the chain; duplicates and evidence reuse stay those of the claimed serial.
+        context.History.PriorApprovedAccidental.ShouldBe(1);
+        context.History.DuplicateClaimsForSerial.ShouldBe(1);
+        context.History.EvidenceReuseMatches.ShouldBe(2);
+    }
+
+    [Fact(Skip = "Pending T349")]
+    public async Task Accidental_damage_approvals_are_counted_along_a_chain_of_replacements()
+    {
+        Arrange("The second replacement tablet fell and the screen cracked.");
+        RegisterReplacement(Serial, OriginalSerial, new DateOnly(2025, 2, 1), new DateOnly(2027, 2, 1));
+        RegisterReplacement(OriginalSerial, FirstSerial, new DateOnly(2025, 2, 1), new DateOnly(2027, 2, 1));
+        _claims.GetHistoryCountsAsync(ClaimId, OriginalSerial, Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new ClaimHistoryCounts(0, 1, 0));
+        _claims.GetHistoryCountsAsync(ClaimId, FirstSerial, Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new ClaimHistoryCounts(0, 1, 0));
+
+        var context = await Provider().GetCaseContextAsync(ClaimId, 1, TestContext.Current.CancellationToken);
+
+        context.History.PriorApprovedAccidental.ShouldBe(2);
+        context.ReplacementCover.ShouldBe(new ReplacementCover(OriginalSerial, new DateOnly(2025, 2, 1), new DateOnly(2027, 2, 1)));
+    }
+
+    private void RegisterReplacement(string serial, string originalSerial, DateOnly originalPurchaseDate, DateOnly coverEndDate)
+        => _replacementSerials.FindBySerialAsync(serial, Arg.Any<CancellationToken>())
+            .Returns(Registration(serial, originalSerial, originalPurchaseDate, coverEndDate));
+
+    private static RegisteredReplacementSerial Registration(string serial, string originalSerial, DateOnly originalPurchaseDate, DateOnly coverEndDate)
+        => RegisteredReplacementSerial.Register(
+            TenantId, serial, ProductId, originalSerial, Guid.NewGuid(), originalPurchaseDate, new DateOnly(2026, 3, 1), coverEndDate, SubmittedAt);
+
+    private CaseKnowledgeProvider Provider() => new(new FakeTenantContext(TenantId), _claims, _catalog, _customers, _tenants, _replacementSerials);
 
     private Claim Arrange(string description, string? contactEmail = Email, string? contactPhone = null, bool withProduct = true)
     {

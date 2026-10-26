@@ -3,8 +3,11 @@ using NSubstitute;
 using Warranty.AI.Harness.Agents;
 using Warranty.AI.Harness.Context;
 using Warranty.AI.Harness.Tools.Implementations;
+using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Claims;
+using Warranty.Domain.Common;
+using Warranty.Guardrails.Pipeline;
 using Warranty.Guardrails.Rules;
 using static Warranty.UnitTests.Harness.Tools.ToolTestKit;
 
@@ -117,6 +120,78 @@ public sealed class InvoiceValidationToolTests
         result.IsError.ShouldBeTrue();
         result.Content.GetProperty("error").GetString().ShouldBe($"{_photoRef} is not an invoice of this claim.");
     }
+
+    // ---- Replacement units (003 FR-029, research R11) ------------------------------------------------------
+
+    /// <summary>A replacement unit handed out in place of <see cref="Serial"/>; the customer's invoice shows the original.</summary>
+    private const string ReplacementSerial = "SN-TAB-0777";
+
+    [Theory(Skip = "Pending T351")]
+    [InlineData("SN-TAB-0001")]
+    [InlineData("sn tab 0001")]
+    public void The_original_serial_on_the_invoice_matches_a_replacement_unit(string invoiceSerial)
+    {
+        var claim = ClaimedPurchase.From(NewClaim(serial: ReplacementSerial)) with { OriginalSerial = Serial };
+
+        var serial = InvoiceValidationTool.Compare(claim, Invoice(invoiceSerial)).First();
+
+        serial.Field.ShouldBe(InvoiceFieldNames.SerialNumber);
+        serial.Match.ShouldBe(EvidenceMatch.Match);
+    }
+
+    [Fact]
+    public void The_replacement_units_own_serial_still_matches()
+    {
+        var claim = ClaimedPurchase.From(NewClaim(serial: ReplacementSerial)) with { OriginalSerial = Serial };
+
+        InvoiceValidationTool.Compare(claim, Invoice(ReplacementSerial)).First().Match.ShouldBe(EvidenceMatch.Match);
+    }
+
+    [Fact]
+    public void A_serial_that_is_neither_the_unit_nor_the_original_is_a_mismatch_for_a_replacement_unit()
+    {
+        var claim = ClaimedPurchase.From(NewClaim(serial: ReplacementSerial)) with { OriginalSerial = Serial };
+
+        InvoiceValidationTool.Compare(claim, Invoice("SN-TAB-0009")).First().Match.ShouldBe(EvidenceMatch.Mismatch);
+    }
+
+    [Fact]
+    public void Another_serial_on_the_invoice_is_a_mismatch_when_the_claimed_serial_is_not_a_replacement_unit()
+    {
+        // Without a registered replacement there is no accepted alternative: the original-serial rule applies to replacement units only.
+        var claim = ClaimedPurchase.From(NewClaim(serial: ReplacementSerial));
+
+        claim.OriginalSerial.ShouldBeNull();
+        InvoiceValidationTool.Compare(claim, Invoice(Serial)).First().Match.ShouldBe(EvidenceMatch.Mismatch);
+    }
+
+    [Fact(Skip = "Pending T351")]
+    public void The_case_of_a_replacement_unit_carries_the_original_serial_as_the_accepted_alternative()
+    {
+        var @case = Case() with
+        {
+            SerialNumber = ReplacementSerial,
+            ReplacementCover = new ReplacementCover(Serial, PurchaseDate, PurchaseDate.AddMonths(24)),
+        };
+
+        var claim = ClaimedPurchase.From(@case);
+
+        claim.SerialNumber.ShouldBe(ReplacementSerial);
+        claim.OriginalSerial.ShouldBe(Serial);
+        InvoiceValidationTool.Compare(claim, Invoice(Serial)).First().Match.ShouldBe(EvidenceMatch.Match);
+    }
+
+    [Fact]
+    public void The_case_of_an_ordinary_claim_has_no_accepted_alternative()
+        => ClaimedPurchase.From(Case()).OriginalSerial.ShouldBeNull();
+
+    private static InvoiceFields Invoice(string serial) => new(PurchaseDate, ModelCode, serial, 449m, Seller);
+
+    private static CaseContext Case()
+        => new(
+            ClaimId, 1, "WC-TEST", ClaimChannel.ClaimantPortal, new DateOnly(2026, 9, 30), PurchaseDate, Seller, 449m, "EUR", Region.EU,
+            ModelCode, Serial, "The tablet battery drains within an hour.", null, new CaseCustomerView("NO", Region.EU), [],
+            ClaimHistoryCounts.None, false, 0);
 
     private Task<Warranty.AI.Harness.Tools.ToolResult> Validate(
         string invoiceDate, string modelCode, string serial, decimal amount, string seller, string? invoiceRef = null)

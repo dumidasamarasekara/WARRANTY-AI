@@ -56,14 +56,21 @@ public static class CoverageWindowCalculator
     /// (<c>NoApplicablePolicy</c>). <paramref name="component"/> is matched case-insensitively against
     /// <see cref="CoverageTerms.ComponentCoverageMonths"/> (e.g. intake's <c>BATTERY</c> → <c>battery</c>);
     /// null or an unlisted component uses the standard months for <paramref name="region"/>.
+    /// <paramref name="minimumCoverEnd"/> is the registered cover end of a replacement unit (003 research R11).
     /// </summary>
     public static CoverageWindowResult Calculate(
         CoverageTerms? terms,
         Region region,
         string? component,
         DateOnly purchaseDate,
-        DateOnly claimDate)
+        DateOnly claimDate,
+        DateOnly? minimumCoverEnd = null)
     {
+        if (minimumCoverEnd is not null)
+        {
+            throw new NotImplementedException("Pending T350: the minimum cover end of a replacement unit.");
+        }
+
         if (terms is null || !terms.StandardCoverageMonths.TryGetValue(region, out var standardMonths))
         {
             return Undetermined;

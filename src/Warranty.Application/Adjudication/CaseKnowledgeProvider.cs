@@ -18,7 +18,10 @@ public sealed class CaseKnowledgeProvider(
     IClaimRepository claims,
     ICatalogRepository catalog,
     ICustomerRepository customers,
-    ITenantRepository tenants) : ICaseKnowledgeProvider
+    ITenantRepository tenants,
+#pragma warning disable CS9113 // Stub: read by the replacement-unit lookup in T349.
+    IReplacementSerialRegistry replacementSerials) : ICaseKnowledgeProvider
+#pragma warning restore CS9113
 {
     public async Task<CaseContext> GetCaseContextAsync(Guid claimId, int round, CancellationToken ct)
     {
