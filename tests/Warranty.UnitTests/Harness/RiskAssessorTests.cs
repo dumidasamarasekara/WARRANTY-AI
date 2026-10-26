@@ -1,6 +1,10 @@
 using Warranty.AI.Harness.Agents.Risk;
+using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Domain.Adjudication;
 using Warranty.Domain.Claims;
+using Warranty.Domain.Common;
+using Warranty.Guardrails.Pipeline;
+using static Warranty.UnitTests.Harness.Tools.ToolTestKit;
 
 namespace Warranty.UnitTests.Harness;
 
@@ -27,6 +31,7 @@ public sealed class RiskAssessorTests
     [InlineData(RiskSignalCode.SourceInconsistency)]
     [InlineData(RiskSignalCode.SerialMismatchPhoto)]
     [InlineData(RiskSignalCode.ManipulationAttempt)]
+    [InlineData(RiskSignalCode.ProductReturnedAndReplaced)]
     public void Any_single_deterministic_signal_is_medium(RiskSignalCode code)
     {
         var result = RiskAssessor.Compute([Deterministic(code)], AiRiskReading.None, DefaultThreshold);
@@ -65,6 +70,7 @@ public sealed class RiskAssessorTests
     [InlineData(RiskSignalCode.ProductNotInCatalog, RiskSeverity.Medium)]
     [InlineData(RiskSignalCode.SourceInconsistency, RiskSeverity.Medium)]
     [InlineData(RiskSignalCode.PurchaseDateAnomaly, RiskSeverity.Medium)]
+    [InlineData(RiskSignalCode.ProductReturnedAndReplaced, RiskSeverity.Medium)]
     public void Deterministic_signals_have_fixed_severities(RiskSignalCode code, RiskSeverity severity)
     {
         RiskAssessor.SeverityOf(code, RiskSignalSource.Deterministic).ShouldBe(severity);
@@ -176,6 +182,49 @@ public sealed class RiskAssessorTests
         oneSignal.Level.ShouldBe(RiskLevel.Medium);
         highScore.Level.ShouldBe(RiskLevel.High);
     }
+
+    // ---- Replacement units (003 FR-029, FR-030, research R11) --------------------------------------------
+
+    [Fact(Skip = "Pending T352")]
+    public void A_serial_that_was_returned_and_replaced_raises_PRODUCT_RETURNED_AND_REPLACED_at_intake()
+    {
+        var history = ClaimHistoryCounts.None with { ReturnedAndReplaced = true };
+
+        var signals = RiskAssessor.IntakeSignals(Case(history), history);
+
+        var signal = signals.ShouldHaveSingleItem();
+        signal.Code.ShouldBe(RiskSignalCode.ProductReturnedAndReplaced);
+        signal.Source.ShouldBe(RiskSignalSource.Deterministic);
+        signal.Severity.ShouldBe(RiskSeverity.Medium);
+        signal.Detail.ShouldNotBeNullOrWhiteSpace();
+
+        // Any signal prevents automatic approval (001 FR-027): the claim goes to human review (FR-030).
+        RiskAssessor.Compute(signals, AiRiskReading.None, DefaultThreshold).Level.ShouldBe(RiskLevel.Medium);
+    }
+
+    [Fact]
+    public void A_serial_that_was_never_returned_raises_no_returned_and_replaced_signal()
+        => RiskAssessor.IntakeSignals(Case(ClaimHistoryCounts.None), ClaimHistoryCounts.None)
+            .ShouldNotContain(s => s.Code == RiskSignalCode.ProductReturnedAndReplaced);
+
+    [Fact]
+    public void A_registered_replacement_unit_raises_no_PRODUCT_NOT_IN_CATALOG()
+    {
+        // The hand-over registers the unit's serial in the catalog (research R10), so the case has its product.
+        var @case = Case(ClaimHistoryCounts.None) with
+        {
+            SerialNumber = "SN-TAB-0777",
+            ReplacementCover = new ReplacementCover(Serial, PurchaseDate, PurchaseDate.AddMonths(24)),
+        };
+
+        RiskAssessor.IntakeSignals(@case, ClaimHistoryCounts.None).ShouldBeEmpty();
+    }
+
+    private static CaseContext Case(ClaimHistoryCounts history)
+        => new(
+            ClaimId, 1, "WC-TEST", ClaimChannel.ClaimantPortal, new DateOnly(2026, 9, 30), PurchaseDate, Seller, 449m, "EUR", Region.EU,
+            ModelCode, Serial, "The tablet battery drains within an hour.", new CaseProduct(ProductId, ModelCode, "Aurora Tab 10", "tablet", 449m),
+            new CaseCustomerView("NO", Region.EU), [], history, false, 0);
 
     // Fixed deterministic severities from research R23, stated here independently of the implementation.
     private static RiskSignal Deterministic(RiskSignalCode code)

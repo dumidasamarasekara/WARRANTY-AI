@@ -236,4 +236,56 @@ public sealed class CoverageWindowTests
 
         (result.AccidentalWindowEndDate, result.WithinAccidentalWindow).ShouldBe((D(2025, 2, 28), true));
     }
+
+    // ---- Minimum cover of a replacement unit (003 FR-029, research R11) ----------------------------------
+
+    [Theory(Skip = "Pending T350")]
+    [InlineData(2025, 12, 1, 2026, 3, 10)] // minimum before the original end: the original window applies
+    [InlineData(2026, 3, 10, 2026, 3, 10)] // minimum on the original end
+    [InlineData(2026, 8, 10, 2026, 8, 10)] // minimum after the original end: the minimum applies
+    public void Coverage_end_is_the_later_of_the_original_window_and_the_minimum_cover_end(
+        int minYear, int minMonth, int minDay, int endYear, int endMonth, int endDay)
+    {
+        // Original purchase 2024-03-10 + 24 months (BOR-WP v1, EU) = 2026-03-10.
+        var result = CoverageWindowCalculator.Calculate(
+            BorealisV1Terms(), Region.EU, null, D(2024, 3, 10), D(2026, 2, 1), minimumCoverEnd: D(minYear, minMonth, minDay));
+
+        result.Outcome.ShouldBe(CoverageWindowOutcome.Determined);
+        result.CoverageEndDate.ShouldBe(D(endYear, endMonth, endDay));
+        result.WithinComponentCoverage.ShouldBe(true);
+    }
+
+    [Theory(Skip = "Pending T350")]
+    [InlineData(2026, 6, 1, true)]   // after the original 24 months, within 6 months of the hand-over (X14)
+    [InlineData(2026, 8, 10, true)]  // the last day of the minimum cover
+    [InlineData(2026, 8, 11, false)] // the day after
+    public void A_claim_after_the_original_window_is_covered_until_the_minimum_cover_end(int year, int month, int day, bool covered)
+    {
+        // Hand-over 2026-02-10 + 6 months (BOR-WP v1 minimumCoverMonths) = 2026-08-10, later than the original 2026-03-10.
+        var result = CoverageWindowCalculator.Calculate(
+            BorealisV1Terms(), Region.EU, null, D(2024, 3, 10), D(year, month, day), minimumCoverEnd: D(2026, 8, 10));
+
+        result.CoverageEndDate.ShouldBe(D(2026, 8, 10));
+        result.WithinComponentCoverage.ShouldBe(covered);
+    }
+
+    [Fact(Skip = "Pending T350")]
+    public void A_minimum_before_the_original_end_never_shortens_the_window()
+    {
+        // Replacement handed over early with minimumCoverMonths 0 (Aurora): the original window still decides.
+        var result = CoverageWindowCalculator.Calculate(
+            AuroraV1Terms(), Region.EU, null, D(2025, 3, 10), D(2027, 3, 10), minimumCoverEnd: D(2025, 6, 1));
+
+        result.CoverageEndDate.ShouldBe(D(2027, 3, 10));
+        result.WithinComponentCoverage.ShouldBe(true);
+    }
+
+    [Fact]
+    public void No_minimum_cover_end_leaves_the_window_unchanged()
+    {
+        var result = CoverageWindowCalculator.Calculate(BorealisV1Terms(), Region.EU, null, D(2024, 3, 10), D(2026, 6, 1), minimumCoverEnd: null);
+
+        result.CoverageEndDate.ShouldBe(D(2026, 3, 10));
+        result.WithinComponentCoverage.ShouldBe(false);
+    }
 }

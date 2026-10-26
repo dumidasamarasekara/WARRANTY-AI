@@ -171,8 +171,12 @@ public static class InvoiceFieldNames
     public const string Seller = "seller";
 }
 
-/// <summary>What the claim states about the purchase, as compared with an invoice.</summary>
-public sealed record ClaimedPurchase(string SerialNumber, string ModelCode, DateOnly PurchaseDate, decimal PurchasePrice, string Seller)
+/// <summary>
+/// What the claim states about the purchase, as compared with an invoice. <see cref="OriginalSerial"/> is the serial a
+/// replacement unit replaced, which the customer's invoice shows (003 research R11).
+/// </summary>
+public sealed record ClaimedPurchase(
+    string SerialNumber, string ModelCode, DateOnly PurchaseDate, decimal PurchasePrice, string Seller, string? OriginalSerial = null)
 {
     public static ClaimedPurchase From(Claim claim)
     {

@@ -30,7 +30,8 @@ public sealed record GuardrailInput(
 /// the tenant's catalog. <see cref="PriorApprovedAccidental"/> is <c>claim_history_lookup</c>'s all-time
 /// count of approved accidental-damage claims for the serial (same tenant), read by
 /// <see cref="AccidentalDamageRule"/>. <see cref="HasProtectionPlan"/> is the claim's stated additional protection plan
-/// (002 FR-036), read by the protection-plan check (002 research R9).
+/// (002 FR-036), read by the protection-plan check (002 research R9). <see cref="ReplacementCover"/> is set when
+/// the claimed serial is a registered replacement unit (003 research R11).
 /// </summary>
 public sealed record CaseFacts(
     Guid TenantId,
@@ -43,7 +44,15 @@ public sealed record CaseFacts(
     int AutoInfoRequestCount,
     DateOnly PurchaseDate,
     int PriorApprovedAccidental,
-    bool HasProtectionPlan = false);
+    bool HasProtectionPlan = false,
+    ReplacementCover? ReplacementCover = null);
+
+/// <summary>
+/// The cover of a claimed serial that was handed out as a replacement unit (003 FR-029, research R11): the serial it
+/// replaced, the original purchase date (carried forward along a chain of replacements) and the cover end registered
+/// at hand-over, the later of the original coverage end and the hand-over date plus the policy's minimum cover.
+/// </summary>
+public sealed record ReplacementCover(string OriginalSerial, DateOnly OriginalPurchaseDate, DateOnly CoverEndDate);
 
 /// <summary>Evidence step facts: claim-vs-evidence consistency checks (FR-016), photo findings and missing items.</summary>
 public sealed record EvidenceFacts(
