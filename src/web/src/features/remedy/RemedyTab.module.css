@@ -174,3 +174,16 @@
   text-decoration: line-through;
   color: var(--color-text-secondary);
 }
+/* The replacement card when a review-queue item focuses it. */
+.focusTarget {
+  border-radius: var(--radius-md);
+}
+
+.focusTarget:focus {
+  outline: none;
+}
+
+.focusTarget:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}

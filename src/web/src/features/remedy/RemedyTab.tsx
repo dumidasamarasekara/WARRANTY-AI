@@ -11,6 +11,7 @@ import { RepairCard } from './RepairCard'
 import { RepairEventsTimeline } from './RepairEventsTimeline'
 import { ReplacementCard } from './ReplacementCard'
 import { ReplacementEventsTimeline } from './ReplacementEventsTimeline'
+import { focusReplacementParam } from './replacementView'
 import type { RemedyHistoryEntry, RemedyView } from './remedyQueries'
 import { decideRemedyParam, isCompletableRemedy, pendingReasonText, remedyLabel, remedyList, remedyOrigin, scenarioLabel } from './remedyView'
 import styles from './RemedyTab.module.css'
@@ -195,6 +196,9 @@ export function RemedyTab({ detail, isReviewer, canRecordRepair = false }: Remed
             replacement={replacement}
             remedy={remedy}
             claimedModel={{ modelCode: detail.product.modelCode, name: detail.product.name }}
+            claimedSerial={detail.product.serialNumber}
+            holdingCentreName={detail.repair?.activeCentre?.name}
+            focused={search.has(focusReplacementParam)}
             canAct={canRecordRepair}
             onReload={reload}
           />

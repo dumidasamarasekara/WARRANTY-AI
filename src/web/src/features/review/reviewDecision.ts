@@ -184,3 +184,16 @@ export function remedyPendingReasonLabel(reason: RemedyPendingReason | undefined
   if (!reason) return 'Awaiting remedy decision'
   return remedyPendingReasonLabels[reason] ?? reason
 }
+
+export type ReplacementCheckReason = NonNullable<ReviewQueueItem['replacementCheckReason']>
+
+const replacementCheckReasonLabels: Record<ReplacementCheckReason, string> = {
+  MODEL_APPROVAL: 'Model approval',
+  RETURN_MISMATCH: 'Returned product does not match',
+}
+
+/** Readable reason a replacement waits for a reviewer (003 ui-screens.md §3). */
+export function replacementCheckReasonLabel(reason: ReplacementCheckReason | undefined): string {
+  if (!reason) return 'Awaiting a reviewer'
+  return replacementCheckReasonLabels[reason] ?? reason
+}

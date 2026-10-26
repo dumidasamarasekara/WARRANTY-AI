@@ -24,12 +24,14 @@ import {
 } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
 import { decideRemedyParam } from '../remedy/remedyView'
+import { focusReplacementParam } from '../remedy/replacementView'
 import { ReviewDecisionForm } from './ReviewDecisionForm'
 import {
   aiDecisionAsReview,
   aiDecisionLabel,
   decidingAiDecision,
   remedyPendingReasonLabel,
+  replacementCheckReasonLabel,
   reviewDecisionLabel,
   type ClaimDetail,
   type ReviewDecisionKind,
@@ -86,9 +88,9 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
     )
   }
 
-  // Remedy decisions open the claim's Remedy tab; only claim decisions use the workspace here.
+  // Remedy decisions and replacement checks open the claim's Remedy tab; only claim decisions use the workspace here.
   // Without a claim in the URL the oldest escalation is shown.
-  const claimDecisions = items.filter((item) => item.kind !== 'RemedyDecision')
+  const claimDecisions = items.filter((item) => item.kind !== 'RemedyDecision' && item.kind !== 'ReplacementCheck')
   const selected = claimId ? claimDecisions.find((item) => item.claimId === claimId) : claimDecisions[0]
 
   return (
@@ -101,6 +103,8 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
               <li key={`${item.kind}-${item.claimId}`}>
                 {item.kind === 'RemedyDecision' ? (
                   <RemedyQueueCard item={item} now={now} />
+                ) : item.kind === 'ReplacementCheck' ? (
+                  <ReplacementQueueCard item={item} now={now} />
                 ) : (
                   <QueueCard item={item} selected={item.claimId === selected?.claimId} currency={currency} now={now} />
                 )}
@@ -112,7 +116,7 @@ export function ReviewQueuePage({ now }: { now?: Date }) {
           {selected ? (
             <ReviewWorkspace key={selected.claimId} item={selected} currency={currency} />
           ) : !claimId ? (
-            <EmptyState message="No claims waiting for a review decision. Open a remedy decision from the queue." />
+            <EmptyState message="No claims waiting for a review decision. Open a remedy decision or replacement check from the queue." />
           ) : (
             <EmptyState
               message="This claim is no longer waiting for review."
@@ -162,6 +166,26 @@ function RemedyQueueCard({ item, now }: { item: ReviewQueueItem; now: Date | und
       <span className={styles.product}>{item.productName}</span>
       <span className={styles.cardMeta}>
         <Badge tone="warn">Remedy</Badge> {remedyPendingReasonLabel(item.remedyPendingReason)}
+      </span>
+      <span className={styles.cardFoot}>
+        <span title={formatDateTime(item.escalatedAt)}>Escalated {formatRelative(item.escalatedAt, now)}</span>
+        {item.submittedByMe && <Badge tone="system">You submitted this claim</Badge>}
+      </span>
+    </Link>
+  )
+}
+
+/**
+ * A replacement waiting for a reviewer (003 ui-screens.md §3): the "Replacement" badge and the reason (a proposed model,
+ * or a returned product whose serial does not match), opening the Remedy tab with the replacement card focused.
+ */
+function ReplacementQueueCard({ item, now }: { item: ReviewQueueItem; now: Date | undefined }) {
+  return (
+    <Link to={`/staff/claims/${item.claimId}/remedy?${focusReplacementParam}`} className={styles.card}>
+      <span className={styles.reference}>{item.reference}</span>
+      <span className={styles.product}>{item.productName}</span>
+      <span className={styles.cardMeta}>
+        <Badge tone="warn">Replacement</Badge> {replacementCheckReasonLabel(item.replacementCheckReason)}
       </span>
       <span className={styles.cardFoot}>
         <span title={formatDateTime(item.escalatedAt)}>Escalated {formatRelative(item.escalatedAt, now)}</span>
