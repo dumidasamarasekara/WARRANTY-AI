@@ -30,7 +30,6 @@ namespace Warranty.UnitTests.Fulfillment;
 /// </summary>
 public sealed class ReplacementMoveCorrectionTests
 {
-    private const string PendingDomain = "Pending T355";
     private const string PendingUseCase = "Pending T356";
 
     private const string AgentActor = "agent-sub-t353";
@@ -99,7 +98,7 @@ public sealed class ReplacementMoveCorrectionTests
 
     // ── Move (FR-009, FR-010; X16) ─────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_move_of_a_ready_replacement_leaves_one_active_location_releases_the_unit_and_awaits_a_new_unit()
     {
         var replacement = ReadyForCollection();
@@ -134,7 +133,7 @@ public sealed class ReplacementMoveCorrectionTests
         replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldNotContain(ReplacementEventType.HandedToCustomer);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_unit_reserved_after_a_move_is_a_new_unit_at_the_new_location()
     {
         var replacement = ReadyForCollection();
@@ -151,7 +150,7 @@ public sealed class ReplacementMoveCorrectionTests
         first.Result.ShouldBe(ReplacementUnitResult.Released);
     }
 
-    [Theory(Skip = PendingDomain)]
+    [Theory]
     [InlineData(ReplacementStatus.AwaitingReturn)]
     [InlineData(ReplacementStatus.AwaitingUnit)]
     public void A_move_before_a_reservation_keeps_the_status(ReplacementStatus status)
@@ -170,7 +169,7 @@ public sealed class ReplacementMoveCorrectionTests
         released.ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
-    [Theory(Skip = PendingDomain)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -185,7 +184,7 @@ public sealed class ReplacementMoveCorrectionTests
         ShouldBeReadyAtTheSuggestedLocation(replacement, events);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_move_needs_another_location_than_the_active_one()
     {
         var replacement = ReadyForCollection();
@@ -197,7 +196,7 @@ public sealed class ReplacementMoveCorrectionTests
         ShouldBeReadyAtTheSuggestedLocation(replacement, events);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void An_auditor_cannot_move_refuse_or_correct()
     {
         var replacement = ReadyForCollection();
@@ -214,7 +213,7 @@ public sealed class ReplacementMoveCorrectionTests
 
     // ── Customer refused unit (FR-014, FR-027; X16) ───────────────────────────────────────────
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_refused_unit_stays_in_the_history_with_its_reason_and_the_replacement_awaits_a_new_unit()
     {
         var replacement = ReadyForCollection();
@@ -242,7 +241,7 @@ public sealed class ReplacementMoveCorrectionTests
         unit.Result.ShouldBe(ReplacementUnitResult.Refused);
     }
 
-    [Theory(Skip = PendingDomain)]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -256,7 +255,7 @@ public sealed class ReplacementMoveCorrectionTests
         ShouldBeReadyAtTheSuggestedLocation(replacement, events);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_unit_can_be_refused_only_while_ready_for_collection()
     {
         var replacement = AwaitingUnit();
@@ -268,7 +267,7 @@ public sealed class ReplacementMoveCorrectionTests
 
     // ── Corrections (FR-017; X17) ─────────────────────────────────────────────────────────────
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_serial_correction_applies_to_the_same_unit_and_keeps_the_original_entry()
     {
         var replacement = ReadyForCollection();
@@ -297,7 +296,7 @@ public sealed class ReplacementMoveCorrectionTests
         payload.GetProperty("serialNumber").GetString().ShouldBe("AT10-R-5309");
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_return_date_correction_changes_the_return_and_keeps_its_serial_check()
     {
         var replacement = AwaitingUnit();
@@ -312,7 +311,7 @@ public sealed class ReplacementMoveCorrectionTests
         Payload(returned).GetProperty("returnedOn").GetString().ShouldBe("2026-10-02", "the original entry keeps the date it recorded");
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_corrected_serial_seen_that_matches_resolves_the_mismatch_and_the_replacement_awaits_a_unit()
     {
         var replacement = Create(ReplacementReturnRule.BeforeReservation, ReplacementStatus.AwaitingReturn);
@@ -332,7 +331,7 @@ public sealed class ReplacementMoveCorrectionTests
         Payload(returned).GetProperty("serialSeen").GetString().ShouldBe(WrongSerial);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_corrected_serial_seen_that_does_not_match_blocks_the_reservation_until_a_reviewer_accepts_it()
     {
         var replacement = AwaitingUnit();
@@ -347,7 +346,7 @@ public sealed class ReplacementMoveCorrectionTests
         replacement.AllowedEvents(StaffRole.ClaimsReviewer).ShouldContain(ReplacementEventType.ReturnAccepted);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_reservation_sent_back_by_a_correction_keeps_its_unit_and_reserving_again_reuses_it()
     {
         var replacement = ReadyForCollection();
@@ -375,7 +374,7 @@ public sealed class ReplacementMoveCorrectionTests
         reserved.PayloadJson.ShouldContain(FirstUnitSerial);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_refusal_sent_back_by_a_correction_reinstates_the_refused_unit()
     {
         var replacement = ReadyForCollection();
@@ -393,7 +392,7 @@ public sealed class ReplacementMoveCorrectionTests
         refused.Type.ShouldBe(ReplacementEventType.UnitRefused, "the refusal stays in the history");
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void Only_the_latest_reservation_or_refusal_can_be_sent_back_and_only_to_its_previous_status()
     {
         var replacement = ReadyForCollection();
@@ -419,7 +418,7 @@ public sealed class ReplacementMoveCorrectionTests
         replacement.Events.Count.ShouldBe(events + 1);
     }
 
-    [Fact(Skip = PendingDomain)]
+    [Fact]
     public void A_not_available_entry_cannot_be_sent_back()
     {
         var replacement = AwaitingUnit();
@@ -432,7 +431,7 @@ public sealed class ReplacementMoveCorrectionTests
         replacement.Status.ShouldBe(ReplacementStatus.NotAvailable);
     }
 
-    [Theory(Skip = PendingDomain)]
+    [Theory]
     [InlineData("noReason", "reason")]
     [InlineData("unknownEntry", "correctsSeq")]
     [InlineData("systemEntry", "correctsSeq")]

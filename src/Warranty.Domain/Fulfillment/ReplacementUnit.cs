@@ -105,4 +105,51 @@ public sealed class ReplacementUnit
         ResultReason = trimmed;
         EndedAt = endedAt;
     }
+
+    /// <summary>
+    /// Records the reservation of this still-reserved unit again after a correction sent its reservation back (the replacement
+    /// awaited a unit with this unit kept): the unit keeps its ID — and so its one ready notification — and takes the location,
+    /// model and serial now reported.
+    /// </summary>
+    internal void Reconfirm(Guid serviceCenterId, Guid productId, string serialNumber, DateTimeOffset reservedAt)
+    {
+        if (!IsReserved)
+        {
+            throw new InvalidOperationException("Only a reserved replacement unit can be reserved again.");
+        }
+
+        if (serviceCenterId == Guid.Empty || productId == Guid.Empty)
+        {
+            throw new ArgumentException("Service-centre and product IDs are required.");
+        }
+
+        ServiceCenterId = serviceCenterId;
+        ProductId = productId;
+        SerialNumber = ProductSerial.NormalizeSerial(serialNumber);
+        ReservedAt = reservedAt;
+    }
+
+    /// <summary>Applies a corrected serial number (FR-017); the unit keeps its ID and result.</summary>
+    internal void CorrectSerial(string serialNumber)
+    {
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            throw new ArgumentException("The corrected serial number is required.", nameof(serialNumber));
+        }
+
+        SerialNumber = ProductSerial.NormalizeSerial(serialNumber);
+    }
+
+    /// <summary>Reserves a refused unit again after a correction sent its refusal back (FR-017).</summary>
+    internal void Reinstate()
+    {
+        if (Result != ReplacementUnitResult.Refused)
+        {
+            throw new InvalidOperationException("Only a refused replacement unit can be reinstated.");
+        }
+
+        Result = ReplacementUnitResult.Reserved;
+        ResultReason = null;
+        EndedAt = null;
+    }
 }
