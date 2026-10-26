@@ -113,6 +113,12 @@ public sealed class ReplacementPolicyTests
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.OtherCategory);
 
     [Fact(Skip = CheckModelPending)]
+    public void The_seeded_Aurora_phone_is_refused_on_a_tablet_claim()
+        => Expect(
+            Policy.CheckModel(Aurora, Tab10, new ReplacementModel("AUR-PHN6", "phone", 480m)),
+            ReplacementModelVerdict.Refused, ReplacementModelRefusal.OtherCategory);
+
+    [Fact(Skip = CheckModelPending)]
     public void Categories_compare_case_insensitively()
         => Expect(Policy.CheckModel(Aurora, Tab10, Tab11 with { Category = "Tablet" }), ReplacementModelVerdict.NeedsReviewerApproval);
 
@@ -135,6 +141,9 @@ public sealed class ReplacementPolicyTests
         var slate12 = new ReplacementModel("BOR-SLATE12", "tablet", 600m);
 
         Expect(Policy.CheckModel(Borealis, slate11, slate12), ReplacementModelVerdict.Refused, ReplacementModelRefusal.SameModelOnly);
+        Expect(
+            Policy.CheckModel(Borealis, slate11, new ReplacementModel("BOR-OVEN60", "major-appliance", 1650m)),
+            ReplacementModelVerdict.Refused, ReplacementModelRefusal.SameModelOnly);
     }
 
     [Fact(Skip = CheckModelPending)]

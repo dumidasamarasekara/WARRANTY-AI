@@ -475,12 +475,13 @@ public sealed class SeedFilesTests
         aurora.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
         [
             ("X1-aurora", "RPMTX1A001", "AUR-TAB10", "AT10-24-0301", Region.EU), ("X5", "RPMTX5A001", "AUR-TAB10", "AT10-24-0305", Region.NA),
-            ("X9-aurora", "RPMTX9A001", "AUR-TAB10", "AT10-24-0309", Region.NA),
+            ("X9-aurora", "RPMTX9A001", "AUR-TAB10", "AT10-24-0309", Region.NA), ("X10-aurora", "RPMTX10A01", "AUR-TAB10", "AT10-24-0310", Region.EU),
+            ("X11-aurora", "RPMTX11A01", "AUR-TAB10", "AT10-24-0311", Region.NA), ("X12-aurora", "RPMTX12A01", "AUR-TAB10", "AT10-24-0312", Region.EU),
         ]);
         borealis.Select(s => (s.Scenario, s.Reference, s.ModelCode, s.SerialNumber, s.Region)).ShouldBe(
         [
             ("X6-borealis", "RPMTX6B001", "BOR-SLATE11", "BS11-24-0306", Region.EU), ("X7-borealis", "RPMTX7B001", "BOR-SLATE11", "BS11-24-0307", Region.EU),
-            ("X8-borealis", "RPMTX8B001", "BOR-SLATE11", "BS11-24-0308", Region.EU),
+            ("X8-borealis", "RPMTX8B001", "BOR-SLATE11", "BS11-24-0308", Region.EU), ("X12-borealis", "RPMTX12B01", "BOR-SLATE11", "BS11-24-0312", Region.EU),
         ]);
         var decidedAtAurora = aurora.Where(s => s.Scenario != "X9-aurora").ToList();
         decidedAtAurora.ShouldAllBe(s => s.DecidedRemedy!.Scenario == RemedyScenario.RepairFailed && s.DecidedRemedy.FailedAttempts == 2);
@@ -511,9 +512,34 @@ public sealed class SeedFilesTests
         borealis.Select(s => s.Id).ShouldBe(
         [
             Guid.Parse("22222222-0006-7000-8000-000000000006"), Guid.Parse("22222222-0006-7000-8000-000000000007"),
-            Guid.Parse("22222222-0006-7000-8000-000000000008"),
+            Guid.Parse("22222222-0006-7000-8000-000000000008"), Guid.Parse("22222222-0006-7000-8000-000000000012"),
         ]);
-        borealis.Select(s => s.SerialNumber).Distinct().Count().ShouldBe(3);
+        borealis.Select(s => s.SerialNumber).Distinct().Count().ShouldBe(4);
+    }
+
+    /// <summary>
+    /// Feature 003 (T340, quickstart X10 – X12): the US3 claims are X1-like Aurora claims and an X6-like Borealis claim of
+    /// their own (own IDs and serials, Replacement decided by a reviewer as their company's other replacement scenarios), so
+    /// that proposing, approving and refusing models and recording "not available" change no other scenario's claim. The
+    /// catalog serial of the equivalent model that X10 reserves is set aside for it.
+    /// </summary>
+    [Fact]
+    public void The_X10_to_X12_claims_are_claims_of_their_own_with_a_decided_Replacement()
+    {
+        var seed = SeedFiles.Load(SeedRoot());
+        var all = seed.Tenants[0].ReplacementScenarios.Concat(seed.Tenants[1].ReplacementScenarios).ToList();
+        var us3 = all.Where(s => s.Scenario is "X10-aurora" or "X11-aurora" or "X12-aurora" or "X12-borealis").ToList();
+
+        us3.Select(s => s.Id).ShouldBe(
+        [
+            Guid.Parse("11111111-0006-7000-8000-000000000010"), Guid.Parse("11111111-0006-7000-8000-000000000011"),
+            Guid.Parse("11111111-0006-7000-8000-000000000012"), Guid.Parse("22222222-0006-7000-8000-000000000012"),
+        ]);
+        us3.ShouldAllBe(s => s.DecidedRemedy!.Remedy == RemedyType.Replacement);
+        all.Select(s => s.SerialNumber).Distinct().Count().ShouldBe(all.Count);
+        var unit = seed.Tenants[0].Serials.Single(s => s.SerialNumber == "AT11-25-0001");
+        unit.ModelCode.ShouldBe("AUR-TAB11");
+        unit.ReservedFor.ShouldNotBeNull().ShouldStartWith("X10-aurora");
     }
 
     [Fact]
@@ -527,7 +553,7 @@ public sealed class SeedFilesTests
             var seed = SeedFiles.Load(root);
 
             seed.Tenants[1].ReplacementScenarios.ShouldBeEmpty();
-            seed.Tenants[0].ReplacementScenarios.Count.ShouldBe(3);
+            seed.Tenants[0].ReplacementScenarios.Count.ShouldBe(6);
         }
         finally
         {

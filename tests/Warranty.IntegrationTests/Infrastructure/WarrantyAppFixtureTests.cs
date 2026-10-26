@@ -96,7 +96,7 @@ public sealed class WarrantyAppFixtureTests(WarrantyAppFixture fixture)
         (await CountAsync(
             "select count(*) from catalog.product_serials p where p.serial_number not like 'REPL-%' and not exists " +
             "(select 1 from catalog.replacement_serials r where r.tenant_id = p.tenant_id and r.serial_number = p.serial_number)"))
-            .ShouldBe(141);
+            .ShouldBe(145);
 
         await using var app = new NpgsqlConnection(fixture.AppConnectionString());
         await app.OpenAsync(TestContext.Current.CancellationToken);
