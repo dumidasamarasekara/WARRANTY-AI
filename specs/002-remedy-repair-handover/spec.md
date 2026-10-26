@@ -248,6 +248,7 @@ who completed it and when.
 
 1. **Given** a claim with remedy Replacement, **When** staff record "Replacement handed to
    customer" with the date, **Then** the remedy is completed.
+   *Superseded by feature 003 (`specs/003-replacement-fulfilment`, see FR-034).*
 2. **Given** a claim with remedy Refund, **When** the refund is completed through the existing
    refund option, **Then** the claim shows the refund as completed with the date and reference.
 3. **Given** a completed Replacement or Refund, **When** the claimant opens the status page,
@@ -454,6 +455,9 @@ today. Submit the same claim with a plan to Aurora; verify the plan does not lif
 
 - **FR-034**: For a Replacement remedy, staff MUST be able to record "Replacement handed to
   customer" with the date, which completes the remedy.
+  *Superseded by feature 003 (`specs/003-replacement-fulfilment`): a replacement is carried out
+  and tracked through 003's process (location, faulty-product return, reserved unit, hand-over to
+  the customer), and the remedy is completed by 003's hand-over event.*
 - **FR-035**: For a Refund remedy, the refund MUST be carried out through the application's
   existing refund option. The claim MUST show when the refund was completed and its reference. This
   feature MUST NOT move money itself.
