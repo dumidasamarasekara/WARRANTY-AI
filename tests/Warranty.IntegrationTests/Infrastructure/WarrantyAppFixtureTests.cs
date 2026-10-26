@@ -92,9 +92,11 @@ public sealed class WarrantyAppFixtureTests(WarrantyAppFixture fixture)
     {
         (await CountAsync("select count(*) from tenancy.tenants")).ShouldBe(2);
         // Replacement units handed out by other tests (003 HandedToCustomer) are added to the catalog, and
-        // ReplacementPersistenceTests adds REPL- serials directly (whichever class runs first); the seed is not.
+        // ReplacementPersistenceTests adds REPL- serials directly and US4_ReplacementWarrantyTests the AT10-C- serials of its
+        // copies of X1 (whichever class runs first); the seed is not.
         (await CountAsync(
-            "select count(*) from catalog.product_serials p where p.serial_number not like 'REPL-%' and not exists " +
+            "select count(*) from catalog.product_serials p where p.serial_number not like 'REPL-%' " +
+            "and p.serial_number not like 'AT10-C-%' and not exists " +
             "(select 1 from catalog.replacement_serials r where r.tenant_id = p.tenant_id and r.serial_number = p.serial_number)"))
             .ShouldBe(145);
 

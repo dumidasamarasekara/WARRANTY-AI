@@ -177,7 +177,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 ### Tests for User Story 4 ⚠️ write first, ensure they fail
 
 - [X] T347 [P] [US4] Extend `tests/Warranty.UnitTests/Guardrails/CoverageWindowTests.cs` (minimum cover end before, on and after the original end), `tests/Warranty.UnitTests/Harness/RiskAssessorTests.cs` (`PRODUCT_RETURNED_AND_REPLACED` from intake signals, no `PRODUCT_NOT_IN_CATALOG` for a registered replacement), `tests/Warranty.UnitTests/Harness/Tools/InvoiceValidationToolTests.cs` (original serial accepted for a replacement unit only) and `tests/Warranty.UnitTests/Application/CaseKnowledgeProviderTests.cs` (replacement cover in `CaseFacts`; accidental incidents counted across the chain)
-- [ ] T348 [P] [US4] Write `tests/Warranty.IntegrationTests/Fulfillment/US4_ReplacementWarrantyTests.cs` for X13–X15 through the deterministic intake and guardrail steps without an AI run (research R15), including that a claim with the new signal is never approved automatically
+- [X] T348 [P] [US4] Write `tests/Warranty.IntegrationTests/Fulfillment/US4_ReplacementWarrantyTests.cs` for X13–X15 through the deterministic intake and guardrail steps without an AI run (research R15), including that a claim with the new signal is never approved automatically
 
 ### Implementation for User Story 4
 
