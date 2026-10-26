@@ -10,7 +10,7 @@ namespace Warranty.Domain.Fulfillment;
 /// claim. Carries the policy version's replacement rules copied at creation, and owns its locations, the
 /// faulty-product return, model proposals, reserved units and append-only events; status changes follow
 /// the replacement state machine in data-model.md and go only through this aggregate (transitions are
-/// added in T325, T336, T343 and T355).
+/// added in T325, T336, T337, T343 and T355).
 /// </summary>
 public sealed class Replacement
 {
@@ -358,10 +358,43 @@ public sealed class Replacement
     /// <see cref="Create"/> in the same transaction, on the repair hand-over's date, with <see cref="ReportSource.System"/>
     /// referring to <paramref name="repairHandoverId"/>; no location or serial is recorded and the status stays.
     /// <see cref="ReturnState.HeldByRepairCentre"/> satisfies both return rules, so no staff return and no return confirmation
-    /// at the hand-over are needed. The return is recorded once. Pending T337.
+    /// at the hand-over are needed. The return is recorded once, while the replacement awaits a unit and has no return
+    /// (an <see cref="InvalidClaimTransitionException"/> otherwise).
     /// </summary>
     public ReplacementEvent RecordHeldReturn(Guid repairHandoverId, DateOnly handedOverOn, DateTimeOffset recordedAt)
-        => throw new NotImplementedException($"Pending T337 ({repairHandoverId}, {handedOverOn}, {recordedAt}).");
+    {
+        if (repairHandoverId == Guid.Empty)
+        {
+            throw new ArgumentException("The repair hand-over ID is required.", nameof(repairHandoverId));
+        }
+
+        if (Status != ReplacementStatus.AwaitingUnit || Return is not null || ReturnState != ReturnState.NotYetReturned)
+        {
+            throw new InvalidClaimTransitionException(
+                $"Cannot record the product held by a repair centre on a replacement in status {Status} (return {ReturnState}).");
+        }
+
+        var faultyReturn = AddReturn(
+            handedOverOn, serviceCenterId: null, serialSeen: null, serialMatches: true, repairHandoverId, note: null,
+            ReplacementEvent.SystemActor, recordedAt);
+        SetReturnState(ReturnState.HeldByRepairCentre, recordedAt);
+        return AppendEvent(
+            ReplacementEventType.ReturnRecorded,
+            Status,
+            Status,
+            reportedAt: recordedAt,
+            recordedAt: recordedAt,
+            ReportSource.System,
+            ReplacementEvent.SystemActor,
+            note: null,
+            payloadJson: JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["returnId"] = faultyReturn.Id,
+                ["repairHandoverId"] = repairHandoverId,
+                ["returnedOn"] = handedOverOn,
+                ["returnState"] = ReturnState.ToString(),
+            }));
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ReturnAccepted"/> (claims reviewer only): a reviewer accepts a returned product whose

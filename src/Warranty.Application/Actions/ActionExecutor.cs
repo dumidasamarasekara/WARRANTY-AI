@@ -546,13 +546,16 @@ public sealed class ActionExecutor(
     /// The replacement of a claim whose remedy just became Replacement (003 research R3), in the same transaction: the
     /// <c>replacement</c> rules of <paramref name="version"/> (<see cref="ReplacementRules.Default"/> when absent) are
     /// copied, the initial status comes from <see cref="ReplacementPolicy.InitialStatus"/> (research R9) and the first
-    /// active replacement location serving the claim is suggested; staff choose one otherwise.
+    /// active replacement location serving the claim is suggested; staff choose one otherwise. When the claim's 002 repair
+    /// centre holds the faulty product (<see cref="Repair.HandoverHoldingProduct"/>), the <c>System</c> return referring to
+    /// the repair hand-over is recorded with it.
     /// </summary>
     private async Task CreateReplacementAsync(
         Claim claim, Product? product, PolicyVersion version, Repair? repair, string actor, DateTimeOffset now, CancellationToken ct)
     {
         var rules = version.RemedyRules?.Replacement ?? ReplacementRules.Default;
-        var status = replacementPolicy.InitialStatus(rules, repair?.HandoverHoldingProduct() is not null);
+        var heldBy = repair?.HandoverHoldingProduct();
+        var status = replacementPolicy.InitialStatus(rules, heldBy is not null);
         var location = claim.Region is { } region && product is not null
             ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ServiceCenterPurpose.Replacement, ct)).FirstOrDefault(c => c.ServesClaim)
             : null;
@@ -571,6 +574,26 @@ public sealed class ActionExecutor(
                     serviceCenterName = location.Name,
                     assignment = nameof(LocationAssignment.Suggested),
                     status = status.ToString(),
+                },
+                ct);
+        }
+
+        // The repair centre still holds the faulty product (research R9, FR-020): the system records the return, referring
+        // to the repair hand-over, so the customer is not asked to bring it and no return confirmation is needed later.
+        if (heldBy is { HandedOverOn: { } handedOverOn })
+        {
+            var held = replacement.RecordHeldReturn(heldBy.Id, handedOverOn, now);
+            replacements.AddEvent(held);
+            await trail.AppendAsync(
+                claim.Id, TrailStep.FaultyProductReturned, actor, "Faulty product held by the repair centre since the repair hand-over.",
+                new
+                {
+                    replacementId = replacement.Id,
+                    eventSeq = held.Seq,
+                    repairId = repair!.Id,
+                    repairHandoverId = heldBy.Id,
+                    returnedOn = handedOverOn,
+                    returnState = replacement.ReturnState.ToString(),
                 },
                 ct);
         }

@@ -26,12 +26,9 @@ namespace Warranty.UnitTests.Fulfillment;
 /// holds the faulty product (<see cref="Repair.HandoverHoldingProduct"/>) satisfies both rules: the replacement starts with a
 /// return recorded by the system, referring to the repair hand-over, and the hand-over to the customer asks for no return.
 /// <para>
-/// Skips: the return before reservation, the mismatch and <see cref="Replacement.AcceptReturn"/> (T336) are implemented;
-/// <see cref="Replacement.RecordHeldReturn"/> and <see cref="RecordReplacementEvent"/>'s <c>ReturnRecorded</c> before reservation,
-/// mismatch and <c>ReturnAccepted</c> (claims reviewer only, <c>SELF_REVIEW_REFUSED</c>) are T337, which merges after T336. The
-/// status rules that already refuse a reservation, a hand-over or a return without a location, the serial comparison itself and
-/// the held-product detection on <see cref="Repair"/> are on master and run unskipped. The review queue item for a mismatch
-/// (<c>RETURN_MISMATCH</c>) is tested with T338.
+/// The domain transitions are T336, <see cref="Replacement.RecordHeldReturn"/> and <see cref="RecordReplacementEvent"/>'s
+/// <c>ReturnRecorded</c> and <c>ReturnAccepted</c> (claims reviewer only, <c>SELF_REVIEW_REFUSED</c>) T337. The review queue
+/// item for a mismatch (<c>RETURN_MISMATCH</c>) is tested with T338.
 /// </para>
 /// </summary>
 public sealed class ReplacementReturnTests
@@ -449,7 +446,7 @@ public sealed class ReplacementReturnTests
         }
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public void A_product_held_by_a_repair_centre_is_recorded_as_returned_by_the_system_referring_to_the_repair_hand_over()
     {
         var handover = RepairAt(RepairStage.FailedTwiceAtCentre).HandoverHoldingProduct().ShouldNotBeNull();
@@ -474,7 +471,7 @@ public sealed class ReplacementReturnTests
         Should.Throw<InvalidOperationException>(() => replacement.RecordHeldReturn(handover.Id, handover.HandedOverOn.Value, CreatedAt));
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public void Under_AtCollection_a_product_held_by_a_repair_centre_needs_no_return_confirmation_at_the_hand_over()
     {
         var handover = RepairAt(RepairStage.FailedTwiceAtCentre).HandoverHoldingProduct().ShouldNotBeNull();
@@ -491,7 +488,7 @@ public sealed class ReplacementReturnTests
 
     // ── Through the use case (RecordReplacementEvent; X6 – X8, FR-024) ─────────────────────────
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task A_return_before_reservation_with_the_claims_serial_spelled_differently_is_recorded_as_matching()
     {
         var (claim, replacement) = ArrangeAwaitingReturn();
@@ -506,7 +503,7 @@ public sealed class ReplacementReturnTests
         await _trail.ReceivedWithAnyArgs(1).AppendAsync(default, default, default!, default!, default, Ct);
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task A_return_with_another_serial_is_recorded_as_a_mismatch_and_keeps_awaiting_the_return()
     {
         var (claim, replacement) = ArrangeAwaitingReturn();
@@ -519,7 +516,7 @@ public sealed class ReplacementReturnTests
         _notifications.ReceivedCalls().ShouldBeEmpty();
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task A_claims_agent_cannot_accept_a_returned_product()
     {
         var (claim, replacement) = ArrangeAwaitingReturnMismatch();
@@ -530,7 +527,7 @@ public sealed class ReplacementReturnTests
         ShouldBeUnchanged(replacement);
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task The_reviewer_who_submitted_the_claim_cannot_accept_its_returned_product()
     {
         UsePrincipal(ReviewerActor, Principals.ClaimsReviewerRole);
@@ -544,7 +541,7 @@ public sealed class ReplacementReturnTests
         ShouldBeUnchanged(replacement);
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task Another_reviewer_accepts_the_returned_product_with_a_reason()
     {
         UsePrincipal(ReviewerActor, Principals.ClaimsReviewerRole);
@@ -561,7 +558,7 @@ public sealed class ReplacementReturnTests
         await _unitOfWork.ReceivedWithAnyArgs(1).ExecuteInTransactionAsync(default!, Ct);
     }
 
-    [Theory(Skip = "Pending T337")]
+    [Theory]
     [InlineData(null)]
     [InlineData("too short")]
     public async Task Accepting_a_returned_product_needs_a_reason_of_10_to_1000_characters(string? reason)

@@ -91,10 +91,12 @@ public sealed class WarrantyAppFixtureTests(WarrantyAppFixture fixture)
     public async Task Both_tenants_are_seeded_and_the_app_login_sees_none_of_their_rows_without_a_tenant()
     {
         (await CountAsync("select count(*) from tenancy.tenants")).ShouldBe(2);
-        // Replacement units handed out by other tests (003 HandedToCustomer) are added to the catalog; the seed is not.
+        // Replacement units handed out by other tests (003 HandedToCustomer) are added to the catalog, and
+        // ReplacementPersistenceTests adds REPL- serials directly (whichever class runs first); the seed is not.
         (await CountAsync(
-            "select count(*) from catalog.product_serials p where not exists (select 1 from catalog.replacement_serials r " +
-            "where r.tenant_id = p.tenant_id and r.serial_number = p.serial_number)")).ShouldBe(141);
+            "select count(*) from catalog.product_serials p where p.serial_number not like 'REPL-%' and not exists " +
+            "(select 1 from catalog.replacement_serials r where r.tenant_id = p.tenant_id and r.serial_number = p.serial_number)"))
+            .ShouldBe(141);
 
         await using var app = new NpgsqlConnection(fixture.AppConnectionString());
         await app.OpenAsync(TestContext.Current.CancellationToken);

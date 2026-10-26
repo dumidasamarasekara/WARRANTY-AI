@@ -122,7 +122,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
 
     // ---- X7: return, then reservation and hand-over ------------------------------------------------------
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X7_the_return_with_the_claims_serial_lets_a_unit_be_reserved_and_handed_over_without_a_return_confirmation()
     {
         var agent = TestStaffUsers.AgentBorealis;
@@ -251,7 +251,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
         ShouldShowNoStaffData(claimant, reviewer, OtherSerial, AcceptReason);
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X8_an_agent_cannot_accept_a_mismatching_return_and_a_reviewer_accepts_it_only_with_a_reason()
     {
         var (claimId, _) = await CopyOfX6Async();
@@ -295,7 +295,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
             .ShouldBe("ReadyForCollection");
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X8_while_the_return_does_not_match_no_unit_can_be_reserved_and_the_return_cannot_be_recorded_again()
     {
         var (claimId, _) = await CopyOfX6Async();
@@ -322,7 +322,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
         ETagOf(await ReplacementAsync(TestStaffUsers.AgentBorealis, claimId)).ShouldBe(ETagOf(before));
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X8_the_reviewer_who_submitted_the_claim_cannot_accept_its_return()
     {
         var reviewer = TestStaffUsers.ReviewerBorealis;
@@ -346,7 +346,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
         ETagOf(await ReplacementAsync(reviewer, claimId)).ShouldBe(ETagOf(before));
     }
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X8_under_AtCollection_a_mismatching_return_blocks_the_hand_over_until_a_reviewer_accepts_it()
     {
         // A copy of US1's X1 (Aurora, returned at collection) with a reserved unit.
@@ -380,7 +380,7 @@ public sealed class US2_FaultyProductReturnTests(WarrantyAppFixture fixture)
 
     // ---- X9: the product is already with the repair centre ----------------------------------------------
 
-    [Fact(Skip = "Pending T337")]
+    [Fact]
     public async Task X9_a_replacement_after_two_failed_repairs_starts_with_the_product_held_by_the_repair_centre()
     {
         var agent = TestStaffUsers.AgentAurora;
