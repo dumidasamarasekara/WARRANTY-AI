@@ -17,7 +17,8 @@ public enum CoverageWindowOutcome
 /// Deterministic coverage window of one claim (data-model.md "Coverage window rule").
 /// <see cref="CoverageEndDate"/> is <c>purchase_date + months</c>, using the component-specific months
 /// when the terms list the claimed component and the standard months for the region otherwise; the
-/// claim is covered iff <c>claim_date ≤ CoverageEndDate</c> (inclusive).
+/// claim is covered iff <c>claim_date ≤ CoverageEndDate</c> (inclusive). For a replacement unit both
+/// ends are at least its minimum cover end (003 FR-029, research R11).
 /// </summary>
 /// <param name="Outcome">Whether the window was determined.</param>
 /// <param name="CoverageEndDate">Last covered day for the claimed component; null when not determined.</param>
@@ -56,7 +57,10 @@ public static class CoverageWindowCalculator
     /// (<c>NoApplicablePolicy</c>). <paramref name="component"/> is matched case-insensitively against
     /// <see cref="CoverageTerms.ComponentCoverageMonths"/> (e.g. intake's <c>BATTERY</c> → <c>battery</c>);
     /// null or an unlisted component uses the standard months for <paramref name="region"/>.
-    /// <paramref name="minimumCoverEnd"/> is the registered cover end of a replacement unit (003 research R11).
+    /// <paramref name="minimumCoverEnd"/> is the registered cover end of a replacement unit (003 FR-029, research R11),
+    /// with <paramref name="purchaseDate"/> the original purchase date: the standard and component coverage ends are
+    /// the later of the window from the original purchase and the minimum, so a minimum never shortens a window. It
+    /// does not extend the accidental-damage allowance window, and without applicable terms the window stays undetermined.
     /// </summary>
     public static CoverageWindowResult Calculate(
         CoverageTerms? terms,
@@ -66,19 +70,14 @@ public static class CoverageWindowCalculator
         DateOnly claimDate,
         DateOnly? minimumCoverEnd = null)
     {
-        if (minimumCoverEnd is not null)
-        {
-            throw new NotImplementedException("Pending T350: the minimum cover end of a replacement unit.");
-        }
-
         if (terms is null || !terms.StandardCoverageMonths.TryGetValue(region, out var standardMonths))
         {
             return Undetermined;
         }
 
-        var standardEndDate = purchaseDate.AddMonths(standardMonths);
+        var standardEndDate = AtLeast(purchaseDate.AddMonths(standardMonths), minimumCoverEnd);
         var coverageEndDate = TryGetComponentMonths(terms, component, out var componentMonths)
-            ? purchaseDate.AddMonths(componentMonths)
+            ? AtLeast(purchaseDate.AddMonths(componentMonths), minimumCoverEnd)
             : standardEndDate;
 
         var accidentalEndDate = AccidentalDamageRule.WindowEndDate(terms.AccidentalDamage, purchaseDate);
@@ -95,6 +94,8 @@ public static class CoverageWindowCalculator
 
     private static readonly CoverageWindowResult Undetermined =
         new(CoverageWindowOutcome.NoApplicablePolicy, null, null, null);
+
+    private static DateOnly AtLeast(DateOnly end, DateOnly? minimum) => minimum is { } floor && floor > end ? floor : end;
 
     private static bool TryGetComponentMonths(CoverageTerms terms, string? component, out int months)
     {
