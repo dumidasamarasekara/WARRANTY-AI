@@ -45,6 +45,9 @@ public interface ICatalogRepository
 
     Task<ProductSerial?> FindSerialAsync(string serialNumber, CancellationToken ct);
 
+    /// <summary>The current tenant's product models of <paramref name="category"/> (compared lower-case), ordered by model code.</summary>
+    Task<IReadOnlyList<Product>> ListProductsAsync(string category, CancellationToken ct);
+
     /// <summary>
     /// Adds a serial to the current tenant's catalog: a handed-out replacement unit not yet in <c>catalog.product_serials</c>,
     /// so the existing catalog lookups find it (003 research R10). Catalog serials are never updated or removed here.
@@ -261,6 +264,12 @@ public interface IReplacementRepository
     /// (<see cref="ReturnState.Mismatch"/>), untracked with their return, oldest change first (the review queue, 003 research R5).
     /// </summary>
     Task<IReadOnlyList<Replacement>> ListReturnMismatchesAsync(CancellationToken ct);
+
+    /// <summary>
+    /// The replacements awaiting a unit (<see cref="ReplacementStatus.AwaitingUnit"/>) whose model proposal waits for a
+    /// reviewer, untracked with their proposals, oldest change first (the review queue, 003 research R5).
+    /// </summary>
+    Task<IReadOnlyList<Replacement>> ListPendingProposalsAsync(CancellationToken ct);
 
     /// <summary>Replacement events are append-only: there is no update or delete.</summary>
     void AddEvent(ReplacementEvent replacementEvent);

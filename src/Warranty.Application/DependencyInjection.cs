@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<RecordReplacementEvent>();
         services.AddScoped<RepairQueries>();
         services.AddScoped<ReplacementQueries>();
+        services.AddScoped<ReplacementModelQuery>();
         services.AddScoped<RecordRemedyCompletion>();
         services.AddScoped<RecordRemedyDecision>();
         services.AddScoped<IActionExecutor, ActionExecutor>();

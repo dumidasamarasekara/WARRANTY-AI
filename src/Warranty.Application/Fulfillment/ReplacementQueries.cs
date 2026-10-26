@@ -9,6 +9,8 @@ using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Integration;
+using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
 
 namespace Warranty.Application.Fulfillment;
 
@@ -264,5 +266,67 @@ public sealed class ReplacementQueries(
         {
             throw new InvalidOperationException("Replacement queries require the tenant of the staff user.");
         }
+    }
+}
+
+/// <summary>
+/// <c>GET /api/claims/{claimId}/replacement-models</c> (003 FR-002, FR-023): the models staff may propose instead of the
+/// claimed one. Empty when the replacement's copied product rule is <see cref="ReplacementProductRule.SameModel"/>, the
+/// claim has no replacement or its product is not in the catalog; otherwise the tenant's other models of the claimed
+/// model's category that <see cref="ReplacementPolicy.CheckModel"/> allows after a reviewer's approval (claim value at
+/// least the claimed model's), ordered by claim value then model code. Any staff role; the catalog is tenant-scoped.
+/// </summary>
+public sealed class ReplacementModelQuery(
+    ITenantContext tenant,
+    IClaimRepository claims,
+    ICatalogRepository catalog,
+    IReplacementRepository replacements,
+    ReplacementPolicy policy)
+{
+    /// <summary>The proposable models, or null when the claim is not visible.</summary>
+    public async Task<IReadOnlyList<ReplacementModelView>?> ListAsync(Guid claimId, CancellationToken ct)
+    {
+        if (!tenant.IsResolved)
+        {
+            throw new InvalidOperationException("Replacement models require the tenant of the staff user.");
+        }
+
+        var claim = await claims.GetAsync(claimId, ct);
+        if (claim is null || claim.TenantId != tenant.TenantId)
+        {
+            return null;
+        }
+
+        var replacement = await replacements.GetByClaimAsync(claim.Id, ct);
+        var claimed = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        if (replacement is null || claimed is null || replacement.ProductRule == ReplacementProductRule.SameModel)
+        {
+            return [];
+        }
+
+        var rules = RulesOf(replacement);
+        var original = ModelOf(claimed);
+        return (await catalog.ListProductsAsync(claimed.Category, ct))
+            .Where(p => p.Id != claimed.Id
+                && p.TenantId == tenant.TenantId
+                && policy.CheckModel(rules, original, ModelOf(p)).Verdict == ReplacementModelVerdict.NeedsReviewerApproval)
+            .OrderBy(p => p.ClaimValue)
+            .ThenBy(p => p.ModelCode, StringComparer.Ordinal)
+            .Select(ReplacementModelView.Of)
+            .ToList();
+    }
+
+    /// <summary>The replacement rules copied onto <paramref name="replacement"/> at creation (they, not the current policy, apply).</summary>
+    public static ReplacementRules RulesOf(Replacement replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+        return new ReplacementRules(replacement.ProductRule, replacement.ReturnRule, replacement.MinimumCoverMonths);
+    }
+
+    /// <summary>A catalog product as the replacement rules compare it.</summary>
+    public static ReplacementModel ModelOf(Product product)
+    {
+        ArgumentNullException.ThrowIfNull(product);
+        return new ReplacementModel(product.ModelCode, product.Category, product.ClaimValue);
     }
 }

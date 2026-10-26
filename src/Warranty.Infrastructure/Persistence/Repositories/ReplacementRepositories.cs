@@ -41,6 +41,13 @@ internal sealed class ReplacementRepository(WarrantyDbContext db) : IReplacement
             .OrderBy(r => r.UpdatedAt)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Replacement>> ListPendingProposalsAsync(CancellationToken ct)
+        => await db.Replacements.AsNoTracking()
+            .Include(r => r.Proposals)
+            .Where(r => r.PendingProposalId != null && r.Status == ReplacementStatus.AwaitingUnit)
+            .OrderBy(r => r.UpdatedAt)
+            .ToListAsync(ct);
+
     public void AddEvent(ReplacementEvent replacementEvent)
     {
         ArgumentNullException.ThrowIfNull(replacementEvent);
