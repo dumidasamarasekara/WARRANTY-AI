@@ -124,8 +124,7 @@ public sealed class PolicyAgent(
 
         var version = retrieval.Version;
         var issued = Issue(retrieval.Chunks, ctx.Run.References);
-        var window = CoverageWindowCalculator.Calculate(
-            version.Terms, applicability.Region!.Value, WarrantyLookupTool.ComponentKey(component), claim.PurchaseDate, claim.ClaimDate);
+        var window = CoverageWindowOf(version.Terms, applicability.Region!.Value, component, input.Case);
 
         var reasoning = await ReasonAsync(input.Case, extraction, product, issued, ctx, ct);
         diagnostics.AddRange(reasoning.Diagnostics);
@@ -206,6 +205,19 @@ public sealed class PolicyAgent(
             .ThenBy(c => c.ChunkId);
         return [.. decisive, .. coverage, .. others];
     }
+
+    /// <summary>
+    /// The deterministic coverage window of the case for the intake <paramref name="component"/>. A replacement unit's
+    /// window runs from the original purchase date and lasts at least until its registered cover end (003 research R11).
+    /// </summary>
+    internal static CoverageWindowResult CoverageWindowOf(CoverageTerms? terms, Region region, string component, CaseContext @case)
+        => CoverageWindowCalculator.Calculate(
+            terms,
+            region,
+            WarrantyLookupTool.ComponentKey(component),
+            @case.ReplacementCover?.OriginalPurchaseDate ?? @case.PurchaseDate,
+            @case.ClaimDate,
+            @case.ReplacementCover?.CoverEndDate);
 
     /// <summary>The intake component (upper-case wire value) the coverage window is computed for; <c>UNKNOWN</c> without an extraction.</summary>
     internal static string ComponentOf(IntakeExtraction? extraction)

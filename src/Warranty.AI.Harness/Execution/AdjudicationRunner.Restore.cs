@@ -78,7 +78,7 @@ public sealed partial class AdjudicationRunner
 
         var component = PolicyAgent.ComponentOf(ctx.Intake is { } intake ? IntakeExtraction.From(intake) : null);
         var window = version is not null && ctx.Case.Region is { } region
-            ? CoverageWindowCalculator.Calculate(version.Terms, region, WarrantyLookupTool.ComponentKey(component), ctx.Case.PurchaseDate, ctx.Case.ClaimDate)
+            ? PolicyAgent.CoverageWindowOf(version.Terms, region, component, ctx.Case)
             : PolicyResult.NoCoverageWindow;
 
         if (version is not null)

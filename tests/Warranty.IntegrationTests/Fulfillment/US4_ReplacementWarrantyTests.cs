@@ -97,7 +97,7 @@ public sealed class US4_ReplacementWarrantyTests(WarrantyAppFixture fixture)
             .ShouldBe(Iso(originalEnd));
     }
 
-    [Fact(Skip = "Pending T350")]
+    [Fact]
     public async Task X13_the_coverage_of_a_handed_out_Aurora_unit_ends_with_the_original_window()
     {
         // Needs the replacement cover of T349 as well.
@@ -127,7 +127,7 @@ public sealed class US4_ReplacementWarrantyTests(WarrantyAppFixture fixture)
 
     // ---- X14: a Borealis unit after the original window --------------------------------------------------
 
-    [Fact(Skip = "Pending T350")]
+    [Fact]
     public async Task X14_a_Borealis_unit_is_covered_until_six_months_after_the_hand_over_when_the_original_window_has_ended()
     {
         // Needs the replacement cover of T349 as well. Bought 22 months ago: the original 24-month window ends in about

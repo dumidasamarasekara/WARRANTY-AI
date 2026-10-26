@@ -239,7 +239,7 @@ public sealed class CoverageWindowTests
 
     // ---- Minimum cover of a replacement unit (003 FR-029, research R11) ----------------------------------
 
-    [Theory(Skip = "Pending T350")]
+    [Theory]
     [InlineData(2025, 12, 1, 2026, 3, 10)] // minimum before the original end: the original window applies
     [InlineData(2026, 3, 10, 2026, 3, 10)] // minimum on the original end
     [InlineData(2026, 8, 10, 2026, 8, 10)] // minimum after the original end: the minimum applies
@@ -255,7 +255,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Theory(Skip = "Pending T350")]
+    [Theory]
     [InlineData(2026, 6, 1, true)]   // after the original 24 months, within 6 months of the hand-over (X14)
     [InlineData(2026, 8, 10, true)]  // the last day of the minimum cover
     [InlineData(2026, 8, 11, false)] // the day after
@@ -269,7 +269,7 @@ public sealed class CoverageWindowTests
         result.WithinComponentCoverage.ShouldBe(covered);
     }
 
-    [Fact(Skip = "Pending T350")]
+    [Fact]
     public void A_minimum_before_the_original_end_never_shortens_the_window()
     {
         // Replacement handed over early with minimumCoverMonths 0 (Aurora): the original window still decides.
