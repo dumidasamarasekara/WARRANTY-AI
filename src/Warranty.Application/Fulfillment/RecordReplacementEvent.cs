@@ -51,6 +51,12 @@ public abstract record RecordReplacementEventResult
     /// <summary>403: the caller's role may not record the event (an auditor records nothing; reviewer-only events by an agent).</summary>
     public sealed record Forbidden(string Detail) : RecordReplacementEventResult;
 
+    /// <summary>
+    /// 403: a reviewer-only event (<c>ReturnAccepted</c>, <c>ModelApproved</c>, <c>ModelDeclined</c>) by the reviewer who
+    /// submitted the claim; a <c>SELF_REVIEW_REFUSED</c> security event was recorded (research R5). Returned from T337 on.
+    /// </summary>
+    public sealed record SelfReviewRefused(string Detail) : RecordReplacementEventResult;
+
     /// <summary>412: <c>If-Match</c> is missing or does not equal the replacement's current ETag.</summary>
     public sealed record PreconditionFailed(string Detail) : RecordReplacementEventResult;
 

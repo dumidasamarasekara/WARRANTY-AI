@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
@@ -553,7 +552,7 @@ public sealed class ActionExecutor(
         Claim claim, Product? product, PolicyVersion version, Repair? repair, string actor, DateTimeOffset now, CancellationToken ct)
     {
         var rules = version.RemedyRules?.Replacement ?? ReplacementRules.Default;
-        var status = replacementPolicy.InitialStatus(rules, HoldsFaultyProduct(repair));
+        var status = replacementPolicy.InitialStatus(rules, repair?.HandoverHoldingProduct() is not null);
         var location = claim.Region is { } region && product is not null
             ? (await serviceNetwork.ListEligibleAsync(region, product.Category, ServiceCenterPurpose.Replacement, ct)).FirstOrDefault(c => c.ServesClaim)
             : null;
@@ -575,30 +574,6 @@ public sealed class ActionExecutor(
                 },
                 ct);
         }
-    }
-
-    /// <summary>
-    /// Whether the claim's 002 repair holds the faulty product (003 research R9): the repair is at the centre or ended
-    /// there as not possible, its active hand-over has a hand-over date, and the product was not returned to the customer
-    /// by a <see cref="RepairEventType.NewAttemptStarted"/> after that hand-over.
-    /// </summary>
-    private static bool HoldsFaultyProduct(Repair? repair)
-    {
-        if (repair is not { Status: RepairStatus.AtRepairCentre or RepairStatus.RepairNotPossible }
-            || repair.ActiveHandover?.HandedOverOn is null)
-        {
-            return false;
-        }
-
-        var lastMove = repair.Events.LastOrDefault(e => e.Type is RepairEventType.HandedOver or RepairEventType.NewAttemptStarted);
-        if (lastMove is not { Type: RepairEventType.NewAttemptStarted })
-        {
-            return true;
-        }
-
-        using var payload = JsonDocument.Parse(lastMove.PayloadJson);
-        return !(payload.RootElement.TryGetProperty("productLocation", out var productLocation)
-            && productLocation.GetString() == nameof(ProductLocation.ReturnedToCustomer));
     }
 
     private static string RecommendationSummary(RemedyEvaluation evaluation, PolicyVersion version)

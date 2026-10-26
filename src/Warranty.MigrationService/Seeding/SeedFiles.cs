@@ -379,12 +379,14 @@ public static class SeedFiles
     }
 
     /// <summary>
-    /// A replacement scenario claim reaches Replacement only through a reviewer's decision (003 research R14): its
-    /// <see cref="RemedyScenarioClaimSeed.DecidedRemedy"/> must be present and name Replacement.
+    /// A replacement scenario claim reaches Replacement only through a reviewer's decision (003 research R14): a
+    /// <see cref="RemedyScenarioClaimSeed.DecidedRemedy"/> must name Replacement. A claim without one keeps the remedy its
+    /// policy version gives, which the seeder requires to be Repair: staff take that repair to its failure and a reviewer
+    /// then decides Replacement (quickstart X9, research R9).
     /// </summary>
     private static IEnumerable<string> ReplacementScenarioErrors(IReadOnlyList<RemedyScenarioClaimSeed> replacements)
         => replacements
-            .Where(s => s.DecidedRemedy?.Remedy != RemedyType.Replacement)
+            .Where(s => s.DecidedRemedy is { } decided && decided.Remedy != RemedyType.Replacement)
             .Select(s => $"replacement scenario {s.Scenario} needs a decided remedy Replacement");
 
     /// <summary>A claim ID or reference used by more than one seeded claim (history, remedy and replacement scenarios).</summary>

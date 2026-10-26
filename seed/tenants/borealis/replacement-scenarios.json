@@ -1,5 +1,5 @@
 {
-  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Borealis reaches Replacement through an uneconomical repair estimate (row repairNotEconomical: Refund or Replacement; its repairFailed row gives Refund). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Borealis returns the faulty product before reservation, so X6 starts Awaiting return; it is also the Borealis claim of the cross-tenant checks (X18). Later stories add their claims here (X8, X12).",
+  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Borealis reaches Replacement through an uneconomical repair estimate (row repairNotEconomical: Refund or Replacement; its repairFailed row gives Refund). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Borealis returns the faulty product before reservation, so X6 starts Awaiting return; it is also the Borealis claim of the cross-tenant checks (X18), so it only gets reads and refused requests. X7-borealis and X8-borealis are X6-like claims of their own (also Awaiting return at the suggested Lyon location): X7 has the faulty product returned with its own serial, then a unit reserved and handed over; X8 has a product returned whose serial is not the claim's (any other serial, e.g. X7's BS11-24-0307), which a claims reviewer then accepts. Later stories add their claims here (X12).",
   "claims": [
     {
       "scenario": "X6-borealis",
@@ -23,6 +23,54 @@
         "remedy": "Replacement",
         "reason": "The repair estimate is above the economic limit of the policy; a replacement is chosen.",
         "decidedDaysAgo": -1
+      }
+    },
+    {
+      "scenario": "X7-borealis",
+      "id": "22222222-0006-7000-8000-000000000007",
+      "reference": "RPMTX7B001",
+      "customerEmail": "remedy.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0307",
+      "region": "EU",
+      "purchasePlace": "Online shop",
+      "purchasePrice": 450.00,
+      "problemDescription": "The tablet no longer charges: the battery indicator stays at zero with the original charger.",
+      "purchasedDaysAgo": -80,
+      "submittedDaysAgo": -30,
+      "approvedDaysAgo": -30,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the Borealis Care Warranty: the charging fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairNotEconomical",
+        "estimateAmount": 350.00,
+        "remedy": "Replacement",
+        "reason": "The repair estimate is above the economic limit of the policy; a replacement is chosen.",
+        "decidedDaysAgo": -2
+      }
+    },
+    {
+      "scenario": "X8-borealis",
+      "id": "22222222-0006-7000-8000-000000000008",
+      "reference": "RPMTX8B001",
+      "customerEmail": "remedy.customer@borealis.example.com",
+      "modelCode": "BOR-SLATE11",
+      "serialNumber": "BS11-24-0308",
+      "region": "EU",
+      "purchasePlace": "Borealis Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The speakers crackle at any volume and the sound cuts out during video calls.",
+      "purchasedDaysAgo": -90,
+      "submittedDaysAgo": -35,
+      "approvedDaysAgo": -35,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the Borealis Care Warranty: the audio fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairNotEconomical",
+        "estimateAmount": 350.00,
+        "remedy": "Replacement",
+        "reason": "The repair estimate is above the economic limit of the policy; a replacement is chosen.",
+        "decidedDaysAgo": -3
       }
     }
   ]

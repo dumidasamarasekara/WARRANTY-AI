@@ -102,6 +102,32 @@ public sealed class Repair
         return repair;
     }
 
+    /// <summary>
+    /// The hand-over through which the repair centre holds the faulty product (003 research R9), or null: the repair is at the
+    /// centre or ended there as not possible, its active hand-over has a hand-over date, and the product was not returned to
+    /// the customer by a <see cref="RepairEventType.NewAttemptStarted"/> after that hand-over. A replacement that follows
+    /// starts with the return recorded by the system, referring to this hand-over (003 FR-020).
+    /// </summary>
+    public RepairHandover? HandoverHoldingProduct()
+    {
+        if (Status is not (RepairStatus.AtRepairCentre or RepairStatus.RepairNotPossible)
+            || ActiveHandover is not { HandedOverOn: not null } handover)
+        {
+            return null;
+        }
+
+        var lastMove = _events.LastOrDefault(e => e.Type is RepairEventType.HandedOver or RepairEventType.NewAttemptStarted);
+        if (lastMove is not { Type: RepairEventType.NewAttemptStarted })
+        {
+            return handover;
+        }
+
+        using var payload = JsonDocument.Parse(lastMove.PayloadJson);
+        var returnedToCustomer = payload.RootElement.TryGetProperty("productLocation", out var productLocation)
+            && productLocation.GetString() == nameof(ProductLocation.ReturnedToCustomer);
+        return returnedToCustomer ? null : handover;
+    }
+
     // Transitions (data-model.md, Repair state machine). A refused transition throws an
     // InvalidClaimTransitionException naming the current status and leaves the repair unchanged.
 
