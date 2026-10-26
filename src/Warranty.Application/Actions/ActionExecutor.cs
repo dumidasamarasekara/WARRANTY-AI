@@ -118,7 +118,8 @@ public sealed class ActionExecutor(
     /// <summary>
     /// Applies a reviewer's remedy decision (002 research R4): the remedy's policy version is evaluated again for its
     /// scenario and the repair facts, and the decision must stay inside both that evaluation and the remedy's allowed
-    /// list; the trail actor is the reviewer's <c>sub</c>.
+    /// list; the trail actor is the reviewer's <c>sub</c>. A change away from Replacement until the unit is handed to the
+    /// customer ends the claim's replacement as <c>Cancelled</c> in the same transaction (003 research R13).
     /// </summary>
     private async Task ApplyRemedyDecisionAsync(ReviewerRemedyDecision decision, CancellationToken ct)
     {
@@ -141,7 +142,8 @@ public sealed class ActionExecutor(
         }
 
         var repair = await repairs.GetByClaimAsync(claim.Id, ct);
-        if (RemedyDecisionRules.WhyNotDecidable(remedy, repair, decision.Remedy) is { } notDecidable)
+        var replacement = await replacements.GetByClaimAsync(claim.Id, ct);
+        if (RemedyDecisionRules.WhyNotDecidable(remedy, repair, decision.Remedy, replacement) is { } notDecidable)
         {
             throw new InvalidClaimTransitionException(notDecidable);
         }
@@ -175,8 +177,9 @@ public sealed class ActionExecutor(
         }
 
         remedy.Decide(decision.Remedy, now);
+        var decisionId = Guid.CreateVersion7();
         remedies.AddDecision(RemedyDecision.Decided(
-            Guid.CreateVersion7(), claim.TenantId, claim.Id, history.Count + 1, remedy.Scenario, version.Id, evaluation.TableRow,
+            decisionId, claim.TenantId, claim.Id, history.Count + 1, remedy.Scenario, version.Id, evaluation.TableRow,
             evaluation.AllowedRemedies, decision.Remedy, RemedyDecidedBy.Reviewer, decision.ReviewerSub, decision.Reason,
             failedAttempts, estimate, now));
 
@@ -210,12 +213,40 @@ public sealed class ActionExecutor(
                 ct);
         }
 
+        if (replacement is not null
+            && decision.Remedy != RemedyType.Replacement
+            && replacement.Status is not (ReplacementStatus.HandedToCustomer or ReplacementStatus.Cancelled))
+        {
+            // A change away from Replacement before the hand-over ends the replacement in this transaction (003 research R13,
+            // FR-028): a System event referring to the decision; a reserved unit is cancelled and the return stays recorded.
+            var cancelledFrom = replacement.Status;
+            var cancelled = replacement.Cancel(decisionId, now);
+            replacements.AddEvent(cancelled);
+            await trail.AppendAsync(
+                claim.Id, TrailStep.ReplacementStatusUpdated, actor,
+                $"Replacement cancelled: the remedy is now {decision.Remedy}.",
+                new
+                {
+                    replacementId = replacement.Id,
+                    eventSeq = cancelled.Seq,
+                    type = nameof(ReplacementEventType.Cancelled),
+                    fromStatus = cancelledFrom.ToString(),
+                    toStatus = nameof(ReplacementStatus.Cancelled),
+                    remedyDecisionId = decisionId,
+                    remedy = decision.Remedy.ToString(),
+                    unitId = replacement.CurrentUnit?.Id,
+                    unitResult = replacement.CurrentUnit?.Result.ToString(),
+                    returnState = replacement.ReturnState.ToString(),
+                },
+                ct);
+        }
+
         switch (decision.Remedy)
         {
             case RemedyType.Repair when repair is null:
                 await CreateRepairAsync(claim, product, actor, now, ct);
                 break;
-            case RemedyType.Replacement when await replacements.GetByClaimAsync(claim.Id, ct) is null:
+            case RemedyType.Replacement when replacement is null:
                 await CreateReplacementAsync(claim, product, version, repair, actor, now, ct);
                 break;
             case RemedyType.Refund:

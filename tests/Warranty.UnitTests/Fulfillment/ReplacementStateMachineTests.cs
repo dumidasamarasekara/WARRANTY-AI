@@ -566,8 +566,8 @@ public sealed class ReplacementStateMachineTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325), the US2 (T336) and
-    /// the US3 transitions (T343) are implemented.
+    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325), the US2 (T336),
+    /// the US3 transitions (T343) and the system cancellation (T345) are implemented.
     /// </summary>
     private static string? Pending(string?[] tasks)
     {
@@ -575,6 +575,7 @@ public sealed class ReplacementStateMachineTests
         pending.Remove(T325);
         pending.Remove(T336);
         pending.Remove(T343);
+        pending.Remove(T345);
 
         return pending.Count == 0 ? null : "Pending " + string.Join(" and ", pending.Order(StringComparer.Ordinal));
     }
