@@ -381,7 +381,8 @@ public sealed partial class AdjudicationRunner(
             ctx.Case.AutoInfoRequestCount,
             ctx.Case.PurchaseDate,
             ctx.Case.History.PriorApprovedAccidental,
-            ctx.Case.HasProtectionPlan);
+            ctx.Case.HasProtectionPlan,
+            ctx.Case.ReplacementCover);
 
         return new GuardrailInput(
             settings,

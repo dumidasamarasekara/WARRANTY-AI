@@ -219,7 +219,7 @@ public sealed class CaseKnowledgeProviderTests
     private const string OriginalSerial = "SN-TAB-0001";
     private const string FirstSerial = "SN-TAB-0000";
 
-    [Fact(Skip = "Pending T349")]
+    [Fact]
     public async Task A_registered_replacement_unit_carries_its_replacement_cover()
     {
         Arrange("The replacement tablet will not charge.");
@@ -243,7 +243,7 @@ public sealed class CaseKnowledgeProviderTests
         context.History.ReturnedAndReplaced.ShouldBeFalse();
     }
 
-    [Fact(Skip = "Pending T349")]
+    [Fact]
     public async Task A_serial_that_was_returned_and_replaced_is_flagged_in_the_history_counts()
     {
         Arrange("The tablet will not charge since last week.");
@@ -256,7 +256,7 @@ public sealed class CaseKnowledgeProviderTests
         context.ReplacementCover.ShouldBeNull();
     }
 
-    [Fact(Skip = "Pending T349")]
+    [Fact]
     public async Task Accidental_damage_approvals_of_the_original_serial_count_for_the_replacement_unit()
     {
         // Borealis allows one accidental-damage incident: a replacement must not reset the allowance (research R11).
@@ -275,7 +275,7 @@ public sealed class CaseKnowledgeProviderTests
         context.History.EvidenceReuseMatches.ShouldBe(2);
     }
 
-    [Fact(Skip = "Pending T349")]
+    [Fact]
     public async Task Accidental_damage_approvals_are_counted_along_a_chain_of_replacements()
     {
         Arrange("The second replacement tablet fell and the screen cracked.");

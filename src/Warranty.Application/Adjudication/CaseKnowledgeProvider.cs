@@ -3,6 +3,7 @@ using Warranty.Application.Abstractions.Knowledge;
 using Warranty.Application.Abstractions.Persistence;
 using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
+using Warranty.Guardrails.Pipeline;
 
 namespace Warranty.Application.Adjudication;
 
@@ -12,6 +13,12 @@ namespace Warranty.Application.Adjudication;
 /// description, purchase place, evidence file names) carries placeholders instead of the customer's
 /// name, email, phone and street address (FR-006a, research R28). Evidence covers every round up to the
 /// requested one, and history counts come from the claim repository (research R25).
+/// <para>
+/// A claimed serial handed out as a replacement unit carries its <see cref="ReplacementCover"/> (003 FR-029, research
+/// R11), and its accidental-damage count includes the approved accidental-damage claims of the serials it replaced,
+/// along the whole chain, so a replacement never resets the incident allowance. A claimed serial that was itself
+/// returned as faulty and replaced is flagged in the history counts (<see cref="ClaimHistoryCounts.ReturnedAndReplaced"/>, FR-030).
+/// </para>
 /// </summary>
 public sealed class CaseKnowledgeProvider(
     ITenantContext tenant,
@@ -19,9 +26,7 @@ public sealed class CaseKnowledgeProvider(
     ICatalogRepository catalog,
     ICustomerRepository customers,
     ITenantRepository tenants,
-#pragma warning disable CS9113 // Stub: read by the replacement-unit lookup in T349.
     IReplacementSerialRegistry replacementSerials) : ICaseKnowledgeProvider
-#pragma warning restore CS9113
 {
     public async Task<CaseContext> GetCaseContextAsync(Guid claimId, int round, CancellationToken ct)
     {
@@ -51,6 +56,12 @@ public sealed class CaseKnowledgeProvider(
             .ToList();
         var history = await claims.GetHistoryCountsAsync(
             claim.Id, claim.SerialNumber, claim.ClaimDate, evidence.Select(e => e.Sha256).Distinct().ToList(), ct);
+        var registration = await replacementSerials.FindBySerialAsync(claim.SerialNumber, ct);
+        history = history with
+        {
+            PriorApprovedAccidental = history.PriorApprovedAccidental + await ReplacedSerialsAccidentalAsync(claim, registration, ct),
+            ReturnedAndReplaced = (await replacementSerials.FindByOriginalSerialAsync(claim.SerialNumber, ct)).Count > 0,
+        };
         var settings = await tenants.GetCurrentSettingsAsync(ct);
 
         return new CaseContext(
@@ -73,7 +84,27 @@ public sealed class CaseKnowledgeProvider(
             history,
             claim.ReviewerInfoRequested,
             claim.AutoInfoRequestCount,
-            claim.HasProtectionPlan);
+            claim.HasProtectionPlan,
+            registration is null
+                ? null
+                : new ReplacementCover(registration.OriginalSerial, registration.OriginalPurchaseDate, registration.CoverEndDate));
+    }
+
+    /// <summary>
+    /// The approved accidental-damage claims of the serials the claimed unit replaced: its original serial, that
+    /// serial's original if it was a replacement too, and so on (003 research R11). Zero when the unit is no replacement.
+    /// </summary>
+    private async Task<int> ReplacedSerialsAccidentalAsync(Claim claim, RegisteredReplacementSerial? registration, CancellationToken ct)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal) { ProductSerial.NormalizeSerial(claim.SerialNumber) };
+        var count = 0;
+        while (registration is not null && visited.Add(registration.OriginalSerial))
+        {
+            count += (await claims.GetHistoryCountsAsync(claim.Id, registration.OriginalSerial, claim.ClaimDate, [], ct)).PriorApprovedAccidental;
+            registration = await replacementSerials.FindBySerialAsync(registration.OriginalSerial, ct);
+        }
+
+        return count;
     }
 
     /// <summary>The catalog product, only when the claimed serial is registered to it (FR-003).</summary>
