@@ -12,8 +12,6 @@ namespace Warranty.UnitTests.Guardrails.Remedies;
 /// </summary>
 public sealed class ReplacementPolicyTests
 {
-    private const string CheckModelPending = "Pending T342";
-
     private static readonly ReplacementPolicy Policy = new();
 
     /// <summary>Same category, at least the claim value, reviewer approves; returned at collection.</summary>
@@ -65,7 +63,7 @@ public sealed class ReplacementPolicyTests
 
     // ---- Model check (FR-002, FR-023) ---------------------------------------------------------------------
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_same_model_is_allowed_under_both_product_rules_without_approval()
     {
         foreach (var rules in new[] { Aurora, Borealis })
@@ -74,11 +72,11 @@ public sealed class ReplacementPolicyTests
         }
     }
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_same_model_compares_model_codes_case_insensitively()
         => Expect(Policy.CheckModel(Aurora, Tab10, Tab10 with { ModelCode = "aur-tab10" }), ReplacementModelVerdict.SameModel);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_same_model_is_allowed_even_without_a_claim_value()
     {
         var noValue = Tab10 with { ClaimValue = null };
@@ -86,55 +84,55 @@ public sealed class ReplacementPolicyTests
         Expect(Policy.CheckModel(Aurora, noValue, noValue), ReplacementModelVerdict.SameModel);
     }
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void An_equivalent_with_a_higher_claim_value_needs_a_reviewer()
         => Expect(Policy.CheckModel(Aurora, Tab10, Tab11), ReplacementModelVerdict.NeedsReviewerApproval);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void An_equivalent_with_exactly_the_original_claim_value_needs_a_reviewer()
         => Expect(
             Policy.CheckModel(Aurora, Tab10, Tab11 with { ClaimValue = Tab10.ClaimValue }), ReplacementModelVerdict.NeedsReviewerApproval);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void An_equivalent_with_a_lower_claim_value_is_refused()
         => Expect(
             Policy.CheckModel(Aurora, Tab11, Tab10), ReplacementModelVerdict.Refused, ReplacementModelRefusal.LowerClaimValue);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void An_equivalent_one_cent_below_the_original_claim_value_is_refused()
         => Expect(
             Policy.CheckModel(Aurora, Tab10, Tab11 with { ClaimValue = 449.99m }),
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.LowerClaimValue);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void A_model_of_another_category_is_refused_even_with_a_higher_claim_value()
         => Expect(
             Policy.CheckModel(Aurora, Tab10, new ReplacementModel("AUR-LAP14", "laptop", 1200m)),
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.OtherCategory);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_seeded_Aurora_phone_is_refused_on_a_tablet_claim()
         => Expect(
             Policy.CheckModel(Aurora, Tab10, new ReplacementModel("AUR-PHN6", "phone", 480m)),
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.OtherCategory);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void Categories_compare_case_insensitively()
         => Expect(Policy.CheckModel(Aurora, Tab10, Tab11 with { Category = "Tablet" }), ReplacementModelVerdict.NeedsReviewerApproval);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void A_proposed_model_without_a_claim_value_is_refused()
         => Expect(
             Policy.CheckModel(Aurora, Tab10, Tab11 with { ClaimValue = null }),
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.MissingClaimValue);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void An_original_model_without_a_claim_value_allows_only_the_same_model()
         => Expect(
             Policy.CheckModel(Aurora, Tab10 with { ClaimValue = null }, Tab11),
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.MissingClaimValue);
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_SameModel_rule_refuses_every_other_model()
     {
         var slate11 = new ReplacementModel("BOR-SLATE11", "tablet", 480m);
@@ -146,14 +144,14 @@ public sealed class ReplacementPolicyTests
             ReplacementModelVerdict.Refused, ReplacementModelRefusal.SameModelOnly);
     }
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void A_version_without_replacement_rules_allows_the_same_model_only()
     {
         Expect(Policy.CheckModel(null, Tab10, Tab10), ReplacementModelVerdict.SameModel);
         Expect(Policy.CheckModel(null, Tab10, Tab11), ReplacementModelVerdict.Refused, ReplacementModelRefusal.SameModelOnly);
     }
 
-    [Fact(Skip = CheckModelPending)]
+    [Fact]
     public void The_model_check_is_deterministic()
         => Policy.CheckModel(Aurora, Tab10, Tab11).ShouldBe(Policy.CheckModel(Aurora, Tab10, Tab11));
 

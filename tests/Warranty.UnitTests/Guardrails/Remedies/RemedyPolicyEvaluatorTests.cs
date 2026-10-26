@@ -12,8 +12,6 @@ namespace Warranty.UnitTests.Guardrails.Remedies;
 /// </summary>
 public sealed class RemedyPolicyEvaluatorTests
 {
-    private const string ReplacementNotAvailablePending = "Pending T342";
-
     /// <summary>Claim value of BOR-SLATE11 in quickstart R10: 60% is 288.00.</summary>
     private const decimal SlateClaimValue = 480m;
 
@@ -154,11 +152,11 @@ public sealed class RemedyPolicyEvaluatorTests
 
     // ---- Replacement not available (003 FR-026, research R2, quickstart X12) --------------------------
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void The_replacement_not_available_row_is_read_under_its_own_name()
         => RemedyPolicyEvaluator.TableRowOf(RemedyScenario.ReplacementNotAvailable).ShouldBe("replacementNotAvailable");
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void A_replacement_not_available_recommends_Refund_at_both_companies_and_a_reviewer_confirms_it()
     {
         foreach (var rules in new[] { RemedyRulesContract.AuroraWithReplacement, RemedyRulesContract.BorealisWithReplacement })
@@ -172,7 +170,7 @@ public sealed class RemedyPolicyEvaluatorTests
         }
     }
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void A_replacement_not_available_allowed_list_is_offered_to_the_reviewer_without_a_recommendation()
     {
         var rules = RemedyRulesContract.AuroraWithReplacement with
@@ -185,7 +183,7 @@ public sealed class RemedyPolicyEvaluatorTests
             [RemedyType.Refund, RemedyType.Repair], reason: RemedyPendingReason.ReplacementNotAvailable);
     }
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void A_missing_replacement_not_available_row_sends_the_remedy_to_a_reviewer_without_a_rule()
     {
         // The 002 rule sets have no replacementNotAvailable row (and no replacement rules).
@@ -197,13 +195,13 @@ public sealed class RemedyPolicyEvaluatorTests
         }
     }
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void A_version_without_remedy_rules_sends_a_replacement_not_available_to_a_reviewer()
         => Expect(
             Evaluator.Evaluate(null, RemedyScenario.ReplacementNotAvailable), "replacementNotAvailable", [],
             reason: RemedyPendingReason.NoRemedyRule);
 
-    [Fact(Skip = ReplacementNotAvailablePending)]
+    [Fact]
     public void A_replacement_not_available_ignores_the_repair_facts()
         => Expect(
             Evaluator.Evaluate(

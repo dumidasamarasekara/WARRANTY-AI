@@ -9,7 +9,7 @@ namespace Warranty.Guardrails.Remedies;
 /// <param name="Scenario">The scenario that was evaluated.</param>
 /// <param name="TableRow">
 /// The remedy-table row the scenario reads (<c>coveredDefect</c>, <c>protectionPlan</c>,
-/// <c>repairNotEconomical</c>, <c>repairFailed</c>), recorded with the decision even when the row is missing.
+/// <c>repairNotEconomical</c>, <c>repairFailed</c>, <c>replacementNotAvailable</c>), recorded with the decision even when the row is missing.
 /// </param>
 /// <param name="AllowedRemedies">The remedies the row permits; empty when the rules or the row are missing.</param>
 /// <param name="SingleRemedy">The remedy when exactly one is allowed (the recommendation); null for a choice.</param>
