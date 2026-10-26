@@ -8,7 +8,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ClaimDetailPage } from '../../../src/features/claims/ClaimDetailPage'
 import type { ClaimDetail } from '../../../src/features/claims/claimDetail'
 import type { RemedyView, RepairCentre, RepairView, ReplacementView } from '../../../src/features/remedy/remedyQueries'
-import { needsReturnConfirmation, replacementActions, replacementEventOrigin, replacementPolicyBasis } from '../../../src/features/remedy/replacementView'
+import {
+  needsReturnConfirmation,
+  replacementActions,
+  replacementCorrectableFields,
+  replacementEventOrigin,
+  replacementPolicyBasis,
+} from '../../../src/features/remedy/replacementView'
 import { setStaffAccessTokenProvider } from '../../../src/shared/api/client'
 
 const auth = vi.hoisted(() => ({ roles: ['claims-agent'] as string[] }))
@@ -258,17 +264,21 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>, action: stri
 }
 
 describe('replacement view', () => {
-  it('renders buttons only from allowedEvents that have a dialog, with one primary for the next happy-path step', () => {
+  it('renders buttons only from allowedEvents, in the contract order, with one primary for the next happy-path step', () => {
     expect(replacementActions(awaitingUnit)).toEqual([
       { type: 'LocationChanged', primary: false },
       { type: 'ReturnRecorded', primary: false },
       { type: 'ModelProposed', primary: false },
       { type: 'UnitReserved', primary: true },
       { type: 'NotAvailable', primary: false },
+      { type: 'Moved', primary: false },
     ])
     expect(replacementActions(ready)).toEqual([
       { type: 'ReturnRecorded', primary: false },
+      { type: 'UnitRefused', primary: false },
       { type: 'HandedToCustomer', primary: true },
+      { type: 'Moved', primary: false },
+      { type: 'Correction', primary: false },
     ])
     expect(replacementActions({ allowedEvents: ['LocationChanged'] })).toEqual([{ type: 'LocationChanged', primary: false }])
     expect(replacementActions({ allowedEvents: [] })).toEqual([])
@@ -278,13 +288,21 @@ describe('replacement view', () => {
     expect(replacementActions(awaitingReturn)).toEqual([
       { type: 'LocationChanged', primary: false },
       { type: 'ReturnRecorded', primary: true },
+      { type: 'Moved', primary: false },
+      { type: 'Correction', primary: false },
     ])
     expect(replacementActions(mismatched)).toEqual([
       { type: 'LocationChanged', primary: false },
       { type: 'ReturnAccepted', primary: true },
+      { type: 'Moved', primary: false },
+      { type: 'Correction', primary: false },
     ])
     // A claims agent gets no reviewer-only event: nothing of theirs moves a mismatched replacement on.
-    expect(replacementActions({ allowedEvents: ['LocationChanged', 'Moved', 'Correction'] })).toEqual([{ type: 'LocationChanged', primary: false }])
+    expect(replacementActions({ allowedEvents: ['LocationChanged', 'Moved', 'Correction'] })).toEqual([
+      { type: 'LocationChanged', primary: false },
+      { type: 'Moved', primary: false },
+      { type: 'Correction', primary: false },
+    ])
   })
 
   it('makes approving a pending model proposal the primary action for a reviewer, never proposing or "not available"', () => {
@@ -295,6 +313,8 @@ describe('replacement view', () => {
       { type: 'ModelDeclined', primary: false },
       { type: 'UnitReserved', primary: false },
       { type: 'NotAvailable', primary: false },
+      { type: 'Moved', primary: false },
+      { type: 'Correction', primary: false },
     ])
     // A claims agent gets no reviewer-only event: reserving the claimed model stays their next step.
     expect(replacementActions({ allowedEvents: ['ModelProposed', 'UnitReserved', 'NotAvailable'] })).toEqual([
@@ -314,6 +334,25 @@ describe('replacement view', () => {
     expect(needsReturnConfirmation({ returnRule: 'AtCollection', returnState: 'HeldByRepairCentre' })).toBe(false)
     expect(needsReturnConfirmation({ returnRule: 'AtCollection', returnState: 'Accepted' })).toBe(false)
     expect(needsReturnConfirmation({ returnRule: 'BeforeReservation', returnState: 'Returned' })).toBe(false)
+  })
+
+  it('offers corrections of staff returns and reservations, and sends back only the latest reservation or refusal', () => {
+    const returned = { ...ready.events[1]!, seq: 3, type: 'ReturnRecorded', fromStatus: 'ReadyForCollection' as const, toStatus: 'ReadyForCollection' as const }
+    const withReturn = { ...ready, events: [...ready.events, returned] }
+    expect(replacementCorrectableFields(suggested, withReturn)).toEqual([])
+    expect(replacementCorrectableFields(ready.events[1]!, withReturn)).toEqual(['serialNumber', 'toStatus'])
+    expect(replacementCorrectableFields(returned, withReturn)).toEqual(['returnedOn', 'serialSeen'])
+
+    const refused = { ...ready.events[1]!, seq: 3, type: 'UnitRefused', fromStatus: 'ReadyForCollection' as const, toStatus: 'AwaitingUnit' as const }
+    const afterRefusal = { ...ready, status: 'AwaitingUnit' as const, events: [...ready.events, refused] }
+    expect(replacementCorrectableFields(ready.events[1]!, afterRefusal)).toEqual(['serialNumber'])
+    expect(replacementCorrectableFields(refused, afterRefusal)).toEqual(['toStatus'])
+
+    const moved = { ...refused, seq: 3, type: 'Moved' }
+    const afterMove = { ...ready, status: 'AwaitingUnit' as const, events: [...ready.events, moved] }
+    expect(replacementCorrectableFields(moved, afterMove)).toEqual([])
+    const correction = { ...moved, seq: 4, type: 'Correction', correctsSeq: 2 }
+    expect(replacementCorrectableFields(correction, afterMove)).toEqual([])
   })
 
   it('words the policy basis and the event origin', () => {
@@ -337,7 +376,7 @@ describe('ReplacementCard', () => {
     expect(location.getByText('North Service Point')).toBeInTheDocument()
     expect(location.getByText('1 Service Street')).toBeInTheDocument()
     expect(location.getByText('[LOCATION CONTACT]')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Record return', 'Propose other model', 'Reserve unit', 'Not available'])
+    expect(actionNames()).toEqual(['Change location', 'Record return', 'Propose other model', 'Reserve unit', 'Not available', 'Move'])
     expect(screen.getByRole('button', { name: 'Reserve unit' }).className).toMatch(/primary/)
     expect(screen.getByRole('button', { name: 'Change location' }).className).not.toMatch(/primary/)
     expect(screen.queryByRole('heading', { name: 'Completion', level: 2 })).not.toBeInTheDocument()
@@ -351,8 +390,46 @@ describe('ReplacementCard', () => {
     const card = await replacementCard()
     expect(card.getByText('Ready for collection')).toBeInTheDocument()
     expect(within(card.getByRole('region', { name: 'Unit' })).getByText('AT10-9001')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Record return', 'Record hand-over to customer'])
+    expect(actionNames()).toEqual(['Record return', 'Customer refused unit', 'Record hand-over to customer', 'Move', 'Correct an entry'])
     expect(screen.getByRole('button', { name: 'Record hand-over to customer' }).className).toMatch(/primary/)
+  })
+
+  it('shows how the last unit ended after a move or a refusal', async () => {
+    detail = approvedClaim({
+      ...awaitingUnit,
+      activeLocation: southLocation,
+      currentUnit: { seq: 1, modelCode: 'AUR-TAB10', serialNumber: 'AT10-9001', result: 'Released' },
+    })
+    renderTab(['claims-agent'])
+
+    const unit = within((await replacementCard()).getByRole('region', { name: 'Unit' }))
+    expect(unit.getByText('Last unit')).toBeInTheDocument()
+    expect(unit.getByText('AT10-9001')).toBeInTheDocument()
+    expect(unit.getByText('Released')).toBeInTheDocument()
+    expect(within((await replacementCard()).getByRole('region', { name: 'Location' })).getByText('South Service Point')).toBeInTheDocument()
+  })
+
+  it('shows the moves, refusals and corrections in the events, the corrected entry struck through', async () => {
+    detail = approvedClaim({
+      ...ready,
+      events: [
+        ...ready.events,
+        { seq: 3, type: 'Moved', fromStatus: 'ReadyForCollection', toStatus: 'AwaitingUnit', reportedAt: '2026-10-22T09:00:00Z', recordedAt: '2026-10-22T09:05:00Z', source: 'Phone', actor: '[AGENT]' },
+        { seq: 4, type: 'UnitReserved', fromStatus: 'AwaitingUnit', toStatus: 'ReadyForCollection', reportedAt: '2026-10-22T10:00:00Z', recordedAt: '2026-10-22T10:05:00Z', source: 'Phone', actor: '[AGENT]' },
+        { seq: 5, type: 'UnitRefused', fromStatus: 'ReadyForCollection', toStatus: 'AwaitingUnit', reportedAt: '2026-10-23T10:00:00Z', recordedAt: '2026-10-23T10:05:00Z', source: 'InPerson', actor: '[AGENT]' },
+        { seq: 6, type: 'Correction', reportedAt: '2026-10-23T11:00:00Z', recordedAt: '2026-10-23T11:05:00Z', source: 'Email', actor: '[REVIEWER]', correctsSeq: 4 },
+      ],
+    })
+    renderTab(['auditor'])
+
+    const timeline = within(await screen.findByRole('list', { name: 'Replacement events' }))
+    expect(timeline.getByText('Moved')).toBeInTheDocument()
+    expect(timeline.getAllByText('Ready for collection → Awaiting replacement unit')).toHaveLength(2)
+    expect(timeline.getByText('Customer refused unit')).toBeInTheDocument()
+    const [first, second] = timeline.getAllByText('Unit reserved')
+    expect(first!.className).not.toMatch(/corrected/)
+    expect(second!.className).toMatch(/corrected/)
+    expect(timeline.getByRole('link', { name: 'Entry 4 · Unit reserved' })).toHaveAttribute('href', '#replacement-event-4')
   })
 
   it('shows the replacement events with system and staff entries', async () => {
@@ -406,7 +483,7 @@ describe('ReplacementCard', () => {
     const line = within(card.getByRole('region', { name: 'Return' }))
     expect(line.getByText('Not yet returned')).toBeInTheDocument()
     expect(line.queryByText('Serial seen')).not.toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Record return'])
+    expect(actionNames()).toEqual(['Change location', 'Record return', 'Move', 'Correct an entry'])
     expect(screen.getByRole('button', { name: 'Record return' }).className).toMatch(/primary/)
   })
 
@@ -419,7 +496,7 @@ describe('ReplacementCard', () => {
     expect(line.getByText('AT10-7777')).toBeInTheDocument()
     expect(line.getByText('Does not match the claim').className).toMatch(/warn/)
     expect(line.getByText('AT10-0001')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Accept return'])
+    expect(actionNames()).toEqual(['Change location', 'Accept return', 'Move', 'Correct an entry'])
     expect(screen.getByRole('button', { name: 'Accept return' }).className).toMatch(/primary/)
   })
 
@@ -442,7 +519,7 @@ describe('ReplacementCard', () => {
     expect(line.getByText('Held by repair centre — Central Repair Workshop')).toBeInTheDocument()
     expect(line.getByText('Handed to the repair centre on')).toBeInTheDocument()
     expect(line.queryByText('Serial seen')).not.toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Propose other model', 'Reserve unit', 'Not available'])
+    expect(actionNames()).toEqual(['Change location', 'Propose other model', 'Reserve unit', 'Not available', 'Move'])
   })
 
   it('shows the model line with a pending proposal, its reason, proposer and time', async () => {
@@ -457,7 +534,16 @@ describe('ReplacementCard', () => {
     expect(line.getByText('[AGENT]')).toBeInTheDocument()
     expect(line.getByText(/^proposed .+/)).toBeInTheDocument()
     expect(line.queryByText('Approved equivalent')).not.toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Record return', 'Approve model', 'Decline model', 'Reserve unit', 'Not available'])
+    expect(actionNames()).toEqual([
+      'Change location',
+      'Record return',
+      'Approve model',
+      'Decline model',
+      'Reserve unit',
+      'Not available',
+      'Move',
+      'Correct an entry',
+    ])
     expect(screen.getByRole('button', { name: 'Approve model' }).className).toMatch(/primary/)
   })
 
@@ -793,6 +879,173 @@ describe('Replacement event dialogs', () => {
     expect(events[0]!.ifMatch).toBe('"x-1"')
     expect(Object.keys(events[0]!.body).sort()).toEqual(['reason', 'reportedAt', 'source', 'type'])
     expect(events[0]!.body).toMatchObject({ type: 'NotAvailable', source: 'Phone', reason: 'Gone — the model is discontinued everywhere.' })
+  })
+
+  it('moves a ready replacement to another location with a reason, saying the reserved unit is released', async () => {
+    detail = approvedClaim(ready)
+    onEvent(() =>
+      HttpResponse.json(
+        { ...awaitingUnit, activeLocation: southLocation, currentUnit: { ...ready.currentUnit!, result: 'Released' } } as object,
+        { status: 201 },
+      ),
+    )
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Move')
+    expect(dialog.getByText(/The unit reserved at the current location is released/)).toBeInTheDocument()
+    const locationSelect = dialog.getByRole('combobox', { name: /New location/ })
+    await vi.waitFor(() => expect(within(locationSelect).getByRole('option', { name: /South Service Point/ })).toBeInTheDocument())
+    expect(within(locationSelect).queryByRole('option', { name: /North Service Point/ })).not.toBeInTheDocument()
+    await user.selectOptions(locationSelect, southLocation.id)
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Move' })
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'Moved')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), ' — the customer collects in the south now.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-2"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['locationId', 'reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({
+      type: 'Moved',
+      source: 'Phone',
+      locationId: southLocation.id,
+      reason: 'Moved — the customer collects in the south now.',
+    })
+  })
+
+  it('records a unit the customer refused with a reason, naming the unit', async () => {
+    detail = approvedClaim(ready)
+    onEvent(() => HttpResponse.json({ ...awaitingUnit, currentUnit: { ...ready.currentUnit!, result: 'Refused' } } as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Customer refused unit')
+    expect(dialog.getByText('AT10-9001')).toBeInTheDocument()
+    expect(dialog.getByText(/The remedy does not change\./)).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'InPerson')
+    const submit = dialog.getByRole('button', { name: 'Customer refused unit' })
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The screen of the unit is scratched.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-2"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'UnitRefused', source: 'InPerson', reason: 'The screen of the unit is scratched.' })
+  })
+
+  it('corrects the serial of a reserved unit, listing only the entries that can be corrected', async () => {
+    detail = approvedClaim(ready)
+    onEvent(() => HttpResponse.json(ready as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    const entrySelect = dialog.getByRole('combobox', { name: /Entry to correct/ })
+    expect(within(entrySelect).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose an entry',
+      expect.stringMatching(/^Entry 2 · Unit reserved · reported .+/),
+    ])
+    await user.selectOptions(entrySelect, '2')
+    const whatSelect = dialog.getByRole('combobox', { name: /What to correct/ })
+    expect(within(whatSelect).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose what to correct',
+      'Serial number of the unit',
+      'Status (recorded too early or by mistake)',
+    ])
+    await user.selectOptions(whatSelect, 'serialNumber')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    await user.type(dialog.getByRole('textbox', { name: /Correct serial number/ }), ' AT10-9002 ')
+    const submit = dialog.getByRole('button', { name: 'Correct an entry' })
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The serial was typed in wrongly.')
+    expect(dialog.getByText('The original entry stays in the history, shown struck through.')).toBeInTheDocument()
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-2"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['correctsSeq', 'reason', 'reportedAt', 'serialNumber', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({
+      type: 'Correction',
+      correctsSeq: 2,
+      serialNumber: 'AT10-9002',
+      reason: 'The serial was typed in wrongly.',
+    })
+  })
+
+  it('sends the latest reservation back to awaiting a unit, saying no second notification is sent', async () => {
+    detail = approvedClaim(ready)
+    onEvent(() => HttpResponse.json(awaitingUnit as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Entry to correct/ }), '2')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /What to correct/ }), 'toStatus')
+    expect(dialog.getByText(/goes back to Awaiting replacement unit\. The notification already sent to the customer is not withdrawn/)).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The location had not reserved the unit yet.')
+    await user.click(dialog.getByRole('button', { name: 'Correct an entry' }))
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['correctsSeq', 'reason', 'reportedAt', 'source', 'toStatus', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'Correction', correctsSeq: 2, toStatus: 'AwaitingUnit' })
+  })
+
+  it('corrects the date of a recorded return, starting from the recorded date', async () => {
+    const returned = {
+      seq: 3,
+      type: 'ReturnRecorded',
+      fromStatus: 'ReadyForCollection' as const,
+      toStatus: 'ReadyForCollection' as const,
+      reportedAt: '2026-10-21T11:00:00Z',
+      recordedAt: '2026-10-21T11:05:00Z',
+      source: 'InPerson',
+      actor: '[AGENT]',
+    }
+    detail = approvedClaim({
+      ...ready,
+      returnState: 'Returned',
+      faultyProductReturn: { returnedOn: '2026-10-21', serialSeen: 'AT10-0001', serialMatches: true, heldByRepairCentre: false },
+      events: [...ready.events, returned],
+    })
+    onEvent(() => HttpResponse.json(ready as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Entry to correct/ }), '3')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /What to correct/ }), 'returnedOn')
+    const date = dialog.getByLabelText(/Correct return date/)
+    expect(date).toHaveValue('2026-10-21')
+    await user.clear(date)
+    await user.type(date, '2026-10-20')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The customer returned it the day before.')
+    await user.click(dialog.getByRole('button', { name: 'Correct an entry' }))
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.body).toMatchObject({ type: 'Correction', correctsSeq: 3, returnedOn: '2026-10-20' })
+    expect(events[0]!.body).not.toHaveProperty('serialSeen')
+  })
+
+  it('shows the API refusal of a correction next to the entry', async () => {
+    detail = approvedClaim(ready)
+    onEvent(() =>
+      HttpResponse.json(
+        { title: 'Validation failed', status: 400, errors: { toStatus: ['Only the latest status change can be corrected, and only back to the status before it.'] } },
+        { status: 400 },
+      ),
+    )
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Correct an entry')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Entry to correct/ }), '2')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /What to correct/ }), 'toStatus')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The location had not reserved the unit yet.')
+    await user.click(dialog.getByRole('button', { name: 'Correct an entry' }))
+
+    expect(await dialog.findByText(/Only the latest status change can be corrected/)).toBeInTheDocument()
+    expect(dialog.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('rejects a reported time in the future', async () => {
