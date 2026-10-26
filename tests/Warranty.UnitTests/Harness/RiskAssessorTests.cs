@@ -185,7 +185,7 @@ public sealed class RiskAssessorTests
 
     // ---- Replacement units (003 FR-029, FR-030, research R11) --------------------------------------------
 
-    [Fact(Skip = "Pending T352")]
+    [Fact]
     public void A_serial_that_was_returned_and_replaced_raises_PRODUCT_RETURNED_AND_REPLACED_at_intake()
     {
         var history = ClaimHistoryCounts.None with { ReturnedAndReplaced = true };

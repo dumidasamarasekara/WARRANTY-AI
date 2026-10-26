@@ -22,7 +22,8 @@ public interface IRiskAssessor
 {
     /// <summary>
     /// Signals available without evidence analysis (<c>PRODUCT_NOT_IN_CATALOG</c>,
-    /// <c>DUPLICATE_SERIAL_CLAIM</c>, <c>EVIDENCE_REUSED</c> from upload hashes, <c>MANIPULATION_ATTEMPT</c>
+    /// <c>DUPLICATE_SERIAL_CLAIM</c>, <c>EVIDENCE_REUSED</c> from upload hashes, <c>PRODUCT_RETURNED_AND_REPLACED</c>,
+    /// <c>MANIPULATION_ATTEMPT</c>
     /// from the injection detector on the description and from the intake's <c>containsInstructionsToSystem</c>);
     /// stored with <see cref="RiskAssessmentStage.Intake"/>.
     /// </summary>
@@ -136,7 +137,8 @@ public sealed class RiskAssessor(
     /// <summary>
     /// Fixed severity of a deterministic signal code (<c>MANIPULATION_ATTEMPT</c>, <c>EVIDENCE_REUSED</c>,
     /// <c>SERIAL_MISMATCH_PHOTO</c> High; <c>DUPLICATE_SERIAL_CLAIM</c>, <c>PRODUCT_NOT_IN_CATALOG</c>,
-    /// <c>SOURCE_INCONSISTENCY</c>, <c>PURCHASE_DATE_ANOMALY</c> Medium); AI-sourced signals are Medium.
+    /// <c>SOURCE_INCONSISTENCY</c>, <c>PURCHASE_DATE_ANOMALY</c>, <c>PRODUCT_RETURNED_AND_REPLACED</c> Medium);
+    /// AI-sourced signals are Medium.
     /// </summary>
     public static RiskSeverity SeverityOf(RiskSignalCode code, RiskSignalSource source)
         => source == RiskSignalSource.Deterministic
@@ -203,7 +205,8 @@ public sealed class RiskAssessor(
     /// <summary>
     /// Signals known before evidence analysis: <c>PRODUCT_NOT_IN_CATALOG</c> when the model/serial pair
     /// is not in the tenant's catalog, <c>DUPLICATE_SERIAL_CLAIM</c> and <c>EVIDENCE_REUSED</c> from the
-    /// same-tenant history counts (research R25).
+    /// same-tenant history counts (research R25), and <c>PRODUCT_RETURNED_AND_REPLACED</c> when the claimed serial was
+    /// returned as faulty and replaced (<see cref="ClaimHistoryCounts.ReturnedAndReplaced"/>, 003 FR-030, research R11).
     /// </summary>
     public static IReadOnlyList<RiskSignal> IntakeSignals(CaseContext @case, ClaimHistoryCounts history)
     {
@@ -232,6 +235,13 @@ public sealed class RiskAssessor(
             signals.Add(Deterministic(
                 RiskSignalCode.EvidenceReused,
                 Invariant($"{history.EvidenceReuseMatches} evidence file(s) of other claims are identical to files of this claim.")));
+        }
+
+        if (history.ReturnedAndReplaced)
+        {
+            signals.Add(Deterministic(
+                RiskSignalCode.ProductReturnedAndReplaced,
+                "This serial number belongs to a product that was returned as faulty and replaced under an earlier claim."));
         }
 
         return signals;
@@ -362,7 +372,7 @@ public sealed class RiskAssessor(
 
         IReadOnlyList<RiskSignal> signals =
         [
-            .. IntakeSignals(@case, await history.LookupAsync(@case.ClaimId, ct)),
+            .. IntakeSignals(@case, await HistoryOfAsync(@case, ct)),
             .. ManipulationSignals(injection.Detect(ClaimantTexts(@case, null, null))),
         ];
         var settings = await tenants.GetCurrentSettingsAsync(ct);
@@ -376,7 +386,7 @@ public sealed class RiskAssessor(
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        var counts = await history.LookupAsync(run.ClaimId, ct);
+        var counts = await HistoryOfAsync(run.Case, ct);
         var today = DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
         return
         [
@@ -398,6 +408,16 @@ public sealed class RiskAssessor(
         adjudication.AddRiskAssessment(assessment);
         run.Risk = assessment;
         return assessment;
+    }
+
+    /// <summary>
+    /// The claim's history counts from <c>claim_history_lookup</c>, with the case's returned-and-replaced flag
+    /// (<see cref="ClaimHistoryCounts.ReturnedAndReplaced"/>, set by the case knowledge and never serialized in the tool output).
+    /// </summary>
+    private async Task<ClaimHistoryCounts> HistoryOfAsync(CaseContext @case, CancellationToken ct)
+    {
+        var counts = await history.LookupAsync(@case.ClaimId, ct);
+        return counts with { ReturnedAndReplaced = counts.ReturnedAndReplaced || @case.History.ReturnedAndReplaced };
     }
 
     private static bool IsDateAnomaly(ConsistencyCheck check, DateOnly claimDate, DateOnly today)

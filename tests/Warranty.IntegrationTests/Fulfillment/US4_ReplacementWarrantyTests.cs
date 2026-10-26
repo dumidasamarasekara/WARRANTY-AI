@@ -152,7 +152,7 @@ public sealed class US4_ReplacementWarrantyTests(WarrantyAppFixture fixture)
 
     // ---- X15: a claim for the returned faulty serial ------------------------------------------------------
 
-    [Fact(Skip = "Pending T352")]
+    [Fact]
     public async Task X15_a_claim_for_the_returned_faulty_serial_carries_PRODUCT_RETURNED_AND_REPLACED_and_goes_to_human_review()
     {
         // Needs the returned-and-replaced flag of T349 as well.
