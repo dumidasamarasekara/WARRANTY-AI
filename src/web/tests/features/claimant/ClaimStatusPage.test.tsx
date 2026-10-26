@@ -342,6 +342,40 @@ describe('ClaimStatusPage', () => {
     expect(callout).not.toHaveTextContent('Please bring your faulty product')
   })
 
+  it('shows the location card "Please bring your product to" without contact or return check results', async () => {
+    respondWith({
+      status: 'Approved',
+      remedy: {
+        ...replacementRemedy('AwaitingReturn', true),
+        returnState: 'Mismatch',
+        serialMatches: false,
+        serialSeen: 'AT10-7777',
+        contact: '[LOCATION CONTACT]',
+      },
+    })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    const card = within(remedy).getByRole('heading', { name: 'Please bring your product to' }).closest('section, div')!.parentElement!
+    expect(card).toHaveTextContent('North Service Point')
+    expect(card).toHaveTextContent('1 Service Street, Springfield')
+    expect(card).toHaveTextContent('Opening hours: Mon–Fri 09:00–17:00')
+    expect(document.body.textContent).not.toMatch(/AT10-7777|\[LOCATION CONTACT\]|does not match|mismatch/i)
+  })
+
+  it('shows a product held by a repair centre as returned and asks for nothing more', async () => {
+    // The API adds "Product returned" (done) when the product stayed at the repair centre, also under AtCollection.
+    respondWith({ status: 'Approved', remedy: replacementRemedy('AwaitingUnit', true) })
+    renderStatus()
+
+    const remedy = await screen.findByRole('region', { name: 'Remedy' })
+    const steps = within(within(remedy).getByRole('list', { name: 'Replacement progress' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.textContent)).toEqual(['Product returned Done', 'Ready for collection In progress', 'Handed to you Next'])
+    expect(within(remedy).queryByRole('heading', { name: 'Please bring your product to' })).not.toBeInTheDocument()
+    expect(within(remedy).getByRole('heading', { name: 'Where to collect your replacement' })).toBeInTheDocument()
+    expect(remedy).not.toHaveTextContent(/repair centre/i)
+  })
+
   it('shows a handed-over replacement as done, without the location card', async () => {
     respondWith({ status: 'Approved', remedy: replacementRemedy('HandedToCustomer') })
     renderStatus()

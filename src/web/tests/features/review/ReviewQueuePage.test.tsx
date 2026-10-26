@@ -185,7 +185,43 @@ describe('ReviewQueuePage', () => {
 
     const card = await screen.findByRole('link', { name: /K7M2Q9X4TB/ })
     expect(card).toHaveTextContent('Repair attempts limit reached')
-    expect(screen.getByText('No claims waiting for a review decision. Open a remedy decision from the queue.')).toBeInTheDocument()
+    expect(screen.getByText('No claims waiting for a review decision. Open a remedy decision or replacement check from the queue.')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Decision' })).not.toBeInTheDocument()
+  })
+
+  it("lists replacement checks with the Replacement badge and reason, opening the claim's Remedy tab on the replacement", async () => {
+    const mismatchClaimId = 'c0000000-0000-4000-8000-000000000004'
+    const modelClaimId = 'c0000000-0000-4000-8000-000000000005'
+    const replacementCheck = { aiDecision: undefined, confidence: undefined, riskLevel: undefined, escalationReasons: [], escalatedAt: '2026-10-06T08:00:00Z' }
+    queueResponds(() => [
+      queueItem({ ...replacementCheck, kind: 'ReplacementCheck', claimId: mismatchClaimId, reference: 'R3TURN0001', replacementCheckReason: 'RETURN_MISMATCH' }),
+      queueItem({ ...replacementCheck, kind: 'ReplacementCheck', claimId: modelClaimId, reference: 'M0DEL00001', replacementCheckReason: 'MODEL_APPROVAL' }),
+      queueItem(),
+    ])
+    const user = renderPage()
+
+    const queue = await screen.findByRole('navigation', { name: 'Review queue' })
+    const mismatchCard = within(queue).getByRole('link', { name: /R3TURN0001/ })
+    expect(mismatchCard).toHaveAttribute('href', `/staff/claims/${mismatchClaimId}/remedy?replacement`)
+    expect(within(mismatchCard).getByText('Replacement').className).toMatch(/warn/)
+    expect(mismatchCard).toHaveTextContent('Returned product does not match')
+    expect(mismatchCard).toHaveTextContent('Escalated 2 h ago')
+    expect(mismatchCard).not.toHaveAttribute('aria-current')
+    expect(within(queue).getByRole('link', { name: /M0DEL00001/ })).toHaveTextContent('Model approval')
+
+    // The oldest claim decision, not a replacement check, opens in the workspace.
+    expect(within(queue).getByRole('link', { name: /K7M2Q9X4TB/ })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('region', { name: 'Human review required' })).toBeInTheDocument()
+
+    await user.click(mismatchCard)
+    expect(await screen.findByRole('heading', { name: 'Remedy tab' })).toBeInTheDocument()
+  })
+
+  it('shows no decision workspace for a replacement check in the URL', async () => {
+    queueResponds(() => [queueItem({ kind: 'ReplacementCheck', replacementCheckReason: 'RETURN_MISMATCH', escalationReasons: [] })])
+    renderPage(`/staff/review/${claimId}`)
+
+    expect(await screen.findByText('This claim is no longer waiting for review.')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Decision' })).not.toBeInTheDocument()
   })
 })

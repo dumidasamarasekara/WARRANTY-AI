@@ -24,6 +24,8 @@ export interface ReplacementEventDialogProps {
   type: ReplacementDialogEvent
   /** The claimed product's model; a reserved unit is this model unless a reviewer approved another. */
   claimedModel: UnitModel
+  /** The claim's serial: a recorded return is compared with it, and a reviewer accepting a mismatch sees both. */
+  claimedSerial?: string
   onClose: () => void
   onRecorded: (replacement: ReplacementView) => void
   /** 409 and 412: reload the claim for the current replacement and a fresh ETag; the dialog keeps the input. */
@@ -38,7 +40,18 @@ function fieldError(problem: EventProblem | null, field: string): string | undef
   return key ? problem.errors[key]?.join(' ') : undefined
 }
 
-const fields = ['reportedAt', 'source', 'note', 'locationId', 'reason', 'serialNumber', 'handedOverOn', 'returnConfirmed'] as const
+const fields = [
+  'reportedAt',
+  'source',
+  'note',
+  'locationId',
+  'reason',
+  'returnedOn',
+  'serialSeen',
+  'serialNumber',
+  'handedOverOn',
+  'returnConfirmed',
+] as const
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -52,6 +65,8 @@ const modelText = (model: UnitModel) => (model.name ? `${model.name} (${model.mo
 
 const descriptions: Record<ReplacementDialogEvent, string> = {
   LocationChanged: 'Choose another location to issue the replacement.',
+  ReturnRecorded: 'Record the faulty product the customer returned to the location.',
+  ReturnAccepted: 'Accept the returned product although its serial does not match the claim’s.',
   UnitReserved: 'Record the unit the location reserved for the customer.',
   HandedToCustomer: 'Record that the customer collected the replacement.',
 }
@@ -65,6 +80,7 @@ export function ReplacementEventDialog({
   replacement,
   type,
   claimedModel,
+  claimedSerial,
   onClose,
   onRecorded,
   onReload,
@@ -77,12 +93,16 @@ export function ReplacementEventDialog({
   const [locationId, setLocationId] = useState('')
   const [reason, setReason] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
+  const [returnedOn, setReturnedOn] = useState(() => localDate(now))
+  const [serialSeen, setSerialSeen] = useState('')
   const [handedOverOn, setHandedOverOn] = useState(() => localDate(now))
   const [returnConfirmed, setReturnConfirmed] = useState(false)
   const [problem, setProblem] = useState<EventProblem | null>(null)
   const [reloading, setReloading] = useState(false)
   const record = useRecordReplacementEvent()
   const choosesLocation = type === 'LocationChanged'
+  // Changing the location and accepting a mismatched return both need a reason.
+  const needsReason = choosesLocation || type === 'ReturnAccepted'
   const locations = useReplacementLocations(claimId, choosesLocation)
   const confirmsReturn = type === 'HandedToCustomer' && needsReturnConfirmation(replacement)
   const unitModel: UnitModel = replacement.approvedModel ?? claimedModel
@@ -93,10 +113,13 @@ export function ReplacementEventDialog({
   const trimmedReason = reason.trim()
   const trimmedNote = note.trim()
   const trimmedSerial = serialNumber.trim()
+  const trimmedSerialSeen = serialSeen.trim()
   const reasonValid = trimmedReason.length >= replacementReasonLimits.min && trimmedReason.length <= replacementReasonLimits.max
 
   let eventValid = true
   if (choosesLocation) eventValid = locationId !== '' && reasonValid
+  if (type === 'ReturnRecorded') eventValid = returnedOn !== '' && returnedOn <= localDate(now) && trimmedSerialSeen !== ''
+  if (type === 'ReturnAccepted') eventValid = reasonValid
   if (type === 'UnitReserved') eventValid = trimmedSerial !== ''
   if (type === 'HandedToCustomer') eventValid = handedOverOn !== '' && handedOverOn <= localDate(now) && (!confirmsReturn || returnConfirmed)
   const valid = reportedValid && source !== '' && trimmedNote.length <= replacementReasonLimits.max && eventValid
@@ -114,9 +137,11 @@ export function ReplacementEventDialog({
     if (!valid || !reported || record.isPending) return
     const request: ReplacementEventRequest = { type, reportedAt: reported.toISOString(), source }
     if (trimmedNote) request.note = trimmedNote
-    if (choosesLocation) {
-      request.locationId = locationId
-      request.reason = trimmedReason
+    if (choosesLocation) request.locationId = locationId
+    if (needsReason) request.reason = trimmedReason
+    if (type === 'ReturnRecorded') {
+      request.returnedOn = returnedOn
+      request.serialSeen = trimmedSerialSeen
     }
     if (type === 'UnitReserved') request.serialNumber = trimmedSerial
     if (type === 'HandedToCustomer') {
@@ -247,20 +272,69 @@ export function ReplacementEventDialog({
                 </option>
               ))}
             </Select>
-            <TextArea
-              label="Reason"
-              hint="Internal — never shown to the claimant."
+          </>
+        )}
+
+        {type === 'ReturnRecorded' && (
+          <>
+            <TextInput
+              type="date"
+              label="Returned on"
               required
-              rows={3}
-              characterLimits={replacementReasonLimits}
-              value={reason}
-              error={errors.reason}
+              max={localDate(now)}
+              value={returnedOn}
+              error={errors.returnedOn}
               onChange={(event) => {
-                setReason(event.target.value)
-                clearFieldError('reason')
+                setReturnedOn(event.target.value)
+                setNow(new Date())
+                clearFieldError('returnedOn')
               }}
             />
+            <TextInput
+              label="Serial number on the returned product"
+              hint="As printed on the product."
+              required
+              value={serialSeen}
+              error={errors.serialSeen}
+              onChange={(event) => {
+                setSerialSeen(event.target.value)
+                clearFieldError('serialSeen')
+              }}
+            />
+            <p className={styles.note}>
+              The serial is compared with the claim’s. If it does not match, a claims reviewer must accept the return before
+              the replacement can go on.
+            </p>
           </>
+        )}
+
+        {type === 'ReturnAccepted' && replacement.faultyProductReturn && (
+          <dl className={styles.facts}>
+            <div>
+              <dt>Serial seen</dt>
+              <dd className={styles.mono}>{replacement.faultyProductReturn.serialSeen ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Claim serial</dt>
+              <dd className={styles.mono}>{claimedSerial ?? '—'}</dd>
+            </div>
+          </dl>
+        )}
+
+        {needsReason && (
+          <TextArea
+            label="Reason"
+            hint="Internal — never shown to the claimant."
+            required
+            rows={3}
+            characterLimits={replacementReasonLimits}
+            value={reason}
+            error={errors.reason}
+            onChange={(event) => {
+              setReason(event.target.value)
+              clearFieldError('reason')
+            }}
+          />
         )}
 
         {type === 'UnitReserved' && (

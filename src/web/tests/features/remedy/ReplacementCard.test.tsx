@@ -7,7 +7,7 @@ import { RouterProvider, createMemoryRouter } from 'react-router'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaimDetailPage } from '../../../src/features/claims/ClaimDetailPage'
 import type { ClaimDetail } from '../../../src/features/claims/claimDetail'
-import type { RemedyView, RepairCentre, ReplacementView } from '../../../src/features/remedy/remedyQueries'
+import type { RemedyView, RepairCentre, RepairView, ReplacementView } from '../../../src/features/remedy/remedyQueries'
 import { needsReturnConfirmation, replacementActions, replacementEventOrigin, replacementPolicyBasis } from '../../../src/features/remedy/replacementView'
 import { setStaffAccessTokenProvider } from '../../../src/shared/api/client'
 
@@ -103,6 +103,45 @@ const ready: ReplacementView = {
   etag: '"x-2"',
 }
 
+/** BOR-style rules: the faulty product comes back before a unit is reserved. */
+const awaitingReturn: ReplacementView = {
+  ...awaitingUnit,
+  status: 'AwaitingReturn',
+  productRule: 'SameModel',
+  returnRule: 'BeforeReservation',
+  allowedEvents: ['LocationChanged', 'ReturnRecorded', 'Moved', 'Correction'],
+  etag: '"x-3"',
+}
+
+/** A returned product whose serial does not match the claim's, as a reviewer sees it. */
+const mismatched: ReplacementView = {
+  ...awaitingReturn,
+  returnState: 'Mismatch',
+  faultyProductReturn: { returnedOn: '2026-10-21', serialSeen: 'AT10-7777', serialMatches: false, heldByRepairCentre: false },
+  allowedEvents: ['LocationChanged', 'ReturnAccepted', 'Moved', 'Correction'],
+  etag: '"x-4"',
+}
+
+/** The product stayed at the repair centre of the 002 repair the replacement follows (FR-020). */
+const held: ReplacementView = {
+  ...awaitingUnit,
+  returnState: 'HeldByRepairCentre',
+  faultyProductReturn: { returnedOn: '2026-10-12', serialMatches: true, heldByRepairCentre: true },
+  allowedEvents: ['LocationChanged', 'ModelProposed', 'UnitReserved', 'Moved', 'NotAvailable'],
+}
+
+const holdingRepair = {
+  status: 'NotPossible',
+  notPossibleReason: 'Failed',
+  activeCentre: { ...northLocation, id: 'bbbbbbbb-0000-0000-0000-000000000009', name: 'Central Repair Workshop' },
+  handedOverOn: '2026-10-12',
+  failedAttempts: 2,
+  attemptLimit: 2,
+  allowedEvents: [],
+  events: [],
+  etag: '"p-1"',
+} as unknown as RepairView
+
 const approvedClaim = (replacement: ReplacementView | undefined): ClaimDetail => ({
   claimId,
   reference: 'WC-2026-000404',
@@ -174,10 +213,10 @@ afterEach(() => {
 })
 afterAll(() => server.close())
 
-function renderTab(roles: string[]) {
+function renderTab(roles: string[], search = '') {
   auth.roles = roles
   const router = createMemoryRouter([{ path: '/staff/claims/:claimId/remedy', element: <ClaimDetailPage tab="remedy" /> }], {
-    initialEntries: [`/staff/claims/${claimId}/remedy`],
+    initialEntries: [`/staff/claims/${claimId}/remedy${search}`],
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -205,11 +244,28 @@ describe('replacement view', () => {
   it('renders buttons only from allowedEvents that have a dialog, with one primary for the next happy-path step', () => {
     expect(replacementActions(awaitingUnit)).toEqual([
       { type: 'LocationChanged', primary: false },
+      { type: 'ReturnRecorded', primary: false },
       { type: 'UnitReserved', primary: true },
     ])
-    expect(replacementActions(ready)).toEqual([{ type: 'HandedToCustomer', primary: true }])
+    expect(replacementActions(ready)).toEqual([
+      { type: 'ReturnRecorded', primary: false },
+      { type: 'HandedToCustomer', primary: true },
+    ])
     expect(replacementActions({ allowedEvents: ['LocationChanged'] })).toEqual([{ type: 'LocationChanged', primary: false }])
     expect(replacementActions({ allowedEvents: [] })).toEqual([])
+  })
+
+  it('makes the return the primary action only while nothing else moves the replacement on', () => {
+    expect(replacementActions(awaitingReturn)).toEqual([
+      { type: 'LocationChanged', primary: false },
+      { type: 'ReturnRecorded', primary: true },
+    ])
+    expect(replacementActions(mismatched)).toEqual([
+      { type: 'LocationChanged', primary: false },
+      { type: 'ReturnAccepted', primary: true },
+    ])
+    // A claims agent gets no reviewer-only event: nothing of theirs moves a mismatched replacement on.
+    expect(replacementActions({ allowedEvents: ['LocationChanged', 'Moved', 'Correction'] })).toEqual([{ type: 'LocationChanged', primary: false }])
   })
 
   it('asks to confirm the return at hand-over only under AtCollection while the product is not back', () => {
@@ -241,7 +297,7 @@ describe('ReplacementCard', () => {
     expect(location.getByText('North Service Point')).toBeInTheDocument()
     expect(location.getByText('1 Service Street')).toBeInTheDocument()
     expect(location.getByText('[LOCATION CONTACT]')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Reserve unit'])
+    expect(actionNames()).toEqual(['Change location', 'Record return', 'Reserve unit'])
     expect(screen.getByRole('button', { name: 'Reserve unit' }).className).toMatch(/primary/)
     expect(screen.getByRole('button', { name: 'Change location' }).className).not.toMatch(/primary/)
     expect(screen.queryByRole('heading', { name: 'Completion', level: 2 })).not.toBeInTheDocument()
@@ -255,7 +311,7 @@ describe('ReplacementCard', () => {
     const card = await replacementCard()
     expect(card.getByText('Ready for collection')).toBeInTheDocument()
     expect(within(card.getByRole('region', { name: 'Unit' })).getByText('AT10-9001')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Record hand-over to customer'])
+    expect(actionNames()).toEqual(['Record return', 'Record hand-over to customer'])
     expect(screen.getByRole('button', { name: 'Record hand-over to customer' }).className).toMatch(/primary/)
   })
 
@@ -298,6 +354,63 @@ describe('ReplacementCard', () => {
     expect(screen.queryByRole('group', { name: 'Replacement actions' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Record hand-over to customer' })).not.toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Replacement events' })).toBeInTheDocument()
+  })
+
+  it('shows the return line before the product is back', async () => {
+    detail = approvedClaim(awaitingReturn)
+    renderTab(['claims-agent'])
+
+    const card = await replacementCard()
+    expect(card.getByText('Awaiting return')).toBeInTheDocument()
+    expect(card.getByText('AUR-WP v2 · Same model only · Returned before reservation')).toBeInTheDocument()
+    const line = within(card.getByRole('region', { name: 'Return' }))
+    expect(line.getByText('Not yet returned')).toBeInTheDocument()
+    expect(line.queryByText('Serial seen')).not.toBeInTheDocument()
+    expect(actionNames()).toEqual(['Change location', 'Record return'])
+    expect(screen.getByRole('button', { name: 'Record return' }).className).toMatch(/primary/)
+  })
+
+  it('flags a returned serial that does not match the claim with a warn badge and the claim serial', async () => {
+    detail = approvedClaim(mismatched)
+    renderTab(['claims-reviewer'])
+
+    const line = within((await replacementCard()).getByRole('region', { name: 'Return' }))
+    expect(line.getByText('Returned product does not match').className).toMatch(/warn/)
+    expect(line.getByText('AT10-7777')).toBeInTheDocument()
+    expect(line.getByText('Does not match the claim').className).toMatch(/warn/)
+    expect(line.getByText('AT10-0001')).toBeInTheDocument()
+    expect(actionNames()).toEqual(['Change location', 'Accept return'])
+    expect(screen.getByRole('button', { name: 'Accept return' }).className).toMatch(/primary/)
+  })
+
+  it('keeps the mismatch badge on the serial after a reviewer accepted the return', async () => {
+    detail = approvedClaim({ ...mismatched, status: 'AwaitingUnit', returnState: 'Accepted', allowedEvents: ['LocationChanged', 'UnitReserved'] })
+    renderTab(['claims-agent'])
+
+    const line = within((await replacementCard()).getByRole('region', { name: 'Return' }))
+    expect(line.getByText('Return accepted by reviewer')).toBeInTheDocument()
+    expect(line.getByText('Does not match the claim')).toBeInTheDocument()
+    expect(actionNames()).toEqual(['Change location', 'Reserve unit'])
+  })
+
+  it('names the repair centre holding the faulty product and offers no return', async () => {
+    detail = { ...approvedClaim(held), repair: holdingRepair }
+    renderTab(['claims-agent'])
+
+    const line = within((await replacementCard()).getByRole('region', { name: 'Return' }))
+    expect(line.getByText('Held by repair centre')).toBeInTheDocument()
+    expect(line.getByText('Held by repair centre — Central Repair Workshop')).toBeInTheDocument()
+    expect(line.getByText('Handed to the repair centre on')).toBeInTheDocument()
+    expect(line.queryByText('Serial seen')).not.toBeInTheDocument()
+    expect(actionNames()).toEqual(['Change location', 'Reserve unit'])
+  })
+
+  it('focuses the card when opened from a replacement check in the review queue', async () => {
+    detail = approvedClaim(mismatched)
+    renderTab(['claims-reviewer'], '?replacement')
+
+    const heading = await screen.findByRole('heading', { name: 'Replacement', level: 2 })
+    await vi.waitFor(() => expect(heading.closest('[tabindex="-1"]')).toHaveFocus())
   })
 
   it('shows no replacement card when the claim has no replacement', async () => {
@@ -411,6 +524,95 @@ describe('Replacement event dialogs', () => {
 
     await vi.waitFor(() => expect(events).toHaveLength(1))
     expect(events[0]!.body).not.toHaveProperty('returnConfirmed')
+  })
+
+  it('records the return with the date and the serial seen, with If-Match', async () => {
+    detail = approvedClaim(awaitingReturn)
+    onEvent(() => HttpResponse.json({ ...awaitingReturn, status: 'AwaitingUnit', returnState: 'Returned' } as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Record return')
+    expect(dialog.getByText(/a claims reviewer must accept the return/)).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'InPerson')
+    const date = dialog.getByLabelText(/Returned on/)
+    await user.clear(date)
+    await user.type(date, '2026-10-21')
+    const submit = dialog.getByRole('button', { name: 'Record return' })
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Serial number on the returned product/ }), ' AT10-0001 ')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-3"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reportedAt', 'returnedOn', 'serialSeen', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'ReturnRecorded', source: 'InPerson', returnedOn: '2026-10-21', serialSeen: 'AT10-0001' })
+  })
+
+  it('refuses a return date in the future', async () => {
+    detail = approvedClaim(awaitingReturn)
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Record return')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'InPerson')
+    await user.type(dialog.getByRole('textbox', { name: /Serial number on the returned product/ }), 'AT10-0001')
+    const date = dialog.getByLabelText(/Returned on/)
+    await user.clear(date)
+    await user.type(date, '2099-01-01')
+
+    expect(dialog.getByRole('button', { name: 'Record return' })).toBeDisabled()
+  })
+
+  it('shows the API error next to the serial seen', async () => {
+    detail = approvedClaim(awaitingReturn)
+    onEvent(() =>
+      HttpResponse.json(
+        { title: 'Validation failed', status: 400, errors: { serialSeen: ['The serial seen on the returned product is required.'] } },
+        { status: 400 },
+      ),
+    )
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Record return')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'InPerson')
+    await user.type(dialog.getByRole('textbox', { name: /Serial number on the returned product/ }), 'AT10-0001')
+    await user.click(dialog.getByRole('button', { name: 'Record return' }))
+
+    expect(await dialog.findByText('The serial seen on the returned product is required.')).toBeInTheDocument()
+  })
+
+  it('lets a reviewer accept a mismatched return with a reason, showing both serials', async () => {
+    detail = approvedClaim(mismatched)
+    onEvent(() => HttpResponse.json({ ...mismatched, status: 'AwaitingUnit', returnState: 'Accepted' } as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Accept return')
+    expect(dialog.getByText('AT10-7777')).toBeInTheDocument()
+    expect(dialog.getByText('AT10-0001')).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    const submit = dialog.getByRole('button', { name: 'Accept return' })
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'Too short')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), ' — the label was replaced in a 2025 repair.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-4"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'ReturnAccepted', source: 'Email', reason: 'Too short — the label was replaced in a 2025 repair.' })
+  })
+
+  it('shows the self-review refusal of the API when the reviewer submitted the claim', async () => {
+    detail = approvedClaim(mismatched)
+    const message = 'You submitted this claim; another reviewer must record this decision.'
+    onEvent(() => HttpResponse.json({ title: 'Forbidden', status: 403, detail: message }, { status: 403 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Accept return')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'The label was replaced in a 2025 repair.')
+    await user.click(dialog.getByRole('button', { name: 'Accept return' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(message)
   })
 
   it('rejects a reported time in the future', async () => {
