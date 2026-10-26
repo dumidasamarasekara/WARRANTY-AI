@@ -273,6 +273,8 @@ public static class FulfillmentEndpoints
                 return CrossTenantGuard.NotFound();
             case RecordReplacementEventResult.Forbidden forbidden:
                 return Results.Problem(statusCode: StatusCodes.Status403Forbidden, detail: forbidden.Detail);
+            case RecordReplacementEventResult.SelfReviewRefused refused:
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, detail: refused.Detail);
             case RecordReplacementEventResult.PreconditionFailed failed:
                 return Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, detail: failed.Detail);
             case RecordReplacementEventResult.Conflict conflict:

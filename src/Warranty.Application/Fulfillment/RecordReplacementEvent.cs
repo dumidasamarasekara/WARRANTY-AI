@@ -53,7 +53,7 @@ public abstract record RecordReplacementEventResult
 
     /// <summary>
     /// 403: a reviewer-only event (<c>ReturnAccepted</c>, <c>ModelApproved</c>, <c>ModelDeclined</c>) by the reviewer who
-    /// submitted the claim; a <c>SELF_REVIEW_REFUSED</c> security event was recorded (research R5). Returned from T337 on.
+    /// submitted the claim; a <c>SELF_REVIEW_REFUSED</c> security event was recorded (research R5).
     /// </summary>
     public sealed record SelfReviewRefused(string Detail) : RecordReplacementEventResult;
 
@@ -72,10 +72,11 @@ public abstract record RecordReplacementEventResult
 }
 
 /// <summary>
-/// Records a staff update of a replacement (003 FR-009 – FR-028, research R4, R6, R7, R10, R12). In order: the caller must
-/// be a claims agent or reviewer (403); the claim must be visible in the tenant (404) and have a replacement (409); the
-/// request fields must be valid for the event type and <c>reportedAt</c> neither in the future nor before the replacement
-/// was set up or the latest entry it follows (400); <c>If-Match</c> must equal the replacement's row version (412); a
+/// Records a staff update of a replacement (003 FR-009 – FR-028, research R4 – R7, R10, R12). In order: the caller must
+/// be a claims agent or reviewer (403); the claim must be visible in the tenant (404) and have a replacement (409); a
+/// reviewer-only event (<c>ReturnAccepted</c>) needs a claims reviewer (403) who did not submit the claim (403 and a
+/// <c>SELF_REVIEW_REFUSED</c> security event, 002 research R4); the request fields must be valid for the event type and
+/// <c>reportedAt</c> neither in the future nor before the replacement was set up or the latest entry it follows (400); <c>If-Match</c> must equal the replacement's row version (412); a
 /// location must be an eligible replacement location of the tenant (<see cref="ServiceCenterPurpose.Replacement"/>, 404 +
 /// <c>ACCESS_DENIED</c>); the event must be allowed from the current status for the caller's role (409 naming the status
 /// and the allowed events); a reserved unit's serial must follow FR-022 (400) and a hand-over under
@@ -83,9 +84,11 @@ public abstract record RecordReplacementEventResult
 /// the replacement, its <c>audit.replacement_events</c> row and a trail entry; <c>UnitReserved</c> queues the
 /// <see cref="ReadyTemplate"/> notification with the dedupe key <c>replacement-ready:{unitId}</c>, and
 /// <c>HandedToCustomer</c> completes the remedy and registers the handed-out serial in <c>catalog.replacement_serials</c>
-/// (and <c>catalog.product_serials</c> when absent) with its cover end. A concurrent change detected on save is a 409.
-/// The events of later stories (return mismatch, model proposals, refusals, moves, unavailability, corrections) are not
-/// recorded yet: a 400 on <c>type</c>, or a 409 for a return that does not match or comes before the reservation.
+/// (and <c>catalog.product_serials</c> when absent) with its cover end. A <c>ReturnRecorded</c> serial is compared with the
+/// claim's (<see cref="EvidenceMatchRules.IdentifiersMatch"/>); a mismatch is recorded, queues no notification and blocks
+/// the reservation and the hand-over until a reviewer records <c>ReturnAccepted</c>. A concurrent change detected on save
+/// is a 409. The events of later stories (model proposals, refusals, moves, unavailability, corrections) are not recorded
+/// yet: a 400 on <c>type</c>.
 /// </summary>
 public sealed class RecordReplacementEvent(
     ITenantContext tenant,
@@ -126,15 +129,17 @@ public sealed class RecordReplacementEvent(
     public const string RemedyNotInProgressDetail =
         "The claim's remedy is not a replacement in progress, so the replacement cannot be handed to the customer.";
 
-    public const string ReturnNotSupportedDetail =
-        "A return before the reservation or a returned product whose serial does not match the claim cannot be recorded yet.";
+    public const string ReviewerOnlyDetail = "Only claims reviewers accept a returned product or decide a model proposal.";
 
-    /// <summary>The event types this use case records (User Story 1); the others come with later stories.</summary>
+    public const string SelfReviewDetail = "You submitted this claim; another reviewer must record this decision.";
+
+    /// <summary>The event types this use case records (User Stories 1 and 2); the others come with later stories.</summary>
     private static readonly HashSet<ReplacementEventType> Supported =
     [
         ReplacementEventType.LocationChanged,
-        ReplacementEventType.UnitReserved,
         ReplacementEventType.ReturnRecorded,
+        ReplacementEventType.ReturnAccepted,
+        ReplacementEventType.UnitReserved,
         ReplacementEventType.HandedToCustomer,
     ];
 
@@ -175,6 +180,24 @@ public sealed class RecordReplacementEvent(
             return new RecordReplacementEventResult.Conflict(NoReplacementDetail, null, []);
         }
 
+        // Reviewer-only events (research R5): a claims agent is refused (403, not 409), and so is the reviewer who submitted
+        // the claim, with a SELF_REVIEW_REFUSED security event (002 research R4).
+        if (command.Type is { } requested && IsReviewerOnly(requested))
+        {
+            if (role != StaffRole.ClaimsReviewer)
+            {
+                return new RecordReplacementEventResult.Forbidden(ReviewerOnlyDetail);
+            }
+
+            if (claim.WasSubmittedBy(tenant.PrincipalId))
+            {
+                await securityEvents.RecordAsync(
+                    SecurityEventKind.SelfReviewRefused, tenant.PrincipalName, claim.Id.ToString(),
+                    new { reference = claim.Reference, eventType = requested.ToString() }, ct);
+                return new RecordReplacementEventResult.SelfReviewRefused(SelfReviewDetail);
+            }
+        }
+
         var now = time.GetUtcNow();
         var errors = Validate(command, replacement, now);
         if (errors.Count > 0)
@@ -208,12 +231,9 @@ public sealed class RecordReplacementEvent(
             return NotAllowed(replacement, role, type);
         }
 
+        // The serial seen is compared with the claim's after the 001 FR-016 normalisation; a mismatch is recorded too.
         var serialMatches = type == ReplacementEventType.ReturnRecorded
             && EvidenceMatchRules.IdentifiersMatch(claim.SerialNumber, command.SerialSeen) == EvidenceMatch.Match;
-        if (type == ReplacementEventType.ReturnRecorded && (replacement.Status == ReplacementStatus.AwaitingReturn || !serialMatches))
-        {
-            return new RecordReplacementEventResult.Conflict(ReturnNotSupportedDetail, replacement.Status, replacement.AllowedEvents(role));
-        }
 
         Guid? unitProductId = null;
         if (type == ReplacementEventType.UnitReserved)
@@ -254,7 +274,7 @@ public sealed class RecordReplacementEvent(
                 {
                     var recorded = Apply(replacement, type, command, report, unitProductId, serialMatches);
                     replacements.AddEvent(recorded);
-                    await AppendTrailAsync(claim.Id, replacement, recorded, token);
+                    await AppendTrailAsync(claim.Id, replacement, recorded, Trimmed(command.Reason), token);
 
                     if (type == ReplacementEventType.UnitReserved && replacement.CurrentUnitId is { } unitId)
                     {
@@ -308,6 +328,7 @@ public sealed class RecordReplacementEvent(
             ReplacementEventType.LocationChanged => replacement.ChangeLocation(command.LocationId!.Value, command.Reason!.Trim(), report),
             ReplacementEventType.ReturnRecorded => replacement.RecordReturn(
                 command.ReturnedOn!.Value, command.SerialSeen!.Trim(), serialMatches, report),
+            ReplacementEventType.ReturnAccepted => replacement.AcceptReturn(command.Reason!.Trim(), report),
             ReplacementEventType.UnitReserved => replacement.ReserveUnit(unitProductId!.Value, command.SerialNumber!, report),
             ReplacementEventType.HandedToCustomer => replacement.HandToCustomer(
                 command.HandedOverOn!.Value, command.ReturnConfirmed == true, report),
@@ -408,12 +429,16 @@ public sealed class RecordReplacementEvent(
         return null;
     }
 
-    private Task AppendTrailAsync(Guid claimId, Replacement replacement, ReplacementEvent recorded, CancellationToken ct)
+    private Task AppendTrailAsync(Guid claimId, Replacement replacement, ReplacementEvent recorded, string? reason, CancellationToken ct)
     {
         var (step, summary) = recorded.Type switch
         {
             ReplacementEventType.LocationChanged => (TrailStep.ReplacementLocationAssigned, "Replacement location changed by staff."),
+            ReplacementEventType.ReturnRecorded when replacement.ReturnState == ReturnState.Mismatch
+                => (TrailStep.FaultyProductReturned, "Faulty product returned to the replacement location; its serial does not match the claim."),
             ReplacementEventType.ReturnRecorded => (TrailStep.FaultyProductReturned, "Faulty product returned to the replacement location."),
+            ReplacementEventType.ReturnAccepted
+                => (TrailStep.ReplacementStatusUpdated, "Returned product accepted by a reviewer despite the serial mismatch."),
             ReplacementEventType.UnitReserved => (TrailStep.ReplacementStatusUpdated, "Replacement unit reserved; ready for collection."),
             ReplacementEventType.HandedToCustomer => (TrailStep.ReplacementStatusUpdated, "Replacement unit handed to the customer."),
             var other => (TrailStep.ReplacementStatusUpdated, $"Replacement update recorded: {other}."),
@@ -445,6 +470,9 @@ public sealed class RecordReplacementEvent(
                 payload["returnedOn"] = replacement.Return?.ReturnedOn;
                 payload["serialMatches"] = replacement.Return?.SerialMatches;
                 break;
+            case ReplacementEventType.ReturnAccepted:
+                payload["reason"] = reason;
+                break;
             case ReplacementEventType.UnitReserved:
             case ReplacementEventType.HandedToCustomer:
                 payload["unitId"] = unit?.Id;
@@ -462,6 +490,10 @@ public sealed class RecordReplacementEvent(
         var locations = await RepairCentreEligibility.ListAsync(network, claim, product, ServiceCenterPurpose.Replacement, ct);
         return locations.Any(l => l.Id == locationId);
     }
+
+    /// <summary>Events only a claims reviewer who did not submit the claim may record (research R5, FR-024).</summary>
+    private static bool IsReviewerOnly(ReplacementEventType type)
+        => type is ReplacementEventType.ReturnAccepted or ReplacementEventType.ModelApproved or ReplacementEventType.ModelDeclined;
 
     private static RecordReplacementEventResult.Conflict NotAllowed(Replacement replacement, StaffRole role, ReplacementEventType type)
     {
@@ -527,6 +559,10 @@ public sealed class RecordReplacementEvent(
                 }
 
                 ValidateSerial("serialSeen", command.SerialSeen, "The serial seen on the returned product", Add);
+                break;
+
+            case ReplacementEventType.ReturnAccepted:
+                ValidateReason(command.Reason, Add);
                 break;
 
             case ReplacementEventType.UnitReserved:

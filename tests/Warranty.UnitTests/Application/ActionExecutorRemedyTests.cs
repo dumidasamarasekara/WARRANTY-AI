@@ -471,10 +471,15 @@ public sealed class ActionExecutorRemedyTests
             (claim.Id, VersionId, ReplacementReturnRule.BeforeReservation));
         replacement.Status.ShouldBe(ReplacementStatus.AwaitingUnit, "the repair centre already holds the faulty product");
         replacement.ActiveLocation!.ServiceCenterId.ShouldBe(_location.Id);
-        replacement.Events.ShouldHaveSingleItem().Type.ShouldBe(ReplacementEventType.LocationSuggested);
+        // The system records the return, referring to the repair hand-over (T337).
+        replacement.Events.Select(e => (e.Type, e.Source)).ShouldBe(
+            [(ReplacementEventType.LocationSuggested, ReportSource.System), (ReplacementEventType.ReturnRecorded, ReportSource.System)]);
+        replacement.ReturnState.ShouldBe(ReturnState.HeldByRepairCentre);
+        var heldReturn = replacement.Return.ShouldNotBeNull();
+        (heldReturn.RepairHandoverId, heldReturn.ReturnedOn).ShouldBe(((Guid?)repair.ActiveHandover!.Id, new DateOnly(2026, 8, 28)));
         _writes.ShouldAllBe(w => w.InTransaction);
         _entries.Select(e => e.Step).ShouldBe(
-            [TrailStep.RemedyDecided, TrailStep.RepairStatusUpdated, TrailStep.ReplacementLocationAssigned]);
+            [TrailStep.RemedyDecided, TrailStep.RepairStatusUpdated, TrailStep.ReplacementLocationAssigned, TrailStep.FaultyProductReturned]);
         _entries.ShouldAllBe(e => e.Actor == ReviewerSub);
         await _refunds.DidNotReceiveWithAnyArgs().RequestRefundAsync(default, default, Ct);
     }
