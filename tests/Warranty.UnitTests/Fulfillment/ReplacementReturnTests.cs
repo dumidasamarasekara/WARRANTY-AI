@@ -26,7 +26,7 @@ namespace Warranty.UnitTests.Fulfillment;
 /// holds the faulty product (<see cref="Repair.HandoverHoldingProduct"/>) satisfies both rules: the replacement starts with a
 /// return recorded by the system, referring to the repair hand-over, and the hand-over to the customer asks for no return.
 /// <para>
-/// Skips: the return before reservation, the mismatch and <see cref="Replacement.AcceptReturn"/> are T336;
+/// Skips: the return before reservation, the mismatch and <see cref="Replacement.AcceptReturn"/> (T336) are implemented;
 /// <see cref="Replacement.RecordHeldReturn"/> and <see cref="RecordReplacementEvent"/>'s <c>ReturnRecorded</c> before reservation,
 /// mismatch and <c>ReturnAccepted</c> (claims reviewer only, <c>SELF_REVIEW_REFUSED</c>) are T337, which merges after T336. The
 /// status rules that already refuse a reservation, a hand-over or a return without a location, the serial comparison itself and
@@ -223,7 +223,7 @@ public sealed class ReplacementReturnTests
         replacement.Events.Count.ShouldBe(1);
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void A_matching_return_before_reservation_is_recorded_at_the_active_location_and_awaits_a_unit()
     {
         var replacement = AwaitingReturn();
@@ -244,7 +244,7 @@ public sealed class ReplacementReturnTests
         replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldContain(ReplacementEventType.UnitReserved);
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void Under_BeforeReservation_the_return_is_recorded_once_and_the_hand_over_asks_for_no_return()
     {
         var replacement = AwaitingReturn();
@@ -273,7 +273,7 @@ public sealed class ReplacementReturnTests
     public void The_returned_serial_is_compared_with_the_claims_serial_under_the_001_FR_016_normalisation(string serialSeen, bool matches)
         => (EvidenceMatchRules.IdentifiersMatch(ClaimSerial, serialSeen) == EvidenceMatch.Match).ShouldBe(matches);
 
-    [Theory(Skip = "Pending T336")]
+    [Theory]
     [MemberData(nameof(SerialsSeen))]
     public void The_serial_check_decides_whether_the_return_before_reservation_moves_the_replacement_on(string serialSeen, bool matches)
     {
@@ -290,7 +290,7 @@ public sealed class ReplacementReturnTests
 
     // ── A mismatch blocks the reservation and the hand-over (FR-019; X8) ───────────────────────
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void A_mismatch_before_reservation_is_kept_and_the_claim_keeps_awaiting_the_return()
     {
         var replacement = AwaitingReturn();
@@ -316,7 +316,7 @@ public sealed class ReplacementReturnTests
         replacement.Units.ShouldBeEmpty();
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void A_mismatch_at_collection_blocks_the_reservation()
     {
         var replacement = AwaitingUnitAtCollection();
@@ -329,7 +329,7 @@ public sealed class ReplacementReturnTests
         replacement.Units.ShouldBeEmpty();
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void A_mismatch_at_collection_blocks_the_hand_over_even_with_the_return_confirmed()
     {
         var replacement = ReadyForCollectionMismatch();
@@ -346,7 +346,7 @@ public sealed class ReplacementReturnTests
 
     // ── ReturnAccepted: claims reviewer only, with a reason (FR-024, research R5; X8) ──────────
 
-    [Theory(Skip = "Pending T336")]
+    [Theory]
     [InlineData(StaffRole.ClaimsAgent)]
     [InlineData(StaffRole.Auditor)]
     public void Only_a_claims_reviewer_accepts_a_returned_product_that_does_not_match(StaffRole role)
@@ -361,7 +361,7 @@ public sealed class ReplacementReturnTests
         replacement.Events.Count.ShouldBe(eventCount);
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void A_reviewer_accepting_the_returned_product_before_reservation_lets_the_replacement_go_on()
     {
         var replacement = AwaitingReturnMismatch();
@@ -380,7 +380,7 @@ public sealed class ReplacementReturnTests
         (replacement.Status, replacement.ReturnState).ShouldBe((ReplacementStatus.HandedToCustomer, ReturnState.Accepted));
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void Accepting_the_returned_product_at_collection_keeps_the_status_and_allows_the_hand_over()
     {
         var replacement = ReadyForCollectionMismatch();
@@ -395,7 +395,7 @@ public sealed class ReplacementReturnTests
         replacement.Status.ShouldBe(ReplacementStatus.HandedToCustomer);
     }
 
-    [Theory(Skip = "Pending T336")]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -410,7 +410,7 @@ public sealed class ReplacementReturnTests
         replacement.Events.Count.ShouldBe(eventCount);
     }
 
-    [Fact(Skip = "Pending T336")]
+    [Fact]
     public void Without_a_mismatch_there_is_no_return_to_accept()
     {
         var returned = AwaitingReturn();

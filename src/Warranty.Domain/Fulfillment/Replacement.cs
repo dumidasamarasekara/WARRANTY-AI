@@ -313,8 +313,7 @@ public sealed class Replacement
     /// <see cref="ReplacementStatus.AwaitingUnit"/>; from <see cref="ReplacementStatus.AwaitingUnit"/> or
     /// <see cref="ReplacementStatus.ReadyForCollection"/> (<see cref="ReplacementReturnRule.AtCollection"/> only) the status stays.
     /// A match sets <see cref="ReturnState.Returned"/>; a mismatch sets <see cref="ReturnState.Mismatch"/> and keeps the status.
-    /// The return is recorded once (corrections go through events). Pending T336 (<see cref="ReplacementReturnRule.BeforeReservation"/>
-    /// and the mismatch).
+    /// The return is recorded once (corrections go through events).
     /// </summary>
     public ReplacementEvent RecordReturn(DateOnly returnedOn, string serialSeen, bool serialMatches, ReplacementReport report)
     {
@@ -326,20 +325,20 @@ public sealed class Replacement
 
         Require(ReplacementEventType.ReturnRecorded, report);
 
-        if (Status == ReplacementStatus.AwaitingReturn || !serialMatches)
-        {
-            throw new NotImplementedException(
-                $"Pending T336 (a return under {ReturnRule} in status {Status}, serial match {serialMatches}).");
-        }
-
+        var from = Status;
         var location = ActiveLocation!;
         var faultyReturn = AddReturn(
             returnedOn, location.ServiceCenterId, serialSeen, serialMatches, repairHandoverId: null, report.Note, report.Actor,
             report.RecordedAt);
-        SetReturnState(ReturnState.Returned, report.RecordedAt);
+        SetReturnState(serialMatches ? ReturnState.Returned : ReturnState.Mismatch, report.RecordedAt);
+        if (serialMatches && from == ReplacementStatus.AwaitingReturn)
+        {
+            SetStatus(ReplacementStatus.AwaitingUnit, report.RecordedAt);
+        }
+
         return Append(
             ReplacementEventType.ReturnRecorded,
-            Status,
+            from,
             Status,
             report,
             new Dictionary<string, object?>
@@ -368,10 +367,39 @@ public sealed class Replacement
     /// <see cref="ReplacementEventType.ReturnAccepted"/> (claims reviewer only): a reviewer accepts a returned product whose
     /// serial did not match (<see cref="ReturnState.Mismatch"/> → <see cref="ReturnState.Accepted"/>, reason required);
     /// <see cref="ReplacementStatus.AwaitingReturn"/> → <see cref="ReplacementStatus.AwaitingUnit"/>, any other status stays.
-    /// That the reviewer did not submit the claim is checked by the use case. Pending T336.
+    /// The return keeps its serial check (<see cref="FaultyProductReturn.SerialMatches"/> stays false); only its consequence is
+    /// accepted. That the reviewer did not submit the claim is checked by the use case.
     /// </summary>
     public ReplacementEvent AcceptReturn(string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T336 ({reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to accept the returned product.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.ReturnAccepted, report);
+
+        var from = Status;
+        SetReturnState(ReturnState.Accepted, report.RecordedAt);
+        if (from == ReplacementStatus.AwaitingReturn)
+        {
+            SetStatus(ReplacementStatus.AwaitingUnit, report.RecordedAt);
+        }
+
+        return Append(
+            ReplacementEventType.ReturnAccepted,
+            from,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["returnId"] = Return?.Id,
+                ["serialSeen"] = Return?.SerialSeen,
+                ["reason"] = reason.Trim(),
+                ["returnState"] = ReturnState.ToString(),
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ModelProposed"/>: <see cref="ReplacementStatus.AwaitingUnit"/> stays; adds a pending

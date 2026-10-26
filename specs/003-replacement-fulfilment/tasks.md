@@ -136,7 +136,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 
 ### Implementation for User Story 2
 
-- [ ] T336 [US2] Implement `RecordReturn` for `BeforeReservation` (with the serial comparison from `src/Warranty.Guardrails/Rules/EvidenceMatchRules.cs`), the `Mismatch` state and `AcceptReturn` on `Replacement` and `FaultyProductReturn` in `src/Warranty.Domain/Fulfillment/`
+- [X] T336 [US2] Implement `RecordReturn` for `BeforeReservation` (with the serial comparison from `src/Warranty.Guardrails/Rules/EvidenceMatchRules.cs`), the `Mismatch` state and `AcceptReturn` on `Replacement` and `FaultyProductReturn` in `src/Warranty.Domain/Fulfillment/`
 - [ ] T337 [US2] Extend `src/Warranty.Application/Fulfillment/RecordReplacementEvent.cs` with `ReturnRecorded` (both rules) and `ReturnAccepted` (claims-reviewer only, self-review refused with `SELF_REVIEW_REFUSED`, as 002 research R4); in `src/Warranty.Application/Actions/ActionExecutor.cs` record the `System` return referring to the repair hand-over when the product is held by a repair centre (research R9)
 - [ ] T338 [US2] Add `ReplacementCheck` items with `RETURN_MISMATCH` to `src/Warranty.Application/Review/ReviewQueueQuery.cs`
 - [ ] T339 [US2] Add the Record return and Accept return dialogs and the return line to `src/web/src/features/remedy/ReplacementCard.tsx` and `ReplacementEventDialog.tsx`, `ReplacementCheck` items to `src/web/src/features/review/ReviewQueuePage.tsx`, and the "Please bring your product to …" card to `src/web/src/features/claimant/ClaimStatusPage.tsx`; Vitest tests

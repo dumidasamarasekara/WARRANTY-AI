@@ -481,13 +481,14 @@ public sealed class ReplacementStateMachineTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325) is implemented, and
+    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325) and the US2 transitions (T336) are implemented, and
     /// the cancellation (T345) builds on the US3 transitions (T343), so T343 is named only on its own.
     /// </summary>
     private static string? Pending(string?[] tasks)
     {
         var pending = tasks.OfType<string>().Distinct().ToList();
         pending.Remove(T325);
+        pending.Remove(T336);
 
         if (pending.Contains(T345))
         {
