@@ -111,4 +111,22 @@ public sealed class FaultyProductReturn
             RecordedAt = recordedAt,
         };
     }
+
+    /// <summary>Applies a corrected return date (FR-017).</summary>
+    internal void CorrectReturnedOn(DateOnly returnedOn) => ReturnedOn = returnedOn;
+
+    /// <summary>Applies a corrected serial seen with its comparison with the claim's serial (FR-017, FR-019).</summary>
+    internal void CorrectSerialSeen(string serialSeen, bool serialMatches)
+    {
+        var serial = string.IsNullOrWhiteSpace(serialSeen)
+            ? throw new ArgumentException("The corrected serial seen is required.", nameof(serialSeen))
+            : serialSeen.Trim();
+        if (serial.Length > MaxSerialLength)
+        {
+            throw new ArgumentException($"The serial seen is at most {MaxSerialLength} characters.", nameof(serialSeen));
+        }
+
+        SerialSeen = serial;
+        SerialMatches = serialMatches;
+    }
 }

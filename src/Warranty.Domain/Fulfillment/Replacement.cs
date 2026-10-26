@@ -9,8 +9,7 @@ namespace Warranty.Domain.Fulfillment;
 /// The replacement of an approved claim whose remedy is Replacement (<c>claims.replacements</c>), one per
 /// claim. Carries the policy version's replacement rules copied at creation, and owns its locations, the
 /// faulty-product return, model proposals, reserved units and append-only events; status changes follow
-/// the replacement state machine in data-model.md and go only through this aggregate (transitions are
-/// added in T325, T336, T337, T343, T345 and T355).
+/// the replacement state machine in data-model.md and go only through this aggregate.
 /// </summary>
 public sealed class Replacement
 {
@@ -272,7 +271,8 @@ public sealed class Replacement
     /// <see cref="ReplacementEventType.LocationChanged"/>: <see cref="ReplacementStatus.AwaitingReturn"/> or
     /// <see cref="ReplacementStatus.AwaitingUnit"/> stays; the staff-chosen location becomes the only active location
     /// (<see cref="LocationAssignment.ChosenByStaff"/>, reason required). Whether the location is an eligible replacement
-    /// location of the tenant is checked by the use case.
+    /// location of the tenant is checked by the use case. A unit still reserved at the old location (only after a correction
+    /// sent its reservation back) ends as <see cref="ReplacementUnitResult.Released"/>.
     /// </summary>
     public ReplacementEvent ChangeLocation(Guid serviceCenterId, string reason, ReplacementReport report)
     {
@@ -291,18 +291,19 @@ public sealed class Replacement
 
         var previous = ActiveLocation?.ServiceCenterId;
         var location = AddLocation(serviceCenterId, LocationAssignment.ChosenByStaff, reason, report.Actor, report.RecordedAt);
-        return Append(
-            ReplacementEventType.LocationChanged,
-            Status,
-            Status,
-            report,
-            new Dictionary<string, object?>
-            {
-                ["serviceCenterId"] = serviceCenterId,
-                ["previousServiceCenterId"] = previous,
-                ["locationId"] = location.Id,
-                ["reason"] = location.Reason,
-            });
+        var payload = new Dictionary<string, object?>
+        {
+            ["serviceCenterId"] = serviceCenterId,
+            ["previousServiceCenterId"] = previous,
+            ["locationId"] = location.Id,
+            ["reason"] = location.Reason,
+        };
+        if (ReleaseReservedUnit(report.RecordedAt) is { } released)
+        {
+            payload["releasedUnitId"] = released.Id;
+        }
+
+        return Append(ReplacementEventType.LocationChanged, Status, Status, report, payload);
     }
 
     /// <summary>
@@ -526,6 +527,8 @@ public sealed class Replacement
     /// <paramref name="productId"/> with <paramref name="serialNumber"/> at the active location and makes it current. Needs an
     /// active location and no unresolved mismatch. The use case resolves the model (the claimed one or
     /// <see cref="ApprovedProductId"/>), checks the serial rules (FR-022) and queues the ready notification once per unit.
+    /// When a correction sent the reservation back (<see cref="Correct"/>), the current unit is still reserved: it is reserved
+    /// again with the reported values and keeps its ID, so no second ready notification is due for it (edge cases).
     /// </summary>
     public ReplacementEvent ReserveUnit(Guid productId, string serialNumber, ReplacementReport report)
     {
@@ -543,12 +546,62 @@ public sealed class Replacement
         Require(ReplacementEventType.UnitReserved, report);
 
         var location = ActiveLocation!;
-        var unit = AddUnit(location.ServiceCenterId, productId, ProductSerial.NormalizeSerial(serialNumber), report.RecordedAt);
+        var serial = ProductSerial.NormalizeSerial(serialNumber);
+        var reconfirmed = CurrentUnit is { IsReserved: true };
+        ReplacementUnit unit;
+        if (CurrentUnit is { IsReserved: true } kept)
+        {
+            kept.Reconfirm(location.ServiceCenterId, productId, serial, report.RecordedAt);
+            unit = kept;
+        }
+        else
+        {
+            unit = AddUnit(location.ServiceCenterId, productId, serial, report.RecordedAt);
+        }
+
         SetStatus(ReplacementStatus.ReadyForCollection, report.RecordedAt);
+        var payload = new Dictionary<string, object?>
+        {
+            ["unitId"] = unit.Id,
+            ["unitSeq"] = unit.Seq,
+            ["serviceCenterId"] = unit.ServiceCenterId,
+            ["productId"] = unit.ProductId,
+            ["serialNumber"] = unit.SerialNumber,
+        };
+        if (reconfirmed)
+        {
+            payload["reservedAgain"] = true;
+        }
+
+        return Append(ReplacementEventType.UnitReserved, ReplacementStatus.AwaitingUnit, ReplacementStatus.ReadyForCollection, report, payload);
+    }
+
+    /// <summary>
+    /// <see cref="ReplacementEventType.UnitRefused"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>; the customer refused the current unit at collection, which ends as
+    /// <see cref="ReplacementUnitResult.Refused"/> with the reason (required) and stays in the history. The location and the
+    /// remedy are unchanged (FR-027); a unit reserved next is a new unit with its own ready notification (research R7).
+    /// </summary>
+    public ReplacementEvent RefuseUnit(string reason, ReplacementReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to record that the customer refused the unit.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.UnitRefused, report);
+
+        var unit = CurrentUnit is { IsReserved: true } reserved
+            ? reserved
+            : throw new InvalidClaimTransitionException(
+                $"Cannot record {ReplacementEventType.UnitRefused} on a replacement in status {Status} without a reserved unit.");
+        unit.End(ReplacementUnitResult.Refused, reason, report.RecordedAt);
+        SetStatus(ReplacementStatus.AwaitingUnit, report.RecordedAt);
         return Append(
-            ReplacementEventType.UnitReserved,
-            ReplacementStatus.AwaitingUnit,
+            ReplacementEventType.UnitRefused,
             ReplacementStatus.ReadyForCollection,
+            ReplacementStatus.AwaitingUnit,
             report,
             new Dictionary<string, object?>
             {
@@ -557,26 +610,63 @@ public sealed class Replacement
                 ["serviceCenterId"] = unit.ServiceCenterId,
                 ["productId"] = unit.ProductId,
                 ["serialNumber"] = unit.SerialNumber,
+                ["reason"] = unit.ResultReason,
             });
     }
-
-    /// <summary>
-    /// <see cref="ReplacementEventType.UnitRefused"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
-    /// <see cref="ReplacementStatus.AwaitingUnit"/>; the current unit ends as <see cref="ReplacementUnitResult.Refused"/>
-    /// (reason required). The remedy is unchanged (FR-027). Pending T355.
-    /// </summary>
-    public ReplacementEvent RefuseUnit(string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T355 ({reason}, {report}).");
 
     /// <summary>
     /// <see cref="ReplacementEventType.Moved"/>: from <see cref="ReplacementStatus.AwaitingReturn"/> (stays),
     /// <see cref="ReplacementStatus.AwaitingUnit"/> (stays) or <see cref="ReplacementStatus.ReadyForCollection"/> (→
     /// <see cref="ReplacementStatus.AwaitingUnit"/>); another location becomes the only active one
     /// (<see cref="LocationAssignment.Moved"/>, reason required) and a reserved current unit ends as
-    /// <see cref="ReplacementUnitResult.Released"/>. Needs an active location. Pending T355.
+    /// <see cref="ReplacementUnitResult.Released"/>; the old location and its unit stay in the history (FR-010). Needs an active
+    /// location other than <paramref name="serviceCenterId"/>. Whether the location is an eligible replacement location of the
+    /// tenant is checked by the use case. The remedy is unchanged (FR-027).
     /// </summary>
     public ReplacementEvent Move(Guid serviceCenterId, string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T355 ({serviceCenterId}, {reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (serviceCenterId == Guid.Empty)
+        {
+            throw new ArgumentException("A replacement location ID is required.", nameof(serviceCenterId));
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to move the replacement.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.Moved, report);
+
+        var previous = ActiveLocation!;
+        if (previous.ServiceCenterId == serviceCenterId)
+        {
+            throw new ArgumentException("A move needs another location than the active one.", nameof(serviceCenterId));
+        }
+
+        var from = Status;
+        var location = AddLocation(serviceCenterId, LocationAssignment.Moved, reason, report.Actor, report.RecordedAt);
+        var released = ReleaseReservedUnit(report.RecordedAt);
+        if (from == ReplacementStatus.ReadyForCollection)
+        {
+            SetStatus(ReplacementStatus.AwaitingUnit, report.RecordedAt);
+        }
+
+        return Append(
+            ReplacementEventType.Moved,
+            from,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["serviceCenterId"] = serviceCenterId,
+                ["previousServiceCenterId"] = previous.ServiceCenterId,
+                ["locationId"] = location.Id,
+                ["reason"] = location.Reason,
+                ["releasedUnitId"] = released?.Id,
+                ["releasedUnitSeq"] = released?.Seq,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.HandedToCustomer"/>: <see cref="ReplacementStatus.ReadyForCollection"/> →
@@ -633,7 +723,8 @@ public sealed class Replacement
     /// <summary>
     /// <see cref="ReplacementEventType.NotAvailable"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
     /// <see cref="ReplacementStatus.NotAvailable"/> (final for the replacement; reason required). The use case evaluates the
-    /// <c>ReplacementNotAvailable</c> row and moves the remedy to <c>AwaitingDecision</c>.
+    /// <c>ReplacementNotAvailable</c> row and moves the remedy to <c>AwaitingDecision</c>. A unit still reserved (only after a
+    /// correction sent its reservation back) ends as <see cref="ReplacementUnitResult.Released"/>.
     /// </summary>
     public ReplacementEvent MarkNotAvailable(string reason, ReplacementReport report)
     {
@@ -645,13 +736,15 @@ public sealed class Replacement
 
         Require(ReplacementEventType.NotAvailable, report);
 
+        var released = ReleaseReservedUnit(report.RecordedAt);
         SetStatus(ReplacementStatus.NotAvailable, report.RecordedAt);
-        return Append(
-            ReplacementEventType.NotAvailable,
-            ReplacementStatus.AwaitingUnit,
-            ReplacementStatus.NotAvailable,
-            report,
-            new Dictionary<string, object?> { ["reason"] = reason.Trim() });
+        var payload = new Dictionary<string, object?> { ["reason"] = reason.Trim() };
+        if (released is not null)
+        {
+            payload["releasedUnitId"] = released.Id;
+        }
+
+        return Append(ReplacementEventType.NotAvailable, ReplacementStatus.AwaitingUnit, ReplacementStatus.NotAvailable, report, payload);
     }
 
     /// <summary>
@@ -700,11 +793,111 @@ public sealed class Replacement
     /// <see cref="ReplacementEventType.Correction"/> of the staff entry with sequence number <paramref name="correctsSeq"/> (any
     /// status except <see cref="ReplacementStatus.HandedToCustomer"/> and <see cref="ReplacementStatus.Cancelled"/>, reason
     /// required): applies the one corrected value of <paramref name="correction"/> and appends a correction that references the
-    /// entry; the corrected entry itself is never changed and no second ready notification is queued for the same unit (FR-017).
-    /// Pending T355.
+    /// entry; the corrected entry itself is never changed and no ready notification is queued for it (FR-017).
+    /// <list type="bullet">
+    /// <item>A return date or serial seen corrects a <see cref="ReplacementEventType.ReturnRecorded"/> entry's return. A corrected
+    /// serial seen carries its comparison with the claim's serial (<see cref="ReplacementCorrection.SerialSeenMatches"/>): a match
+    /// sets <see cref="ReturnState.Returned"/> and moves <see cref="ReplacementStatus.AwaitingReturn"/> on to
+    /// <see cref="ReplacementStatus.AwaitingUnit"/>; a mismatch sets <see cref="ReturnState.Mismatch"/>, which blocks the
+    /// reservation and the hand-over until a reviewer accepts the return.</item>
+    /// <item>A serial number corrects the unit of a <see cref="ReplacementEventType.UnitReserved"/> entry; the unit keeps its ID,
+    /// so its ready notification is not queued again. The serial rules (FR-022) are checked by the use case.</item>
+    /// <item>A hand-over date would correct a <see cref="ReplacementEventType.HandedToCustomer"/> entry, but a handed-out
+    /// replacement is final, so it is always refused.</item>
+    /// <item>A status sends the latest status change back to the status before it: a
+    /// <see cref="ReplacementEventType.UnitReserved"/> entry back to <see cref="ReplacementStatus.AwaitingUnit"/> keeping its unit
+    /// reserved (the notification already queued is not withdrawn, and reserving again reuses the unit, so no second notification
+    /// is queued for it; edge cases), a <see cref="ReplacementEventType.UnitRefused"/> entry back to
+    /// <see cref="ReplacementStatus.ReadyForCollection"/> reinstating the refused unit. Other status changes cannot be sent back
+    /// (a move is undone by another move; a "not available" re-evaluated the remedy).</item>
+    /// </list>
+    /// An invalid correction throws an <see cref="ArgumentException"/> naming the request field.
     /// </summary>
     public ReplacementEvent Correct(int correctsSeq, string reason, ReplacementCorrection correction, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T355 ({correctsSeq}, {reason}, {correction}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(correction);
+        ArgumentNullException.ThrowIfNull(report);
+        Require(ReplacementEventType.Correction, report);
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required for a correction.", nameof(reason));
+        }
+
+        var corrected = _events.SingleOrDefault(e => e.Seq == correctsSeq)
+            ?? throw new ArgumentException($"The replacement has no entry {correctsSeq}.", nameof(correctsSeq));
+        if (corrected.Actor == ReplacementEvent.SystemActor || corrected.Type == ReplacementEventType.Correction)
+        {
+            throw new ArgumentException(
+                "Only an entry recorded by staff can be corrected; to correct a correction, correct the original entry again.",
+                nameof(correctsSeq));
+        }
+
+        if (correction.ValueCount != 1)
+        {
+            throw new ArgumentException(
+                "A correction sets exactly one corrected value: returnedOn, serialSeen, serialNumber, handedOverOn or toStatus.",
+                nameof(correction));
+        }
+
+        var from = Status;
+        var payload = new Dictionary<string, object?>
+        {
+            ["correctsSeq"] = corrected.Seq,
+            ["correctedType"] = corrected.Type.ToString(),
+            ["reason"] = reason.Trim(),
+        };
+
+        if (correction.ReturnedOn is { } returnedOn)
+        {
+            var faultyReturn = ReturnOf(corrected, "returnedOn");
+            payload["previousReturnedOn"] = faultyReturn.ReturnedOn;
+            payload["returnedOn"] = returnedOn;
+            faultyReturn.CorrectReturnedOn(returnedOn);
+            UpdatedAt = report.RecordedAt;
+        }
+        else if (correction.SerialSeen is { } serialSeen)
+        {
+            CorrectSerialSeen(corrected, serialSeen, correction.SerialSeenMatches, report.RecordedAt, payload);
+        }
+        else if (correction.SerialNumber is { } serialNumber)
+        {
+            const string field = "serialNumber";
+            if (corrected.Type != ReplacementEventType.UnitReserved)
+            {
+                throw new ArgumentException(
+                    $"A serial number corrects a {ReplacementEventType.UnitReserved} entry, not {corrected.Type}.", field);
+            }
+
+            var unit = UnitOf(corrected, field);
+            payload["unitId"] = unit.Id;
+            payload["previousSerialNumber"] = unit.SerialNumber;
+            unit.CorrectSerial(serialNumber);
+            payload["serialNumber"] = unit.SerialNumber;
+            UpdatedAt = report.RecordedAt;
+        }
+        else if (correction.HandedOverOn is not null)
+        {
+            throw new ArgumentException(
+                corrected.Type == ReplacementEventType.HandedToCustomer
+                    ? "A handed-out replacement is final; its hand-over date cannot be corrected."
+                    : $"A hand-over date corrects a {ReplacementEventType.HandedToCustomer} entry, not {corrected.Type}.",
+                "handedOverOn");
+        }
+        else
+        {
+            SendBack(corrected, correction.ToStatus!.Value, report.RecordedAt, payload);
+        }
+
+        if (!string.IsNullOrWhiteSpace(report.ActorName))
+        {
+            payload["actorName"] = report.ActorName;
+        }
+
+        return AppendEvent(
+            ReplacementEventType.Correction, from, Status, report.ReportedAt, report.RecordedAt, report.Source, report.Actor, report.Note,
+            JsonSerializer.Serialize(payload), corrected.Id);
+    }
 
     /// <summary>The next gap-free event sequence number.</summary>
     internal int NextEventSeq => _events.Count == 0 ? 1 : _events.Max(e => e.Seq) + 1;
@@ -828,6 +1021,111 @@ public sealed class Replacement
     /// <summary>The allowed events as listed in a refusal.</summary>
     internal static string Describe(IReadOnlyList<ReplacementEventType> events)
         => events.Count == 0 ? "none" : string.Join(", ", events);
+
+    /// <summary>Ends a still-reserved current unit as <see cref="ReplacementUnitResult.Released"/>; returns it, or null when none is reserved.</summary>
+    private ReplacementUnit? ReleaseReservedUnit(DateTimeOffset at)
+    {
+        if (CurrentUnit is not { IsReserved: true } unit)
+        {
+            return null;
+        }
+
+        unit.End(ReplacementUnitResult.Released, reason: null, at);
+        UpdatedAt = at;
+        return unit;
+    }
+
+    /// <summary>Applies a corrected serial seen of a <see cref="ReplacementEventType.ReturnRecorded"/> entry and its consequence.</summary>
+    private void CorrectSerialSeen(
+        ReplacementEvent corrected, string serialSeen, bool serialMatches, DateTimeOffset at, Dictionary<string, object?> payload)
+    {
+        var faultyReturn = ReturnOf(corrected, "serialSeen");
+        payload["previousSerialSeen"] = faultyReturn.SerialSeen;
+        payload["previousSerialMatches"] = faultyReturn.SerialMatches;
+        faultyReturn.CorrectSerialSeen(serialSeen, serialMatches);
+        payload["serialSeen"] = faultyReturn.SerialSeen;
+        payload["serialMatches"] = serialMatches;
+
+        SetReturnState(serialMatches ? ReturnState.Returned : ReturnState.Mismatch, at);
+        if (serialMatches && Status == ReplacementStatus.AwaitingReturn)
+        {
+            SetStatus(ReplacementStatus.AwaitingUnit, at);
+        }
+
+        payload["returnState"] = ReturnState.ToString();
+    }
+
+    /// <summary>
+    /// Sends the latest status change <paramref name="corrected"/> (a reservation or a refusal of the current unit) back to its
+    /// previous status <paramref name="toStatus"/>: a reservation keeps its unit reserved, a refusal reinstates its unit.
+    /// </summary>
+    private void SendBack(ReplacementEvent corrected, ReplacementStatus toStatus, DateTimeOffset at, Dictionary<string, object?> payload)
+    {
+        const string field = "toStatus";
+        if (corrected.Type is not (ReplacementEventType.UnitReserved or ReplacementEventType.UnitRefused))
+        {
+            throw new ArgumentException(
+                $"A {corrected.Type} entry cannot be sent back; correct its values or record a new update instead.", field);
+        }
+
+        var latest = _events.Where(e => e.FromStatus is not null && e.FromStatus != e.ToStatus).MaxBy(e => e.Seq);
+        if (latest is null || latest.Seq != corrected.Seq || corrected.ToStatus != Status || corrected.FromStatus != toStatus)
+        {
+            throw new ArgumentException("Only the latest status change can be corrected, and only back to the status before it.", field);
+        }
+
+        var unit = UnitOf(corrected, field);
+        if (unit.Id != CurrentUnitId)
+        {
+            throw new ArgumentException("Only an entry of the current unit can be sent back.", field);
+        }
+
+        if (corrected.Type == ReplacementEventType.UnitRefused)
+        {
+            unit.Reinstate();
+        }
+        else if (!unit.IsReserved)
+        {
+            throw new ArgumentException("The unit of this reservation is no longer reserved.", field);
+        }
+
+        payload["previousStatus"] = Status.ToString();
+        payload["toStatus"] = toStatus.ToString();
+        payload["unitId"] = unit.Id;
+        SetStatus(toStatus, at);
+    }
+
+    /// <summary>The return a <see cref="ReplacementEventType.ReturnRecorded"/> entry recorded (its payload's <c>returnId</c>).</summary>
+    private FaultyProductReturn ReturnOf(ReplacementEvent corrected, string field)
+    {
+        if (corrected.Type != ReplacementEventType.ReturnRecorded)
+        {
+            throw new ArgumentException($"A {field} corrects a {ReplacementEventType.ReturnRecorded} entry, not {corrected.Type}.", field);
+        }
+
+        return Return is { } faultyReturn && PayloadGuid(corrected, "returnId") == faultyReturn.Id
+            ? faultyReturn
+            : throw new ArgumentException($"The return of entry {corrected.Seq} is not known.", field);
+    }
+
+    /// <summary>The unit a reservation or refusal entry recorded (its payload's <c>unitId</c>).</summary>
+    private ReplacementUnit UnitOf(ReplacementEvent corrected, string field)
+    {
+        var id = PayloadGuid(corrected, "unitId");
+        return _units.SingleOrDefault(u => u.Id == id)
+            ?? throw new ArgumentException($"The unit of entry {corrected.Seq} is not known.", field);
+    }
+
+    private static Guid? PayloadGuid(ReplacementEvent replacementEvent, string property)
+    {
+        using var payload = JsonDocument.Parse(replacementEvent.PayloadJson);
+        return payload.RootElement.ValueKind == JsonValueKind.Object
+            && payload.RootElement.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && value.TryGetGuid(out var id)
+                ? id
+                : null;
+    }
 
     /// <summary>Events only a claims reviewer may record (research R5, FR-024).</summary>
     private static bool IsReviewerOnly(ReplacementEventType type)
