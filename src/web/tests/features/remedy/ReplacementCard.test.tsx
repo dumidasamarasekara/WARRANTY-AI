@@ -130,6 +130,20 @@ const held: ReplacementView = {
   allowedEvents: ['LocationChanged', 'ModelProposed', 'UnitReserved', 'Moved', 'NotAvailable'],
 }
 
+const tab11 = { productId: 'dddddddd-0000-0000-0000-000000000011', modelCode: 'AUR-TAB11', name: 'Aurora Tab 11', category: 'tablet', claimValue: 520 }
+
+const tab12 = { productId: 'dddddddd-0000-0000-0000-000000000012', modelCode: 'AUR-TAB12', name: 'Aurora Tab 12', category: 'tablet', claimValue: 610 }
+
+const proposalReason = 'No Tab 10 is left in stock; the Tab 11 is its successor.'
+
+/** An equivalent proposed by an agent, as a reviewer sees it (US3). */
+const proposed: ReplacementView = {
+  ...awaitingUnit,
+  pendingProposal: { model: tab11, reason: proposalReason, proposedBy: '[AGENT]', proposedAt: '2026-10-21T09:30:00Z' },
+  allowedEvents: ['LocationChanged', 'ReturnRecorded', 'ModelApproved', 'ModelDeclined', 'UnitReserved', 'Moved', 'NotAvailable', 'Correction'],
+  etag: '"x-5"',
+}
+
 const holdingRepair = {
   status: 'NotPossible',
   notPossibleReason: 'Failed',
@@ -181,12 +195,14 @@ interface ReceivedEvent {
 let detail: ClaimDetail = approvedClaim(awaitingUnit)
 let detailRequests = 0
 let events: ReceivedEvent[] = []
+let models = [tab11, tab12]
 
 const server = setupServer(
   http.get('*/api/me', () =>
     HttpResponse.json({ sub: 'u-1', name: '[AGENT]', tenantDisplayName: 'Aurora Audio', tenantCurrency: 'EUR', roles: auth.roles }),
   ),
   http.get('*/api/claims/:claimId/replacement-locations', () => HttpResponse.json([northLocation, southLocation])),
+  http.get('*/api/claims/:claimId/replacement-models', () => HttpResponse.json(models)),
   http.get('*/api/claims/:claimId', () => {
     detailRequests++
     return HttpResponse.json(detail as object)
@@ -210,6 +226,7 @@ afterEach(() => {
   detail = approvedClaim(awaitingUnit)
   detailRequests = 0
   events = []
+  models = [tab11, tab12]
 })
 afterAll(() => server.close())
 
@@ -245,7 +262,9 @@ describe('replacement view', () => {
     expect(replacementActions(awaitingUnit)).toEqual([
       { type: 'LocationChanged', primary: false },
       { type: 'ReturnRecorded', primary: false },
+      { type: 'ModelProposed', primary: false },
       { type: 'UnitReserved', primary: true },
+      { type: 'NotAvailable', primary: false },
     ])
     expect(replacementActions(ready)).toEqual([
       { type: 'ReturnRecorded', primary: false },
@@ -266,6 +285,27 @@ describe('replacement view', () => {
     ])
     // A claims agent gets no reviewer-only event: nothing of theirs moves a mismatched replacement on.
     expect(replacementActions({ allowedEvents: ['LocationChanged', 'Moved', 'Correction'] })).toEqual([{ type: 'LocationChanged', primary: false }])
+  })
+
+  it('makes approving a pending model proposal the primary action for a reviewer, never proposing or "not available"', () => {
+    expect(replacementActions(proposed)).toEqual([
+      { type: 'LocationChanged', primary: false },
+      { type: 'ReturnRecorded', primary: false },
+      { type: 'ModelApproved', primary: true },
+      { type: 'ModelDeclined', primary: false },
+      { type: 'UnitReserved', primary: false },
+      { type: 'NotAvailable', primary: false },
+    ])
+    // A claims agent gets no reviewer-only event: reserving the claimed model stays their next step.
+    expect(replacementActions({ allowedEvents: ['ModelProposed', 'UnitReserved', 'NotAvailable'] })).toEqual([
+      { type: 'ModelProposed', primary: false },
+      { type: 'UnitReserved', primary: true },
+      { type: 'NotAvailable', primary: false },
+    ])
+    expect(replacementActions({ allowedEvents: ['ModelProposed', 'NotAvailable'] })).toEqual([
+      { type: 'ModelProposed', primary: false },
+      { type: 'NotAvailable', primary: false },
+    ])
   })
 
   it('asks to confirm the return at hand-over only under AtCollection while the product is not back', () => {
@@ -297,7 +337,7 @@ describe('ReplacementCard', () => {
     expect(location.getByText('North Service Point')).toBeInTheDocument()
     expect(location.getByText('1 Service Street')).toBeInTheDocument()
     expect(location.getByText('[LOCATION CONTACT]')).toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Record return', 'Reserve unit'])
+    expect(actionNames()).toEqual(['Change location', 'Record return', 'Propose other model', 'Reserve unit', 'Not available'])
     expect(screen.getByRole('button', { name: 'Reserve unit' }).className).toMatch(/primary/)
     expect(screen.getByRole('button', { name: 'Change location' }).className).not.toMatch(/primary/)
     expect(screen.queryByRole('heading', { name: 'Completion', level: 2 })).not.toBeInTheDocument()
@@ -402,7 +442,33 @@ describe('ReplacementCard', () => {
     expect(line.getByText('Held by repair centre — Central Repair Workshop')).toBeInTheDocument()
     expect(line.getByText('Handed to the repair centre on')).toBeInTheDocument()
     expect(line.queryByText('Serial seen')).not.toBeInTheDocument()
-    expect(actionNames()).toEqual(['Change location', 'Reserve unit'])
+    expect(actionNames()).toEqual(['Change location', 'Propose other model', 'Reserve unit', 'Not available'])
+  })
+
+  it('shows the model line with a pending proposal, its reason, proposer and time', async () => {
+    detail = approvedClaim(proposed)
+    renderTab(['claims-reviewer'])
+
+    const line = within((await replacementCard()).getByRole('region', { name: 'Model' }))
+    expect(line.getByText('AUR-TAB10')).toBeInTheDocument()
+    expect(line.getByText('Aurora Tab 11 (AUR-TAB11)')).toBeInTheDocument()
+    expect(line.getByText('Awaiting reviewer approval').className).toMatch(/warn/)
+    expect(line.getByText(proposalReason)).toBeInTheDocument()
+    expect(line.getByText('[AGENT]')).toBeInTheDocument()
+    expect(line.getByText(/^proposed .+/)).toBeInTheDocument()
+    expect(line.queryByText('Approved equivalent')).not.toBeInTheDocument()
+    expect(actionNames()).toEqual(['Change location', 'Record return', 'Approve model', 'Decline model', 'Reserve unit', 'Not available'])
+    expect(screen.getByRole('button', { name: 'Approve model' }).className).toMatch(/primary/)
+  })
+
+  it('shows the approved equivalent on the model line', async () => {
+    detail = approvedClaim({ ...awaitingUnit, approvedModel: tab11 })
+    renderTab(['auditor'])
+
+    const line = within((await replacementCard()).getByRole('region', { name: 'Model' }))
+    expect(line.getByText('Aurora Tab 11 (AUR-TAB11)')).toBeInTheDocument()
+    expect(line.getByText('Approved equivalent').className).toMatch(/ok/)
+    expect(line.queryByText('Awaiting reviewer approval')).not.toBeInTheDocument()
   })
 
   it('focuses the card when opened from a replacement check in the review queue', async () => {
@@ -613,6 +679,120 @@ describe('Replacement event dialogs', () => {
     await user.click(dialog.getByRole('button', { name: 'Accept return' }))
 
     expect(await dialog.findByRole('alert')).toHaveTextContent(message)
+  })
+
+  it('proposes another model listing only the models of /replacement-models, with a reason and If-Match', async () => {
+    onEvent(() => HttpResponse.json(proposed as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Propose other model')
+    expect(dialog.getByText('Claimed model: Aurora Tab 10 (AUR-TAB10)')).toBeInTheDocument()
+    const modelSelect = dialog.getByRole('combobox', { name: /Model/ })
+    await vi.waitFor(() => expect(within(modelSelect).getAllByRole('option')).toHaveLength(3))
+    expect(within(modelSelect).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Choose a model',
+      expect.stringMatching(/^Aurora Tab 11 \(AUR-TAB11\) · claim value .*520/),
+      expect.stringMatching(/^Aurora Tab 12 \(AUR-TAB12\) · claim value .*610/),
+    ])
+
+    await user.selectOptions(modelSelect, tab11.productId)
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Propose other model' })
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'No stock')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), ' of the Tab 10 at any location.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-1"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['productId', 'reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({
+      type: 'ModelProposed',
+      source: 'Phone',
+      productId: tab11.productId,
+      reason: 'No stock of the Tab 10 at any location.',
+    })
+  })
+
+  it('offers no model to propose when the policy allows the same model only', async () => {
+    models = []
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Propose other model')
+    expect(await dialog.findByText(/The policy allows no other model for this claim/)).toBeInTheDocument()
+    expect(dialog.queryByRole('combobox', { name: /Model/ })).not.toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'No stock of the Tab 10 at any location.')
+    expect(dialog.getByRole('button', { name: 'Propose other model' })).toBeDisabled()
+  })
+
+  it('lets a reviewer approve the proposed model without a reason, showing the proposal', async () => {
+    detail = approvedClaim(proposed)
+    onEvent(() => HttpResponse.json({ ...awaitingUnit, approvedModel: tab11 } as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Approve model')
+    expect(dialog.getByText('Aurora Tab 11 (AUR-TAB11)')).toBeInTheDocument()
+    expect(dialog.getByText(proposalReason)).toBeInTheDocument()
+    expect(dialog.getByText(/^\[AGENT\] · /)).toBeInTheDocument()
+    expect(dialog.queryByRole('textbox', { name: /Reason/ })).not.toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Other')
+    await user.click(dialog.getByRole('button', { name: 'Approve model' }))
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-5"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'ModelApproved', source: 'Other' })
+  })
+
+  it('lets a reviewer decline the proposed model with a reason', async () => {
+    detail = approvedClaim(proposed)
+    onEvent(() => HttpResponse.json(awaitingUnit as object, { status: 201 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Decline model')
+    expect(dialog.getByText('Aurora Tab 11 (AUR-TAB11)')).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    const submit = dialog.getByRole('button', { name: 'Decline model' })
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'A Tab 10 unit arrives at the location next week.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'ModelDeclined', reason: 'A Tab 10 unit arrives at the location next week.' })
+  })
+
+  it('shows the self-review refusal of the API when the reviewer who submitted the claim approves a model', async () => {
+    detail = approvedClaim(proposed)
+    const message = 'You submitted this claim; another reviewer must record this decision.'
+    onEvent(() => HttpResponse.json({ title: 'Forbidden', status: 403, detail: message }, { status: 403 }))
+    const user = renderTab(['claims-reviewer'])
+
+    const dialog = await openDialog(user, 'Approve model')
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Email')
+    await user.click(dialog.getByRole('button', { name: 'Approve model' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(message)
+  })
+
+  it('records "not available" with a reason', async () => {
+    onEvent(() => HttpResponse.json({ ...awaitingUnit, status: 'NotAvailable', allowedEvents: ['Correction'] } as object, { status: 201 }))
+    const user = renderTab(['claims-agent'])
+
+    const dialog = await openDialog(user, 'Not available')
+    expect(dialog.getByText(/This ends the replacement\. The policy is evaluated again and a claims reviewer confirms the remedy/)).toBeInTheDocument()
+    await user.selectOptions(dialog.getByRole('combobox', { name: /Source/ }), 'Phone')
+    const submit = dialog.getByRole('button', { name: 'Not available' })
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), 'Gone')
+    expect(submit).toBeDisabled()
+    await user.type(dialog.getByRole('textbox', { name: /Reason/ }), ' — the model is discontinued everywhere.')
+    await user.click(submit)
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(events[0]!.ifMatch).toBe('"x-1"')
+    expect(Object.keys(events[0]!.body).sort()).toEqual(['reason', 'reportedAt', 'source', 'type'])
+    expect(events[0]!.body).toMatchObject({ type: 'NotAvailable', source: 'Phone', reason: 'Gone — the model is discontinued everywhere.' })
   })
 
   it('rejects a reported time in the future', async () => {

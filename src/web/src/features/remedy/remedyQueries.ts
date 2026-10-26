@@ -108,6 +108,22 @@ export function useReplacementLocations(claimId: string, enabled = true) {
   })
 }
 
+export type ReplacementModel = Schemas['ReplacementModel']
+
+export const replacementModelsQueryKey = (claimId: string) => ['claims', claimId, 'replacement-models'] as const
+
+/**
+ * `GET /api/claims/{claimId}/replacement-models`: the models staff may propose instead of the claimed one (003 FR-023);
+ * empty when the policy allows the same model only.
+ */
+export function useReplacementModels(claimId: string, enabled = true) {
+  return useQuery({
+    queryKey: replacementModelsQueryKey(claimId),
+    queryFn: () => unwrap(api.GET('/api/claims/{claimId}/replacement-models', { params: { path: { claimId } } })),
+    enabled,
+  })
+}
+
 export interface RecordReplacementEventInput {
   claimId: string
   /** `ReplacementView.etag`, sent as `If-Match`. */

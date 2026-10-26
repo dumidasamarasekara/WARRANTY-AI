@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatDate, replacementStatusPresentation, returnStatePresentation } from '../../shared/presentation'
+import { formatDate, formatDateTime, replacementStatusPresentation, returnStatePresentation } from '../../shared/presentation'
 import { ActorBadge, Alert, Badge, Button, Card, cx } from '../../shared/ui'
 import tones from '../../shared/ui/tone.module.css'
 import type { RemedyView, ReplacementView } from './remedyQueries'
 import { ReplacementEventDialog, type UnitModel } from './ReplacementEventDialog'
-import { replacementActionLabels, replacementActions, replacementPolicyBasis, type ReplacementDialogEvent } from './replacementView'
+import {
+  replacementActionLabels,
+  replacementActions,
+  replacementModelText,
+  replacementPolicyBasis,
+  type ReplacementDialogEvent,
+} from './replacementView'
 import styles from './RemedyTab.module.css'
 
 export interface ReplacementCardProps {
@@ -76,6 +82,54 @@ function ReturnSection({
             </div>
           )}
         </dl>
+      )}
+    </section>
+  )
+}
+
+/**
+ * The model line (ui-screens.md §2): the claimed model, the equivalent a reviewer approved, if any, and a proposal
+ * awaiting a reviewer with its reason, the staff member who proposed it and when. Staff-only.
+ */
+function ModelSection({ replacement, claimedModel }: Pick<ReplacementCardProps, 'replacement' | 'claimedModel'>) {
+  const approved = replacement.approvedModel
+  const proposal = replacement.pendingProposal
+
+  return (
+    <section className={styles.section} aria-label="Model">
+      <h3 className={styles.sectionLabel}>Model</h3>
+      <dl className={styles.facts}>
+        <div>
+          <dt>Claimed model</dt>
+          <dd className={styles.mono}>{claimedModel.modelCode}</dd>
+        </div>
+        {approved && (
+          <div>
+            <dt>Approved model</dt>
+            <dd className={styles.badges}>
+              <span>{replacementModelText(approved)}</span>
+              <Badge tone="ok">Approved equivalent</Badge>
+            </dd>
+          </div>
+        )}
+        {proposal && (
+          <div>
+            <dt>Proposed model</dt>
+            <dd className={styles.badges}>
+              <span>{replacementModelText(proposal.model)}</span>
+              <Badge tone="warn">Awaiting reviewer approval</Badge>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {proposal && (
+        <>
+          <p className={styles.note}>{proposal.reason}</p>
+          <p className={cx(styles.origin, tones.human)}>
+            <ActorBadge actor="human" name={proposal.proposedBy} />
+            <span>proposed {formatDateTime(proposal.proposedAt)}</span>
+          </p>
+        </>
       )}
     </section>
   )
@@ -155,13 +209,11 @@ export function ReplacementCard({
 
             <ReturnSection replacement={replacement} claimedSerial={claimedSerial} holdingCentreName={holdingCentreName} />
 
+            <ModelSection replacement={replacement} claimedModel={claimedModel} />
+
             <section className={styles.section} aria-label="Unit">
               <h3 className={styles.sectionLabel}>Unit</h3>
               <dl className={styles.facts}>
-                <div>
-                  <dt>Claimed model</dt>
-                  <dd className={styles.mono}>{claimedModel.modelCode}</dd>
-                </div>
                 <div>
                   <dt>Reserved unit</dt>
                   <dd>

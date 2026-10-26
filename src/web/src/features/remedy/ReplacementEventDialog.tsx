@@ -1,15 +1,24 @@
 import { useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
+import { useMe } from '../../app/staffQueries'
 import { ApiProblem } from '../../shared/api/client'
+import { formatDateTime, formatMoney } from '../../shared/presentation'
 import { Button, Dialog, Select, TextArea, TextInput } from '../../shared/ui'
 import {
   useRecordReplacementEvent,
   useReplacementLocations,
+  useReplacementModels,
   type ReplacementEventRequest,
   type ReplacementView,
   type ReportSource,
 } from './remedyQueries'
 import { reportSourceLabel, reportSources } from './remedyView'
-import { needsReturnConfirmation, replacementActionLabels, replacementReasonLimits, type ReplacementDialogEvent } from './replacementView'
+import {
+  needsReturnConfirmation,
+  replacementActionLabels,
+  replacementModelText,
+  replacementReasonLimits,
+  type ReplacementDialogEvent,
+} from './replacementView'
 import styles from './RemedyTab.module.css'
 
 /** The model a reserved unit must be: the claimed one, or the model a reviewer approved. */
@@ -45,6 +54,7 @@ const fields = [
   'source',
   'note',
   'locationId',
+  'productId',
   'reason',
   'returnedOn',
   'serialSeen',
@@ -61,14 +71,41 @@ const localDateTime = (date: Date) =>
 
 const localDate = (date: Date) => localDateTime(date).slice(0, 10)
 
-const modelText = (model: UnitModel) => (model.name ? `${model.name} (${model.modelCode})` : model.modelCode)
-
 const descriptions: Record<ReplacementDialogEvent, string> = {
   LocationChanged: 'Choose another location to issue the replacement.',
   ReturnRecorded: 'Record the faulty product the customer returned to the location.',
+  ModelProposed: 'Propose another model when the claimed one cannot be supplied. A claims reviewer must approve it.',
+  ModelApproved: 'Approve the proposed model: a unit of it can then be reserved for the customer.',
+  ModelDeclined: 'Decline the proposed model: the claimed model remains.',
   ReturnAccepted: 'Accept the returned product although its serial does not match the claim’s.',
   UnitReserved: 'Record the unit the location reserved for the customer.',
   HandedToCustomer: 'Record that the customer collected the replacement.',
+  NotAvailable: 'Record that no replacement unit can be supplied.',
+}
+
+/** Events whose request carries a reason of 10–1000 characters (003 contracts, `ReplacementEventRequest`). */
+const reasonEvents: readonly ReplacementDialogEvent[] = ['LocationChanged', 'ReturnAccepted', 'ModelProposed', 'ModelDeclined', 'NotAvailable']
+
+/** The pending model proposal a reviewer decides: the model, the reason, who proposed it and when. */
+function PendingProposal({ proposal }: { proposal: NonNullable<ReplacementView['pendingProposal']> }) {
+  return (
+    <dl className={styles.facts}>
+      <div>
+        <dt>Proposed model</dt>
+        <dd>{replacementModelText(proposal.model)}</dd>
+      </div>
+      <div>
+        <dt>Reason</dt>
+        <dd>{proposal.reason}</dd>
+      </div>
+      <div>
+        <dt>Proposed by</dt>
+        <dd>
+          {proposal.proposedBy} · {formatDateTime(proposal.proposedAt)}
+        </dd>
+      </div>
+    </dl>
+  )
 }
 
 /**
@@ -91,6 +128,7 @@ export function ReplacementEventDialog({
   const [source, setSource] = useState<ReportSource | ''>('')
   const [note, setNote] = useState('')
   const [locationId, setLocationId] = useState('')
+  const [productId, setProductId] = useState('')
   const [reason, setReason] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [returnedOn, setReturnedOn] = useState(() => localDate(now))
@@ -101,9 +139,13 @@ export function ReplacementEventDialog({
   const [reloading, setReloading] = useState(false)
   const record = useRecordReplacementEvent()
   const choosesLocation = type === 'LocationChanged'
-  // Changing the location and accepting a mismatched return both need a reason.
-  const needsReason = choosesLocation || type === 'ReturnAccepted'
+  const proposesModel = type === 'ModelProposed'
+  const decidesModel = type === 'ModelApproved' || type === 'ModelDeclined'
+  const needsReason = reasonEvents.includes(type)
   const locations = useReplacementLocations(claimId, choosesLocation)
+  // Only the models the policy allows are offered (GET /replacement-models); none under "same model only".
+  const models = useReplacementModels(claimId, proposesModel)
+  const currency = useMe().data?.tenantCurrency
   const confirmsReturn = type === 'HandedToCustomer' && needsReturnConfirmation(replacement)
   const unitModel: UnitModel = replacement.approvedModel ?? claimedModel
 
@@ -119,7 +161,9 @@ export function ReplacementEventDialog({
   let eventValid = true
   if (choosesLocation) eventValid = locationId !== '' && reasonValid
   if (type === 'ReturnRecorded') eventValid = returnedOn !== '' && returnedOn <= localDate(now) && trimmedSerialSeen !== ''
-  if (type === 'ReturnAccepted') eventValid = reasonValid
+  if (type === 'ReturnAccepted' || type === 'ModelDeclined' || type === 'NotAvailable') eventValid = reasonValid
+  if (proposesModel) eventValid = productId !== '' && reasonValid
+  if (decidesModel && !replacement.pendingProposal) eventValid = false
   if (type === 'UnitReserved') eventValid = trimmedSerial !== ''
   if (type === 'HandedToCustomer') eventValid = handedOverOn !== '' && handedOverOn <= localDate(now) && (!confirmsReturn || returnConfirmed)
   const valid = reportedValid && source !== '' && trimmedNote.length <= replacementReasonLimits.max && eventValid
@@ -138,6 +182,7 @@ export function ReplacementEventDialog({
     const request: ReplacementEventRequest = { type, reportedAt: reported.toISOString(), source }
     if (trimmedNote) request.note = trimmedNote
     if (choosesLocation) request.locationId = locationId
+    if (proposesModel) request.productId = productId
     if (needsReason) request.reason = trimmedReason
     if (type === 'ReturnRecorded') {
       request.returnedOn = returnedOn
@@ -197,6 +242,8 @@ export function ReplacementEventDialog({
   }
 
   const otherLocations = (locations.data ?? []).filter((location) => location.id !== replacement.activeLocation?.id)
+  const proposable = models.data ?? []
+  const money = (value: number) => (currency ? formatMoney(value, currency) : value.toFixed(2))
 
   return (
     <Dialog
@@ -321,6 +368,42 @@ export function ReplacementEventDialog({
           </dl>
         )}
 
+        {proposesModel && (
+          <>
+            <p className={styles.note}>Claimed model: {replacementModelText(claimedModel)}</p>
+            {models.isSuccess && proposable.length === 0 ? (
+              <p className={styles.note}>The policy allows no other model for this claim: only the claimed model can be handed out.</p>
+            ) : (
+              <Select
+                label="Model"
+                hint="Only models the policy allows: the same category with at least the claimed model’s claim value."
+                required
+                value={productId}
+                disabled={models.isPending}
+                error={errors.productId ?? (models.isError ? 'The models could not be loaded.' : undefined)}
+                onChange={(event) => {
+                  setProductId(event.target.value)
+                  clearFieldError('productId')
+                }}
+              >
+                <option value="">{models.isPending ? 'Loading models…' : 'Choose a model'}</option>
+                {proposable.map((model) => (
+                  <option key={model.productId} value={model.productId}>
+                    {replacementModelText(model)} · claim value {money(model.claimValue)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </>
+        )}
+
+        {decidesModel &&
+          (replacement.pendingProposal ? (
+            <PendingProposal proposal={replacement.pendingProposal} />
+          ) : (
+            <p className={styles.note}>No model proposal is waiting for a decision. Reload to see the latest status.</p>
+          ))}
+
         {needsReason && (
           <TextArea
             label="Reason"
@@ -340,7 +423,7 @@ export function ReplacementEventDialog({
         {type === 'UnitReserved' && (
           <>
             <p className={styles.note}>
-              Model: {modelText(unitModel)}
+              Model: {replacementModelText(unitModel)}
               {replacement.approvedModel ? ' (approved equivalent)' : ''}
             </p>
             <TextInput
@@ -400,6 +483,17 @@ export function ReplacementEventDialog({
             )}
             <p className={styles.note}>This completes the remedy and registers the unit’s serial for later claims.</p>
           </>
+        )}
+
+        {type === 'ModelProposed' && (
+          <p className={styles.note}>No unit can be reserved for the proposed model until a reviewer approves it.</p>
+        )}
+
+        {type === 'NotAvailable' && (
+          <p className={styles.note}>
+            This ends the replacement. The policy is evaluated again and a claims reviewer confirms the remedy; the customer sees
+            that the claim is being reviewed.
+          </p>
         )}
 
         <TextArea

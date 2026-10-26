@@ -87,6 +87,7 @@ describe('review decision rules', () => {
     expect(remedyPendingReasonLabel('NO_REMEDY_RULE')).toBe('No remedy rule applies')
     expect(remedyPendingReasonLabel('REPAIR_FAILED_LIMIT')).toBe('Repair attempts limit reached')
     expect(remedyPendingReasonLabel('REPAIR_NOT_ECONOMICAL')).toBe('Repair is not economical')
+    expect(remedyPendingReasonLabel('REPLACEMENT_NOT_AVAILABLE')).toBe('No replacement available; the policy recommends Refund.')
     expect(remedyPendingReasonLabel(undefined)).toBe('Awaiting remedy decision')
   })
 })
