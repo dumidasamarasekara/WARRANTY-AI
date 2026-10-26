@@ -176,7 +176,7 @@ const remedyPendingReasonLabels: Record<RemedyPendingReason, string> = {
   NO_REMEDY_RULE: 'No remedy rule applies',
   REPAIR_FAILED_LIMIT: 'Repair attempts limit reached',
   REPAIR_NOT_ECONOMICAL: 'Repair is not economical',
-  REPLACEMENT_NOT_AVAILABLE: 'Replacement is not available',
+  REPLACEMENT_NOT_AVAILABLE: 'No replacement available; the policy recommends Refund.',
 }
 
 /** Readable reason a remedy waits for a reviewer (002 data-model.md `pending_reason`). */
