@@ -17,6 +17,7 @@ import {
   formatDateTime,
   formatMoney,
   requestedItemLabel,
+  riskSignalLabel,
   riskSignalSourceActor,
   type Disposition,
 } from '../../shared/presentation'
@@ -618,6 +619,7 @@ function AiDecisionTab({ detail, basePath, tenantName, isReviewer }: Context) {
                     <li key={`${signal.code}-${index}`} className={styles.signal}>
                       <span className={styles.signalHead}>
                         <code className={styles.mono}>{signal.code}</code>
+                        {riskSignalLabel(signal.code) !== signal.code && <span>{riskSignalLabel(signal.code)}</span>}
                         {signal.source && <ActorBadge actor={riskSignalSourceActor(signal.source)} />}
                         {signal.severity && <Badge tone={signal.severity === 'High' ? 'err' : signal.severity === 'Medium' ? 'warn' : 'system'}>{signal.severity}</Badge>}
                       </span>
