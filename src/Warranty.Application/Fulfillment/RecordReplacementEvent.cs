@@ -95,8 +95,12 @@ public abstract record RecordReplacementEventResult
 /// the reservation and the hand-over until a reviewer records <c>ReturnAccepted</c>. <c>NotAvailable</c> evaluates the
 /// remedy's policy version again with its <c>replacementNotAvailable</c> row (<see cref="RemedyPolicyEvaluator"/>, an
 /// <c>Evaluated</c> remedy decision) and sends the remedy back to a reviewer (<c>AwaitingDecision</c>,
-/// <c>REPLACEMENT_NOT_AVAILABLE</c>; FR-026, even for a single remedy). A concurrent change detected on save is a 409.
-/// The events of later stories (refusals, moves, corrections) are not recorded yet: a 400 on <c>type</c>.
+/// <c>REPLACEMENT_NOT_AVAILABLE</c>; FR-026, even for a single remedy). <c>Moved</c> needs an eligible location like
+/// <c>LocationChanged</c> and, like <c>UnitRefused</c>, never changes the remedy (FR-027); a unit reserved afterwards is a
+/// new unit with its own notification. A <c>Correction</c> (FR-017) names the corrected entry (<c>correctsSeq</c>), a reason
+/// and one corrected value: a corrected serial seen is compared with the claim's serial again, a corrected unit serial
+/// follows the reservation rules (FR-022); the original entry is never changed and a correction queues no notification —
+/// nor does reserving again a unit whose reservation a correction sent back. A concurrent change detected on save is a 409.
 /// </summary>
 public sealed class RecordReplacementEvent(
     ITenantContext tenant,
@@ -149,7 +153,7 @@ public sealed class RecordReplacementEvent(
     /// <summary>The equivalent-model rule as named in a refusal.</summary>
     private const string EquivalentRule = $"rule {nameof(ReplacementProductRule.SameCategoryAtLeastClaimValue)}";
 
-    /// <summary>The event types this use case records (User Stories 1 – 3); the others come with later stories.</summary>
+    /// <summary>The event types staff record (every type except the system's <c>LocationSuggested</c> and <c>Cancelled</c>).</summary>
     private static readonly HashSet<ReplacementEventType> Supported =
     [
         ReplacementEventType.LocationChanged,
@@ -159,8 +163,11 @@ public sealed class RecordReplacementEvent(
         ReplacementEventType.ModelApproved,
         ReplacementEventType.ModelDeclined,
         ReplacementEventType.UnitReserved,
+        ReplacementEventType.UnitRefused,
+        ReplacementEventType.Moved,
         ReplacementEventType.HandedToCustomer,
         ReplacementEventType.NotAvailable,
+        ReplacementEventType.Correction,
     ];
 
     /// <summary>The dedupe key of the ready notification of the reserved unit <paramref name="unitId"/> (research R7).</summary>
@@ -238,7 +245,8 @@ public sealed class RecordReplacementEvent(
 
         var type = command.Type!.Value;
         var product = claim.ProductId is { } claimedProductId ? await catalog.GetProductAsync(claimedProductId, ct) : null;
-        if (type == ReplacementEventType.LocationChanged && !await IsEligibleLocationAsync(claim, product, command.LocationId!.Value, ct))
+        if (type is ReplacementEventType.LocationChanged or ReplacementEventType.Moved
+            && !await IsEligibleLocationAsync(claim, product, command.LocationId!.Value, ct))
         {
             await securityEvents.RecordAsync(
                 SecurityEventKind.AccessDenied, tenant.PrincipalName, command.LocationId.Value.ToString(),
@@ -270,8 +278,11 @@ public sealed class RecordReplacementEvent(
             return NotAllowed(replacement, role, type);
         }
 
-        // The serial seen is compared with the claim's after the 001 FR-016 normalisation; a mismatch is recorded too.
-        var serialMatches = type == ReplacementEventType.ReturnRecorded
+        // The serial seen (recorded or corrected) is compared with the claim's after the 001 FR-016 normalisation; a mismatch
+        // is recorded too.
+        var comparesSerialSeen = type == ReplacementEventType.ReturnRecorded
+            || (type == ReplacementEventType.Correction && command.SerialSeen is not null);
+        var serialMatches = comparesSerialSeen
             && EvidenceMatchRules.IdentifiersMatch(claim.SerialNumber, command.SerialSeen) == EvidenceMatch.Match;
 
         Guid? unitProductId = null;
@@ -279,6 +290,19 @@ public sealed class RecordReplacementEvent(
         {
             unitProductId = replacement.ApprovedProductId ?? claim.ProductId;
             var serialErrors = await CheckUnitSerialAsync(claim, unitProductId, command.SerialNumber!, ct);
+            if (serialErrors is not null)
+            {
+                return new RecordReplacementEventResult.Invalid(serialErrors);
+            }
+        }
+
+        // A corrected unit serial follows the reservation rules for the corrected unit's model (FR-022); an entry that is not a
+        // reservation is refused by the replacement.
+        if (type == ReplacementEventType.Correction
+            && command.SerialNumber is not null
+            && CorrectedUnitOf(replacement, command.CorrectsSeq!.Value) is { } correctedUnit)
+        {
+            var serialErrors = await CheckUnitSerialAsync(claim, correctedUnit.ProductId, command.SerialNumber, ct);
             if (serialErrors is not null)
             {
                 return new RecordReplacementEventResult.Invalid(serialErrors);
@@ -317,6 +341,7 @@ public sealed class RecordReplacementEvent(
 
         var report = new ReplacementReport(
             command.ReportedAt!.Value, command.Source!.Value, tenant.PrincipalId, role, Trimmed(command.Note), now, tenant.PrincipalName);
+        var unitBefore = replacement.CurrentUnitId;
         try
         {
             await unitOfWork.ExecuteInTransactionAsync(
@@ -333,9 +358,11 @@ public sealed class RecordReplacementEvent(
 
                     await AppendTrailAsync(claim.Id, replacement, recorded, Trimmed(command.Reason), evaluation, basis, token);
 
-                    if (type == ReplacementEventType.UnitReserved && replacement.CurrentUnitId is { } unitId)
+                    // One ready notification per unit (research R7): a unit reserved again after a correction sent its
+                    // reservation back keeps its ID and gets none. A key already queued (a retried request) is tolerated too:
+                    // the database keeps one notification per unit.
+                    if (type == ReplacementEventType.UnitReserved && replacement.CurrentUnitId is { } unitId && unitId != unitBefore)
                     {
-                        // A key already queued (a retried request) is tolerated: the database keeps one notification per unit.
                         await notifications.EnqueueAsync(claim.Id, ReadyTemplate, ReadyDedupeKey(unitId), token);
                     }
 
@@ -393,8 +420,35 @@ public sealed class RecordReplacementEvent(
             ReplacementEventType.UnitReserved => replacement.ReserveUnit(unitProductId!.Value, command.SerialNumber!, report),
             ReplacementEventType.HandedToCustomer => replacement.HandToCustomer(
                 command.HandedOverOn!.Value, command.ReturnConfirmed == true, report),
+            ReplacementEventType.UnitRefused => replacement.RefuseUnit(command.Reason!.Trim(), report),
+            ReplacementEventType.Moved => replacement.Move(command.LocationId!.Value, command.Reason!.Trim(), report),
+            ReplacementEventType.Correction => replacement.Correct(
+                command.CorrectsSeq!.Value,
+                command.Reason!.Trim(),
+                new ReplacementCorrection(
+                    command.ReturnedOn, Trimmed(command.SerialSeen), Trimmed(command.SerialNumber), command.HandedOverOn, command.ToStatus)
+                {
+                    SerialSeenMatches = serialMatches,
+                },
+                report),
             _ => throw new InvalidClaimTransitionException($"Cannot record {type} on a replacement in status {replacement.Status}."),
         };
+
+    /// <summary>
+    /// The unit of the reservation entry <paramref name="correctsSeq"/> (its payload's <c>unitId</c>); null when the entry is
+    /// not a reservation of a known unit (the replacement then refuses the correction).
+    /// </summary>
+    private static ReplacementUnit? CorrectedUnitOf(Replacement replacement, int correctsSeq)
+    {
+        var corrected = replacement.Events.SingleOrDefault(e => e.Seq == correctsSeq);
+        if (corrected is not { Type: ReplacementEventType.UnitReserved })
+        {
+            return null;
+        }
+
+        var unitId = PayloadGuid(corrected, "unitId");
+        return replacement.Units.SingleOrDefault(u => u.Id == unitId);
+    }
 
     /// <summary>
     /// The hand-over completes the remedy (research R12) and registers the handed-out serial with its cover end in
@@ -572,6 +626,12 @@ public sealed class RecordReplacementEvent(
             ReplacementEventType.NotAvailable
                 => (TrailStep.ReplacementStatusUpdated, "No replacement available; the policy was evaluated again and the remedy goes to a reviewer."),
             ReplacementEventType.LocationChanged => (TrailStep.ReplacementLocationAssigned, "Replacement location changed by staff."),
+            ReplacementEventType.Moved
+                => (TrailStep.ReplacementLocationAssigned, "Replacement moved to another location; a unit reserved at the old one is released."),
+            ReplacementEventType.UnitRefused
+                => (TrailStep.ReplacementStatusUpdated, "The customer refused the replacement unit; a new unit is needed. The remedy is unchanged."),
+            ReplacementEventType.Correction
+                => (TrailStep.ReplacementStatusUpdated, "A replacement entry was corrected; the original entry is kept."),
             ReplacementEventType.ReturnRecorded when replacement.ReturnState == ReturnState.Mismatch
                 => (TrailStep.FaultyProductReturned, "Faulty product returned to the replacement location; its serial does not match the claim."),
             ReplacementEventType.ReturnRecorded => (TrailStep.FaultyProductReturned, "Faulty product returned to the replacement location."),
@@ -601,8 +661,20 @@ public sealed class RecordReplacementEvent(
         switch (recorded.Type)
         {
             case ReplacementEventType.LocationChanged:
+            case ReplacementEventType.Moved:
                 payload["assignment"] = location?.Assignment.ToString();
                 payload["reason"] = location?.Reason;
+                payload["releasedUnitId"] = PayloadGuid(recorded, "releasedUnitId");
+                break;
+            case ReplacementEventType.UnitRefused:
+                payload["unitId"] = unit?.Id;
+                payload["unitSeq"] = unit?.Seq;
+                payload["unitResult"] = unit?.Result.ToString();
+                payload["reason"] = reason;
+                break;
+            case ReplacementEventType.Correction:
+                payload["correctsSeq"] = CorrectsSeqOf(recorded);
+                payload["reason"] = reason;
                 break;
             case ReplacementEventType.ReturnRecorded:
                 payload["returnedOn"] = replacement.Return?.ReturnedOn;
@@ -649,14 +721,29 @@ public sealed class RecordReplacementEvent(
         return trail.AppendAsync(claimId, step, tenant.PrincipalId, summary, payload, ct);
     }
 
-    /// <summary>The proposal a model event refers to (its payload's <c>proposalId</c>).</summary>
-    private static Guid? ProposalIdOf(ReplacementEvent modelEvent)
+    /// <summary>The sequence number of the entry a correction corrects (its payload's <c>correctsSeq</c>).</summary>
+    private static int? CorrectsSeqOf(ReplacementEvent correction)
     {
-        using var payload = JsonDocument.Parse(modelEvent.PayloadJson);
+        using var payload = JsonDocument.Parse(correction.PayloadJson);
         return payload.RootElement.ValueKind == JsonValueKind.Object
-            && payload.RootElement.TryGetProperty("proposalId", out var id)
-            && id.TryGetGuid(out var proposalId)
-                ? proposalId
+            && payload.RootElement.TryGetProperty("correctsSeq", out var value)
+            && value.TryGetInt32(out var seq)
+                ? seq
+                : null;
+    }
+
+    /// <summary>The proposal a model event refers to (its payload's <c>proposalId</c>).</summary>
+    private static Guid? ProposalIdOf(ReplacementEvent modelEvent) => PayloadGuid(modelEvent, "proposalId");
+
+    /// <summary>The ID in the payload property <paramref name="property"/> of <paramref name="replacementEvent"/>, if any.</summary>
+    private static Guid? PayloadGuid(ReplacementEvent replacementEvent, string property)
+    {
+        using var payload = JsonDocument.Parse(replacementEvent.PayloadJson);
+        return payload.RootElement.ValueKind == JsonValueKind.Object
+            && payload.RootElement.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && value.TryGetGuid(out var id)
+                ? id
                 : null;
     }
 
@@ -715,12 +802,21 @@ public sealed class RecordReplacementEvent(
         switch (command.Type)
         {
             case ReplacementEventType.LocationChanged:
+            case ReplacementEventType.Moved:
                 if (command.LocationId is null || command.LocationId == Guid.Empty)
                 {
                     Add("locationId", "The replacement location is required.");
                 }
 
                 ValidateReason(command.Reason, Add);
+                break;
+
+            case ReplacementEventType.UnitRefused:
+                ValidateReason(command.Reason, Add);
+                break;
+
+            case ReplacementEventType.Correction:
+                ValidateCorrection(command, today, Add);
                 break;
 
             case ReplacementEventType.ReturnRecorded:
@@ -791,6 +887,53 @@ public sealed class RecordReplacementEvent(
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// A correction names the corrected entry, a reason and exactly one corrected value (contracts
+    /// <c>ReplacementEventRequest</c>): a return date (not in the future), a serial seen or unit serial number, a hand-over date
+    /// or the status a wrongly recorded status change goes back to.
+    /// </summary>
+    private static void ValidateCorrection(RecordReplacementEventCommand command, DateOnly today, Action<string, string> add)
+    {
+        if (command.CorrectsSeq is not > 0)
+        {
+            add("correctsSeq", "The sequence number of the corrected entry is required.");
+        }
+
+        ValidateReason(command.Reason, add);
+        var correction = new ReplacementCorrection(
+            command.ReturnedOn, Trimmed(command.SerialSeen), Trimmed(command.SerialNumber), command.HandedOverOn, command.ToStatus);
+        if (correction.ValueCount != 1)
+        {
+            add("correction", "A correction sets exactly one corrected value: returnedOn, serialSeen, serialNumber, handedOverOn or toStatus.");
+            return;
+        }
+
+        if (command.ReturnedOn > today)
+        {
+            add("returnedOn", "The return date must not be in the future.");
+        }
+
+        if (command.HandedOverOn > today)
+        {
+            add("handedOverOn", "The hand-over date must not be in the future.");
+        }
+
+        if (correction.SerialSeen is not null)
+        {
+            ValidateSerial("serialSeen", correction.SerialSeen, "The serial seen on the returned product", add);
+        }
+
+        if (correction.SerialNumber is not null)
+        {
+            ValidateSerial("serialNumber", correction.SerialNumber, "The serial number of the reserved unit", add);
+        }
+
+        if (command.ToStatus is { } toStatus && !Enum.IsDefined(toStatus))
+        {
+            add("toStatus", "The status is not a replacement status.");
+        }
     }
 
     private static void ValidateReason(string? reason, Action<string, string> add)

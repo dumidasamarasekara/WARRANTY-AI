@@ -204,7 +204,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 ### Implementation for User Story 5
 
 - [X] T355 [US5] Implement `Move`, `RefuseUnit` and `Correct` on `Replacement` in `src/Warranty.Domain/Fulfillment/Replacement.cs` and `ReplacementUnit.cs`
-- [ ] T356 [US5] Extend `src/Warranty.Application/Fulfillment/RecordReplacementEvent.cs` with `Moved`, `UnitRefused` and `Correction` (reason required; correction references `correctsSeq`; corrected values applied; original event untouched)
+- [X] T356 [US5] Extend `src/Warranty.Application/Fulfillment/RecordReplacementEvent.cs` with `Moved`, `UnitRefused` and `Correction` (reason required; correction references `correctsSeq`; corrected values applied; original event untouched)
 - [ ] T357 [US5] Add the Move, Customer refused unit and Correct an entry dialogs and the struck-through corrected entries in `src/web/src/features/remedy/ReplacementEventDialog.tsx` and `ReplacementEventsTimeline.tsx`; the claimant page shows the new location; Vitest tests
 
 **Checkpoint**: validate X16, X17

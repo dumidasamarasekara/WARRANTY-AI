@@ -26,7 +26,6 @@ namespace Warranty.IntegrationTests.Fulfillment;
 [Trait("Feature", "003")]
 public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
 {
-    private const string Pending = "Pending T356";
     private const string ReadyTemplate = "ReplacementReadyForCollection";
     private const string MoveReason = "The customer moved to Hamburg and collects the replacement there.";
     private const string RefusalReason = "The customer refused the unit at collection: the screen is scratched.";
@@ -50,7 +49,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
 
     // ---- X16: move, reserve, refuse, reserve ---------------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task X16_a_move_and_a_refused_unit_keep_one_active_location_a_notification_per_unit_and_the_remedy()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -119,7 +118,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
         (await TrailStepsAsync(claimId)).ShouldContain("ReplacementLocationAssigned");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_refusal_while_awaiting_a_unit_conflicts_naming_the_status()
     {
         var (claimId, _) = await CopyOfX1Async();
@@ -133,7 +132,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
         (await EventTypesAsync(claimId)).ShouldBe(["LocationSuggested"]);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task An_auditor_cannot_move_a_replacement()
     {
         var (claimId, _) = await CopyOfX1Async();
@@ -152,7 +151,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
 
     // ---- X17: corrections --------------------------------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task X17_a_corrected_unit_serial_applies_and_the_original_entry_stays_in_the_history()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -194,7 +193,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
         claimant.GetProperty("remedy").GetProperty("label").GetString().ShouldBe("Your replacement is ready for collection");
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task X17_a_reservation_corrected_back_to_awaiting_a_unit_and_reserved_again_queues_no_second_notification()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -219,7 +218,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
         (await EventTypesAsync(claimId)).ShouldBe(["LocationSuggested", "UnitReserved", "Correction", "UnitReserved"]);
     }
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_correction_without_a_reason_or_naming_the_claims_own_serial_is_refused()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -252,7 +251,7 @@ public sealed class US5_MoveRefusalCorrectionTests(WarrantyAppFixture fixture)
 
     // ---- FR-011: a location of another company -----------------------------------------------------
 
-    [Fact(Skip = Pending)]
+    [Fact]
     public async Task A_move_of_an_Aurora_replacement_to_a_Borealis_location_gets_404_with_ACCESS_DENIED_and_changes_nothing()
     {
         var agent = TestStaffUsers.AgentAurora;
