@@ -111,7 +111,7 @@ public sealed class US4_ReplacementWarrantyTests(WarrantyAppFixture fixture)
         window.WithinComponentCoverage.ShouldBe(true);
     }
 
-    [Fact(Skip = "Pending T351")]
+    [Fact]
     public async Task X13_the_invoice_of_the_original_purchase_passes_the_serial_check_of_the_handed_out_unit()
     {
         // Needs the replacement cover of T349 as well: the invoice names the original serial, not the unit's.

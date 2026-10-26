@@ -102,7 +102,7 @@ public sealed class ToolInvoker(
         try
         {
             var result = await tool.InvokeAsync(
-                call.Arguments, new ToolInvocationContext(run.Tenant, run.RunId, run.ClaimId, caller, run.References), ct);
+                call.Arguments, new ToolInvocationContext(run.Tenant, run.RunId, run.ClaimId, caller, run.References, run.Case), ct);
             return new Outcome(result.IsError ? "error" : "ok", null, result);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

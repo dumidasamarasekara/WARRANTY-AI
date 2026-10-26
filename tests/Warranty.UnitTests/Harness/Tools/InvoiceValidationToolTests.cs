@@ -126,7 +126,7 @@ public sealed class InvoiceValidationToolTests
     /// <summary>A replacement unit handed out in place of <see cref="Serial"/>; the customer's invoice shows the original.</summary>
     private const string ReplacementSerial = "SN-TAB-0777";
 
-    [Theory(Skip = "Pending T351")]
+    [Theory]
     [InlineData("SN-TAB-0001")]
     [InlineData("sn tab 0001")]
     public void The_original_serial_on_the_invoice_matches_a_replacement_unit(string invoiceSerial)
@@ -165,7 +165,7 @@ public sealed class InvoiceValidationToolTests
         InvoiceValidationTool.Compare(claim, Invoice(Serial)).First().Match.ShouldBe(EvidenceMatch.Mismatch);
     }
 
-    [Fact(Skip = "Pending T351")]
+    [Fact]
     public void The_case_of_a_replacement_unit_carries_the_original_serial_as_the_accepted_alternative()
     {
         var @case = Case() with
