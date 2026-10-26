@@ -153,7 +153,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 
 ### Tests for User Story 3 ⚠️ write first, ensure they fail
 
-- [ ] T340 [P] [US3] Unskip the `CheckModel` cases of `tests/Warranty.UnitTests/Guardrails/Remedies/ReplacementPolicyTests.cs` (same model; claim value lower, equal, higher; other category; missing claim value; `SameModel` rule) and extend `tests/Warranty.UnitTests/Guardrails/Remedies/RemedyPolicyEvaluatorTests.cs` with the `ReplacementNotAvailable` row and a missing row; unskip the US3 cases of `ReplacementStateMachineTests.cs`; add the X10–X12 claims to `seed/tenants/*/replacement-scenarios.json`
+- [X] T340 [P] [US3] Unskip the `CheckModel` cases of `tests/Warranty.UnitTests/Guardrails/Remedies/ReplacementPolicyTests.cs` (same model; claim value lower, equal, higher; other category; missing claim value; `SameModel` rule) and extend `tests/Warranty.UnitTests/Guardrails/Remedies/RemedyPolicyEvaluatorTests.cs` with the `ReplacementNotAvailable` row and a missing row; unskip the US3 cases of `ReplacementStateMachineTests.cs`; add the X10–X12 claims to `seed/tenants/*/replacement-scenarios.json`
 - [ ] T341 [P] [US3] Write `tests/Warranty.IntegrationTests/Fulfillment/US3_EquivalentAndNotAvailableTests.cs` for X10–X12 and X19 (claim stays `Approved`; history keeps the original Replacement remedy)
 
 ### Implementation for User Story 3

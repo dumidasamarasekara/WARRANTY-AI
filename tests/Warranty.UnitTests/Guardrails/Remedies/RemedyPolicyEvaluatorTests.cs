@@ -8,10 +8,12 @@ namespace Warranty.UnitTests.Guardrails.Remedies;
 /// <summary>
 /// The deterministic remedy evaluator (002 plan.md "Remedy evaluation", research R2, R13) on the seeded Aurora
 /// and Borealis rule sets (tasks.md "Fixed identifiers") and on the boundaries of FR-003 – FR-006, FR-012,
-/// FR-031 and FR-032.
+/// FR-031 and FR-032; with feature 003 also the <c>replacementNotAvailable</c> row (003 FR-026, research R2).
 /// </summary>
 public sealed class RemedyPolicyEvaluatorTests
 {
+    private const string ReplacementNotAvailablePending = "Pending T342";
+
     /// <summary>Claim value of BOR-SLATE11 in quickstart R10: 60% is 288.00.</summary>
     private const decimal SlateClaimValue = 480m;
 
@@ -149,6 +151,65 @@ public sealed class RemedyPolicyEvaluatorTests
             reason: RemedyPendingReason.RepairNotEconomical, limit: 250.00m);
         result.AutomaticRemedy.ShouldBeNull();
     }
+
+    // ---- Replacement not available (003 FR-026, research R2, quickstart X12) --------------------------
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void The_replacement_not_available_row_is_read_under_its_own_name()
+        => RemedyPolicyEvaluator.TableRowOf(RemedyScenario.ReplacementNotAvailable).ShouldBe("replacementNotAvailable");
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void A_replacement_not_available_recommends_Refund_at_both_companies_and_a_reviewer_confirms_it()
+    {
+        foreach (var rules in new[] { RemedyRulesContract.AuroraWithReplacement, RemedyRulesContract.BorealisWithReplacement })
+        {
+            var result = Evaluator.Evaluate(rules, RemedyScenario.ReplacementNotAvailable);
+
+            Expect(
+                result, "replacementNotAvailable", [RemedyType.Refund], single: RemedyType.Refund,
+                reason: RemedyPendingReason.ReplacementNotAvailable);
+            result.AutomaticRemedy.ShouldBeNull("a single remedy after a replacement that is not available still needs a reviewer (FR-026)");
+        }
+    }
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void A_replacement_not_available_allowed_list_is_offered_to_the_reviewer_without_a_recommendation()
+    {
+        var rules = RemedyRulesContract.AuroraWithReplacement with
+        {
+            ReplacementNotAvailable = new RemedyChoice(null, [RemedyType.Refund, RemedyType.Repair]),
+        };
+
+        Expect(
+            Evaluator.Evaluate(rules, RemedyScenario.ReplacementNotAvailable), "replacementNotAvailable",
+            [RemedyType.Refund, RemedyType.Repair], reason: RemedyPendingReason.ReplacementNotAvailable);
+    }
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void A_missing_replacement_not_available_row_sends_the_remedy_to_a_reviewer_without_a_rule()
+    {
+        // The 002 rule sets have no replacementNotAvailable row (and no replacement rules).
+        foreach (var rules in new[] { Aurora, Borealis, RemedyRulesContract.AuroraWithReplacement with { ReplacementNotAvailable = null } })
+        {
+            Expect(
+                Evaluator.Evaluate(rules, RemedyScenario.ReplacementNotAvailable), "replacementNotAvailable", [],
+                reason: RemedyPendingReason.NoRemedyRule);
+        }
+    }
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void A_version_without_remedy_rules_sends_a_replacement_not_available_to_a_reviewer()
+        => Expect(
+            Evaluator.Evaluate(null, RemedyScenario.ReplacementNotAvailable), "replacementNotAvailable", [],
+            reason: RemedyPendingReason.NoRemedyRule);
+
+    [Fact(Skip = ReplacementNotAvailablePending)]
+    public void A_replacement_not_available_ignores_the_repair_facts()
+        => Expect(
+            Evaluator.Evaluate(
+                RemedyRulesContract.BorealisWithReplacement, RemedyScenario.ReplacementNotAvailable, failedAttempts: 3, estimate: 400m,
+                claimValue: SlateClaimValue),
+            "replacementNotAvailable", [RemedyType.Refund], single: RemedyType.Refund, reason: RemedyPendingReason.ReplacementNotAvailable);
 
     // ---- Determinism (FR-010) -------------------------------------------------------------------------
 

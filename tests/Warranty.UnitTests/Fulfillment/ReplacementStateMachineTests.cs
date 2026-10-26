@@ -478,6 +478,91 @@ public sealed class ReplacementStateMachineTests
         replacement.Events.Count.ShouldBe(1);
     }
 
+    [Fact(Skip = "Pending T343")]
+    public void A_proposal_stays_pending_until_a_reviewer_approves_it_and_its_model_becomes_the_approved_product()
+    {
+        var replacement = ReplacementAt(Stage.AwaitingUnit);
+
+        var proposed = replacement.ProposeModel(EquivalentProduct, Reason, Report(1, StaffRole.ClaimsAgent));
+
+        var proposal = replacement.PendingProposal.ShouldNotBeNull();
+        (proposal.ProductId, proposal.Reason, proposal.State, proposal.ProposedBy).ShouldBe(
+            (EquivalentProduct, Reason, ModelProposalState.Pending, AgentActor));
+        replacement.ApprovedProductId.ShouldBeNull("a proposal alone changes no model");
+        proposed.PayloadJson.ShouldContain(EquivalentProduct.ToString());
+        replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldNotContain(ReplacementEventType.ModelProposed);
+
+        var approved = replacement.ApproveModel(Report(2, StaffRole.ClaimsReviewer));
+
+        (approved.Type, approved.FromStatus, approved.ToStatus, approved.Actor).ShouldBe(
+            (ReplacementEventType.ModelApproved, ReplacementStatus.AwaitingUnit, ReplacementStatus.AwaitingUnit, ReviewerActor));
+        (proposal.State, proposal.DecidedBy).ShouldBe((ModelProposalState.Approved, ReviewerActor));
+        replacement.PendingProposal.ShouldBeNull();
+        replacement.ApprovedProductId.ShouldBe(EquivalentProduct);
+        replacement.AllowedEvents(StaffRole.ClaimsReviewer).ShouldNotContain(ReplacementEventType.ModelApproved);
+        replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldContain(ReplacementEventType.UnitReserved);
+    }
+
+    [Fact(Skip = "Pending T343")]
+    public void A_declined_proposal_keeps_the_claimed_model_and_another_model_can_be_proposed()
+    {
+        var replacement = ReplacementAt(Stage.AwaitingUnitWithProposal);
+        var proposal = replacement.PendingProposal.ShouldNotBeNull();
+        const string DeclineReason = "The proposed model lacks the claimed features.";
+
+        replacement.DeclineModel(DeclineReason, Report(2, StaffRole.ClaimsReviewer));
+
+        (proposal.State, proposal.DecidedBy, proposal.DecisionReason).ShouldBe((ModelProposalState.Declined, ReviewerActor, DeclineReason));
+        replacement.PendingProposal.ShouldBeNull();
+        replacement.ApprovedProductId.ShouldBeNull();
+        replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldContain(ReplacementEventType.ModelProposed);
+        replacement.Events[^1].PayloadJson.ShouldContain(DeclineReason);
+    }
+
+    [Theory(Skip = "Pending T343")]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void A_proposal_a_decline_and_a_not_available_need_a_reason(string? reason)
+    {
+        var awaiting = ReplacementAt(Stage.AwaitingUnit);
+        Should.Throw<ArgumentException>(() => awaiting.ProposeModel(EquivalentProduct, reason!, Report(1, StaffRole.ClaimsAgent)));
+        Should.Throw<ArgumentException>(() => awaiting.MarkNotAvailable(reason!, Report(1, StaffRole.ClaimsAgent)));
+        (awaiting.Status, awaiting.Proposals.Count, awaiting.Events.Count).ShouldBe((ReplacementStatus.AwaitingUnit, 0, 1));
+
+        var withProposal = ReplacementAt(Stage.AwaitingUnitWithProposal);
+        var eventCount = withProposal.Events.Count;
+        Should.Throw<ArgumentException>(() => withProposal.DeclineModel(reason!, Report(2, StaffRole.ClaimsReviewer)));
+        withProposal.PendingProposal.ShouldNotBeNull().State.ShouldBe(ModelProposalState.Pending);
+        withProposal.Events.Count.ShouldBe(eventCount);
+    }
+
+    [Fact(Skip = "Pending T343")]
+    public void A_reviewer_cannot_approve_or_decline_without_a_pending_proposal()
+    {
+        var replacement = ReplacementAt(Stage.AwaitingUnit);
+
+        Should.Throw<InvalidOperationException>(() => replacement.ApproveModel(Report(1, StaffRole.ClaimsReviewer)))
+            .Message.ShouldContain(nameof(ReplacementStatus.AwaitingUnit));
+        Should.Throw<InvalidOperationException>(() => replacement.DeclineModel(Reason, Report(1, StaffRole.ClaimsReviewer)));
+        (replacement.ApprovedProductId, replacement.Events.Count).ShouldBe(((Guid?)null, 1));
+    }
+
+    [Fact(Skip = "Pending T343")]
+    public void Not_available_ends_the_replacement_and_drops_a_pending_proposal_from_the_allowed_events()
+    {
+        var replacement = ReplacementAt(Stage.AwaitingUnitWithProposal);
+
+        var recorded = replacement.MarkNotAvailable("No unit of the model is left at any location.", Report(2, StaffRole.ClaimsAgent));
+
+        (recorded.Type, recorded.FromStatus, recorded.ToStatus).ShouldBe(
+            (ReplacementEventType.NotAvailable, ReplacementStatus.AwaitingUnit, ReplacementStatus.NotAvailable));
+        recorded.PayloadJson.ShouldContain("No unit of the model is left at any location.");
+        replacement.Status.ShouldBe(ReplacementStatus.NotAvailable);
+        replacement.AllowedEvents(StaffRole.ClaimsReviewer).ShouldBe([ReplacementEventType.Correction]);
+        replacement.Units.ShouldBeEmpty();
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>

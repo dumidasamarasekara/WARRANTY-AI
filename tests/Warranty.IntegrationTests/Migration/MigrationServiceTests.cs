@@ -42,19 +42,19 @@ public sealed class MigrationServiceTests : IAsyncLifetime
             ["tenancy.tenant_channels"] = 2,
             ["tenancy.tenant_settings"] = 2,
             ["catalog.products"] = 7,
-            ["catalog.product_serials"] = 141,
+            ["catalog.product_serials"] = 145,
             ["crm.customers"] = 11,
             ["integration.service_centers"] = 8,
-            ["claims.claims"] = 18,
-            ["audit.decision_trail_entries"] = 79,
-            ["claims.claim_remedies"] = 15,
-            ["claims.remedy_decisions"] = 30,
+            ["claims.claims"] = 22,
+            ["audit.decision_trail_entries"] = 99,
+            ["claims.claim_remedies"] = 19,
+            ["claims.remedy_decisions"] = 38,
             ["claims.repairs"] = 8,
             ["claims.repair_handovers"] = 8,
             ["audit.repair_events"] = 8,
-            ["claims.replacements"] = 5,
-            ["claims.replacement_locations"] = 5,
-            ["audit.replacement_events"] = 5,
+            ["claims.replacements"] = 9,
+            ["claims.replacement_locations"] = 9,
+            ["audit.replacement_events"] = 9,
             ["policy.warranty_policies"] = 2,
             ["policy.policy_versions"] = 3,
         });
@@ -275,6 +275,14 @@ public sealed class MigrationServiceTests : IAsyncLifetime
         const string Trail = "ClaimSubmitted,AutoApproved,RemedyRecommended,RemedyDecided,ReplacementLocationAssigned";
         rows.ShouldBe(
         [
+            "RPMTX10A01 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
+                + $"Aurora Service Center Amsterdam (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
+            "RPMTX11A01 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
+                + $"Aurora Service Center Springfield (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
+            "RPMTX12A01 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
+                + $"Aurora Service Center Amsterdam (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
+            "RPMTX12B01 | Approved | InProgress Replacement | BOR-WP v1 | SameModel/BeforeReservation/6 | AwaitingReturn | NotYetReturned | "
+                + $"Borealis Repair Hub Lyon (Suggested) | 1:LocationSuggested:AwaitingReturn:System | {Trail}",
             "RPMTX1A001 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "
                 + $"Aurora Service Center Amsterdam (Suggested) | 1:LocationSuggested:AwaitingUnit:System | {Trail}",
             "RPMTX5A001 | Approved | InProgress Replacement | AUR-WP v2 | SameCategoryAtLeastClaimValue/AtCollection/0 | AwaitingUnit | NotYetReturned | "

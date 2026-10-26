@@ -41,6 +41,9 @@
   { "serialNumber": "AT10-24-0301", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-13", "reservedFor": "X1-aurora (replacement-scenarios.json, same facts as X6-borealis)" },
   { "serialNumber": "AT10-24-0305", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-13", "reservedFor": "X5 (replacement-scenarios.json, hand-over refused before a unit is reserved)" },
   { "serialNumber": "AT10-24-0309", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-13", "reservedFor": "X9-aurora (replacement-scenarios.json, Replacement after the second failed repair with the product at the centre)" },
+  { "serialNumber": "AT10-24-0310", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-20", "reservedFor": "X10-aurora (replacement-scenarios.json, equivalent model AUR-TAB11 proposed and approved)" },
+  { "serialNumber": "AT10-24-0311", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-20", "reservedFor": "X11-aurora (replacement-scenarios.json, models of another category refused)" },
+  { "serialNumber": "AT10-24-0312", "modelCode": "AUR-TAB10", "manufacturedOn": "2025-01-20", "reservedFor": "X12-aurora (replacement-scenarios.json, replacement not available)" },
 
   { "serialNumber": "AP6-24-0001", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-01" },
   { "serialNumber": "AP6-24-0002", "modelCode": "AUR-PHN6", "manufacturedOn": "2024-08-05", "reservedFor": "golden G-AUR-02" },
@@ -74,7 +77,7 @@
   { "serialNumber": "AB15-24-0014", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-12" },
   { "serialNumber": "AB15-24-0015", "modelCode": "AUR-BOOK15", "manufacturedOn": "2024-08-19" },
 
-  { "serialNumber": "AT11-25-0001", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-03" },
+  { "serialNumber": "AT11-25-0001", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-03", "reservedFor": "X10-aurora (replacement-scenarios.json, unit of the approved equivalent model)" },
   { "serialNumber": "AT11-25-0002", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-03" },
   { "serialNumber": "AT11-25-0003", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-10" },
   { "serialNumber": "AT11-25-0004", "modelCode": "AUR-TAB11", "manufacturedOn": "2025-03-10" },

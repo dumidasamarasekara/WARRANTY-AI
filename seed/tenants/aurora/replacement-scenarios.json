@@ -1,5 +1,5 @@
 {
-  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim but X9 carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Aurora reaches Replacement only after two failed repairs (row repairFailed; no repair history is seeded, so the faulty product is not held by a repair centre). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Aurora returns the faulty product at collection, Borealis before reservation. X5 is a second X1-like claim so the refused hand-over is tested before any unit is reserved, independently of X2-X4. X9-aurora has no decidedRemedy: it is approved with the remedy its policy version gives (Repair, row coveredDefect) and a repair awaiting hand-over at the first eligible repair centre of the region, exactly as a remedy-scenarios.json claim, and no replacement yet. Staff then take it to its second failed repair with the product kept at the centre (hand-over, RepairFailed, NewAttemptStarted with productLocation AtCentre, RepairFailed: 002 R8) and a claims reviewer confirms Replacement; the replacement then starts with the return held by the repair centre (research R9). Later stories add their claims here (X10-X12, X16, X17).",
+  "$comment": "Approved claims whose remedy is Replacement for the 003 replacement scenarios (quickstart §2), created by the migration service's ReplacementScenarioSeeder without an AI run and marked as seeded history. The format is that of remedy-scenarios.json, and every claim but X9 carries a decidedRemedy: the seeder evaluates the claim's own policy version for that scenario, which must send the remedy to a reviewer and allow Replacement; the seeded-history reviewer decides it with the reason given, and the replacement is then created as the ActionExecutor does (research R3): rules copied from the policy version, the first eligible replacement location of the region suggested, the initial status from the return rule. Aurora reaches Replacement only after two failed repairs (row repairFailed; no repair history is seeded, so the faulty product is not held by a repair centre). Dates are signed day offsets from the seeding day (negative = in the past). X1-aurora and X6-borealis are the 'same facts, different company' pair (same purchase place, region, price, problem and dates; only the product differs, as each company sells its own): Aurora returns the faulty product at collection, Borealis before reservation. X5 is a second X1-like claim so the refused hand-over is tested before any unit is reserved, independently of X2-X4. X9-aurora has no decidedRemedy: it is approved with the remedy its policy version gives (Repair, row coveredDefect) and a repair awaiting hand-over at the first eligible repair centre of the region, exactly as a remedy-scenarios.json claim, and no replacement yet. Staff then take it to its second failed repair with the product kept at the centre (hand-over, RepairFailed, NewAttemptStarted with productLocation AtCentre, RepairFailed: 002 R8) and a claims reviewer confirms Replacement; the replacement then starts with the return held by the repair centre (research R9). X10-aurora, X11-aurora and X12-aurora are X1-like claims of their own (awaiting a unit at the suggested location; Aurora allows an equivalent of the same category with at least the claim value, approved by a reviewer): X10 gets the equivalent AUR-TAB11 proposed, approved and a unit of it (catalog serial AT11-25-0001) reserved; X11 gets models of another category (AUR-PHN6) proposed and refused; X12 is recorded as not available, so its remedy goes back to a reviewer (row replacementNotAvailable: Refund). Later stories add their claims here (X16, X17).",
   "claims": [
     {
       "scenario": "X1-aurora",
@@ -65,6 +65,78 @@
       "approvedDaysAgo": -15,
       "approvedBy": "System",
       "explanation": "Your claim is covered by the manufacturer warranty: the camera fault is a manufacturing defect."
+    },
+    {
+      "scenario": "X10-aurora",
+      "id": "11111111-0006-7000-8000-000000000010",
+      "reference": "RPMTX10A01",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0310",
+      "region": "EU",
+      "purchasePlace": "Online shop",
+      "purchasePrice": 450.00,
+      "problemDescription": "The charging port is loose and the tablet charges only when the cable is held at an angle.",
+      "purchasedDaysAgo": -75,
+      "submittedDaysAgo": -28,
+      "approvedDaysAgo": -28,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the charging port fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Replacement",
+        "reason": "Two repair attempts did not fix the charging port; the policy gives a replacement.",
+        "decidedDaysAgo": -2
+      }
+    },
+    {
+      "scenario": "X11-aurora",
+      "id": "11111111-0006-7000-8000-000000000011",
+      "reference": "RPMTX11A01",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0311",
+      "region": "NA",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The Wi-Fi connection drops every few minutes, although other devices stay connected.",
+      "purchasedDaysAgo": -85,
+      "submittedDaysAgo": -32,
+      "approvedDaysAgo": -32,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the wireless fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Replacement",
+        "reason": "Two repair attempts did not fix the wireless fault; the policy gives a replacement.",
+        "decidedDaysAgo": -2
+      }
+    },
+    {
+      "scenario": "X12-aurora",
+      "id": "11111111-0006-7000-8000-000000000012",
+      "reference": "RPMTX12A01",
+      "customerEmail": "remedy.customer@aurora.example.com",
+      "modelCode": "AUR-TAB10",
+      "serialNumber": "AT10-24-0312",
+      "region": "EU",
+      "purchasePlace": "Aurora Store",
+      "purchasePrice": 450.00,
+      "problemDescription": "The battery swells and lifts the back cover at one corner after a full charge.",
+      "purchasedDaysAgo": -95,
+      "submittedDaysAgo": -40,
+      "approvedDaysAgo": -40,
+      "approvedBy": "System",
+      "explanation": "Your claim is covered by the manufacturer warranty: the battery fault is a manufacturing defect.",
+      "decidedRemedy": {
+        "scenario": "RepairFailed",
+        "failedAttempts": 2,
+        "remedy": "Replacement",
+        "reason": "Two repair attempts did not fix the battery fault; the policy gives a replacement.",
+        "decidedDaysAgo": -3
+      }
     }
   ]
 }
