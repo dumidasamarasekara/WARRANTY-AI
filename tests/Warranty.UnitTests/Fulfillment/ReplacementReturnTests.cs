@@ -11,6 +11,7 @@ using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
 using Warranty.Guardrails.Rules;
 using Warranty.UnitTests.Domain;
 
@@ -688,7 +689,8 @@ public sealed class ReplacementReturnTests
 
     private Task<RecordReplacementEventResult> Execute(Claim claim, RecordReplacementEventCommand command)
         => new RecordReplacementEvent(
-                _tenant, _claims, _catalog, _remedies, _replacements, _serials, _policies, _network, _notifications, _trail,
+                _tenant, _claims, _catalog, _remedies, _replacements, _serials, _policies, _network, new RemedyPolicyEvaluator(),
+                new ReplacementPolicy(), _notifications, _trail,
                 _securityEvents, _unitOfWork, _time)
             .ExecuteAsync(command with { ClaimId = claim.Id }, Ct);
 

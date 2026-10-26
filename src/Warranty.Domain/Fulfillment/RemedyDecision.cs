@@ -17,9 +17,9 @@ public sealed class RemedyDecision
 
     public const int MaxReasonLength = 1000;
 
-    /// <summary>Remedy-rules table rows an evaluation can come from.</summary>
+    /// <summary>Remedy-rules table rows an evaluation can come from (003 adds <c>replacementNotAvailable</c>).</summary>
     public static readonly IReadOnlyList<string> TableRows =
-        ["coveredDefect", "repairNotEconomical", "repairFailed", "protectionPlan", "none"];
+        ["coveredDefect", "repairNotEconomical", "repairFailed", "protectionPlan", "replacementNotAvailable", "none"];
 
     private IReadOnlyList<RemedyType> _allowedRemedies = [];
 

@@ -25,16 +25,17 @@ namespace Warranty.IntegrationTests.Fulfillment;
 /// history keeps the original Replacement decision; a reviewer's change away from Replacement before the hand-over ends
 /// the replacement as <c>Cancelled</c> (research R13).
 /// <para>
-/// X10, X11, X12-aurora and X12-borealis are seeded for one test each and are changed by it; the other cases use copies of
-/// them (the claim row with its own ID, reference, serial and email, the remedy Replacement decided by a reviewer and a
-/// replacement with the source's rules, status and suggested location), as US2's copies of X6.
+/// X12-aurora and X12-borealis are seeded for one test each and are changed by it; X10 and X11 are only read (the X10
+/// walk-through runs on a copy, so the check of the seeded X10 does not depend on the order the tests run in). The other
+/// cases use copies of them (the claim row with its own ID, reference, serial and email, the remedy Replacement decided
+/// by a reviewer as the source's first decision and a replacement with the source's rules, initial status and suggested
+/// location), as US2's copies of X6; a copy never depends on what another test did to its source.
 /// </para>
 /// </summary>
 [Collection(WarrantyAppCollection.Name)]
 [Trait("Feature", "003")]
 public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixture)
 {
-    private const string ModelsPending = "Pending T344";
     private const string CancellationPending = "Pending T345";
     private const string ReadyTemplate = "ReplacementReadyForCollection";
     private const string ProposalReason = "No Aurora Tab 10 is left in stock; the Tab 11 is its successor.";
@@ -99,7 +100,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         reviewerEvents.ShouldNotContain("ModelApproved");
     }
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X10_the_proposable_models_are_the_other_tablets_with_at_least_the_claim_value()
     {
         foreach (var user in new[] { TestStaffUsers.AgentAurora, TestStaffUsers.ReviewerAurora, TestStaffUsers.AuditorAurora })
@@ -113,16 +114,16 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         }
     }
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X10_a_proposed_equivalent_waits_for_the_reviewer_and_after_approval_a_unit_of_it_is_reserved()
     {
         var agent = TestStaffUsers.AgentAurora;
         var reviewer = TestStaffUsers.ReviewerAurora;
-        var reference = await ReferenceAsync(X10);
-        var contact = await ContactAsync(X10);
+        var (claimId, reference) = await CopyAsync(X10);
+        var contact = await ContactAsync(claimId);
 
         // The agent proposes AUR-TAB11 with a reason: the proposal is pending and the status stays.
-        var proposed = await RecordAsync(agent, X10, Propose(AuroraTab11, ProposalReason));
+        var proposed = await RecordAsync(agent, claimId, Propose(AuroraTab11, ProposalReason));
 
         proposed.GetProperty("status").GetString().ShouldBe("AwaitingUnit");
         var pending = proposed.GetProperty("pendingProposal");
@@ -136,53 +137,53 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         var recorded = proposed.GetProperty("events").EnumerateArray().Last();
         (recorded.GetProperty("type").GetString(), recorded.GetProperty("fromStatus").GetString(), recorded.GetProperty("toStatus").GetString())
             .ShouldBe(("ModelProposed", "AwaitingUnit", "AwaitingUnit"));
-        (await ProposalRowsAsync(X10)).ShouldBe([new ProposalRow(AuroraTab11, "Pending", ProposalReason, agent.Subject, null, null)]);
-        (await TrailAsync(X10)).Where(e => e.Step == "ReplacementModelProposed").ShouldHaveSingleItem().Actor.ShouldBe(agent.Subject);
+        (await ProposalRowsAsync(claimId)).ShouldBe([new ProposalRow(AuroraTab11, "Pending", ProposalReason, agent.Subject, null, null)]);
+        (await TrailAsync(claimId)).Where(e => e.Step == "ReplacementModelProposed").ShouldHaveSingleItem().Actor.ShouldBe(agent.Subject);
 
         // The reviewers' queue has the claim as a model approval; the reviewer may approve or decline.
-        var item = (await ReviewQueueAsync(reviewer)).Single(i => i.GetProperty("claimId").GetGuid() == X10);
+        var item = (await ReviewQueueAsync(reviewer)).Single(i => i.GetProperty("claimId").GetGuid() == claimId);
         item.GetProperty("kind").GetString().ShouldBe("ReplacementCheck");
         item.GetProperty("replacementCheckReason").GetString().ShouldBe("MODEL_APPROVAL");
         item.GetProperty("submittedByMe").GetBoolean().ShouldBeFalse();
-        var reviewerEvents = Strings((await ReplacementAsync(reviewer, X10)).GetProperty("allowedEvents"));
+        var reviewerEvents = Strings((await ReplacementAsync(reviewer, claimId)).GetProperty("allowedEvents"));
         reviewerEvents.ShouldContain("ModelApproved");
         reviewerEvents.ShouldContain("ModelDeclined");
 
         // Before the approval a unit of AUR-TAB11 cannot be reserved: the unit's model is still the claimed AUR-TAB10 (FR-022).
-        var beforeApproval = await ReplacementAsync(agent, X10);
-        var early = await EventAsync(agent, X10, ETagOf(beforeApproval), Reserve(Tab11Serial));
+        var beforeApproval = await ReplacementAsync(agent, claimId);
+        var early = await EventAsync(agent, claimId, ETagOf(beforeApproval), Reserve(Tab11Serial));
         early.Status.ShouldBe(HttpStatusCode.BadRequest, early.Body);
         early.Body.ShouldContain("serialNumber");
-        (await UnitCountAsync(X10)).ShouldBe(0);
-        (await ReplacementRowAsync(X10)).Status.ShouldBe("AwaitingUnit");
+        (await UnitCountAsync(claimId)).ShouldBe(0);
+        (await ReplacementRowAsync(claimId)).Status.ShouldBe("AwaitingUnit");
 
         // The reviewer approves: AUR-TAB11 becomes the approved model and the claim leaves the queue.
-        var approved = await RecordAsync(reviewer, X10, Event("ModelApproved"));
+        var approved = await RecordAsync(reviewer, claimId, Event("ModelApproved"));
 
         approved.GetProperty("status").GetString().ShouldBe("AwaitingUnit");
         approved.TryGetProperty("pendingProposal", out _).ShouldBeFalse();
         approved.GetProperty("approvedModel").GetProperty("modelCode").GetString().ShouldBe("AUR-TAB11");
-        var approval = (await EventRowsAsync(X10)).Last();
+        var approval = (await EventRowsAsync(claimId)).Last();
         (approval.Type, approval.FromStatus, approval.ToStatus, approval.Actor).ShouldBe(
             ("ModelApproved", "AwaitingUnit", "AwaitingUnit", reviewer.Subject));
-        (await ProposalRowsAsync(X10)).ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+        (await ProposalRowsAsync(claimId)).ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             p => p.State.ShouldBe("Approved"), p => p.DecidedBy.ShouldBe(reviewer.Subject));
-        (await TrailAsync(X10)).Where(e => e.Step == "ReplacementModelDecided").ShouldHaveSingleItem().Actor.ShouldBe(reviewer.Subject);
-        (await ReviewQueueAsync(reviewer)).ShouldNotContain(i => i.GetProperty("claimId").GetGuid() == X10);
+        (await TrailAsync(claimId)).Where(e => e.Step == "ReplacementModelDecided").ShouldHaveSingleItem().Actor.ShouldBe(reviewer.Subject);
+        (await ReviewQueueAsync(reviewer)).ShouldNotContain(i => i.GetProperty("claimId").GetGuid() == claimId);
 
         // Now the AUR-TAB11 unit is reserved: ready for collection with one keyed notification.
-        var ready = await RecordAsync(agent, X10, Reserve(Tab11Serial));
+        var ready = await RecordAsync(agent, claimId, Reserve(Tab11Serial));
 
         ready.GetProperty("status").GetString().ShouldBe("ReadyForCollection");
         ready.GetProperty("currentUnit").GetProperty("modelCode").GetString().ShouldBe("AUR-TAB11");
         (await ScalarAsync<Guid>(
                 "select u.product_id from claims.replacement_units u join claims.replacements r on r.id = u.replacement_id where r.claim_id = @value",
-                X10))
+                claimId))
             .ShouldBe(AuroraTab11);
         var unitId = await ScalarAsync<Guid>(
-            "select u.id from claims.replacement_units u join claims.replacements r on r.id = u.replacement_id where r.claim_id = @value", X10);
-        (await NotificationKeysAsync(X10)).ShouldBe([$"replacement-ready:{unitId}"]);
-        (await EventTypesAsync(X10)).ShouldBe(["LocationSuggested", "ModelProposed", "ModelApproved", "UnitReserved"]);
+            "select u.id from claims.replacement_units u join claims.replacements r on r.id = u.replacement_id where r.claim_id = @value", claimId);
+        (await NotificationKeysAsync(claimId)).ShouldBe([$"replacement-ready:{unitId}"]);
+        (await EventTypesAsync(claimId)).ShouldBe(["LocationSuggested", "ModelProposed", "ModelApproved", "UnitReserved"]);
 
         // The claimant sees the model's name, never its serial or the proposal.
         var claimant = await ClaimantViewAsync(WarrantyAppFixture.AuroraHost, reference, contact);
@@ -195,10 +196,10 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         text.ShouldNotContain(agent.Subject);
         text.ShouldNotContain(reviewer.Subject);
 
-        await ShouldStayApprovedWithTheOriginalReplacementAsync(X10);
+        await ShouldStayApprovedWithTheOriginalReplacementAsync(claimId, seededHistory: false);
     }
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X10_only_a_reviewer_decides_a_proposal_and_a_declined_one_keeps_the_claimed_model()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -250,7 +251,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
 
     // ---- X11: models the policy does not allow -------------------------------------------------------------
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X11_a_model_of_another_category_is_refused_naming_the_rule_and_changes_nothing()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -270,7 +271,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         ETagOf(await ReplacementAsync(agent, X11)).ShouldBe(ETagOf(before));
     }
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X11_Borealis_allows_the_same_model_only_so_no_model_is_proposable_and_a_proposal_is_refused_naming_the_rule()
     {
         // A copy of X12-borealis with the faulty product returned, so it awaits a unit: only the policy rule refuses the proposal.
@@ -296,7 +297,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
 
     // ---- X12: replacement not available ----------------------------------------------------------------
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X12_not_available_at_Aurora_sends_the_remedy_to_a_reviewer_who_confirms_the_refund_and_the_history_is_kept()
     {
         var agent = TestStaffUsers.AgentAurora;
@@ -315,7 +316,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         await ConfirmRefundAsync(X12Aurora, reviewer, ["LocationSuggested", "NotAvailable"]);
     }
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X12_not_available_at_Borealis_after_the_return_sends_the_remedy_to_a_reviewer_who_confirms_the_refund()
     {
         var agent = TestStaffUsers.AgentBorealis;
@@ -394,7 +395,7 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
 
     // ---- X19: the submitter cannot approve a model -------------------------------------------------------
 
-    [Fact(Skip = ModelsPending)]
+    [Fact]
     public async Task X19_the_reviewer_who_submitted_the_claim_cannot_approve_or_decline_its_model_proposal()
     {
         var reviewer = TestStaffUsers.ReviewerAurora;
@@ -512,8 +513,9 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
     /// <summary>
     /// A new claim like <paramref name="source"/> (a seeded US3 claim): a copy of its claim row with its own ID, reference,
     /// serial and email (submitted through the agent portal by <paramref name="submittedBy"/> when given), the remedy
-    /// Replacement decided by a reviewer on the source's policy version, and a replacement with the source's rules, status
-    /// and suggested location (its <c>LocationSuggested</c> event included), as the executor creates it.
+    /// Replacement decided by a reviewer on the source's policy version (as its first decision), and a replacement with the
+    /// source's rules, initial status and suggested location (its <c>LocationSuggested</c> event included), as the executor
+    /// creates it.
     /// </summary>
     private async Task<(Guid ClaimId, string Reference)> CopyAsync(Guid source, TestStaffUser? submittedBy = null)
     {
@@ -543,20 +545,24 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
             await transaction.CommitAsync(Ct);
         }
 
+        // The source as seeded, whatever another test has done to it since: its replacement's initial status (its first event)
+        // and the remedy its first reviewer decision chose Replacement from.
         var row = await ReplacementRowAsync(source);
+        var initialStatus = await ScalarAsync<string>("select to_status from audit.replacement_events where claim_id = @value and seq = 1", source);
+        var (remedyVersionId, scenario, allowed) = await FirstDecisionAsync(source);
         var at = DateTimeOffset.UtcNow.AddDays(-1);
         using (TenantContextScope.Begin(tenant, tenant == Borealis ? "borealis" : "aurora"))
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
             var remedy = ClaimRemedy.AwaitDecision(
-                Guid.CreateVersion7(), tenant, claimId, row.RemedyPolicyVersionId, Enum.Parse<RemedyScenario>(row.RemedyScenario),
-                row.AllowedRemedies.Select(Enum.Parse<RemedyType>),
+                Guid.CreateVersion7(), tenant, claimId, remedyVersionId, Enum.Parse<RemedyScenario>(scenario),
+                allowed.Select(Enum.Parse<RemedyType>),
                 tenant == Borealis ? RemedyPendingReason.RepairNotEconomical : RemedyPendingReason.RepairFailedLimit, at);
             remedy.Decide(RemedyType.Replacement, at);
             scope.ServiceProvider.GetRequiredService<IRemedyRepository>().Add(remedy);
             scope.ServiceProvider.GetRequiredService<IReplacementRepository>().Add(Replacement.Create(
                 Guid.CreateVersion7(), tenant, claimId, row.PolicyVersionId, Enum.Parse<ReplacementProductRule>(row.ProductRule),
-                Enum.Parse<ReplacementReturnRule>(row.ReturnRule), row.MinimumCoverMonths, Enum.Parse<ReplacementStatus>(row.Status),
+                Enum.Parse<ReplacementReturnRule>(row.ReturnRule), row.MinimumCoverMonths, Enum.Parse<ReplacementStatus>(initialStatus),
                 row.ServiceCenterId, at));
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(Ct);
         }
@@ -717,6 +723,21 @@ public sealed class US3_EquivalentAndNotAvailableTests(WarrantyAppFixture fixtur
         return new ReplacementRow(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.GetGuid(5),
             reader.IsDBNull(6) ? null : reader.GetGuid(6), reader.GetGuid(7), reader.GetString(8), reader.GetFieldValue<string[]>(9));
+    }
+
+    /// <summary>The policy version, scenario and allowed remedies of the claim's first <c>Decided</c> remedy decision.</summary>
+    private async Task<(Guid PolicyVersionId, string Scenario, string[] Allowed)> FirstDecisionAsync(Guid claimId)
+    {
+        await using var connection = await OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            select policy_version_id, scenario, allowed_remedies from claims.remedy_decisions
+            where claim_id = @id and kind = 'Decided' order by seq limit 1
+            """, connection);
+        command.Parameters.AddWithValue("id", claimId);
+        await using var reader = await command.ExecuteReaderAsync(Ct);
+        (await reader.ReadAsync(Ct)).ShouldBeTrue($"claim {claimId} has no remedy decision");
+        return (reader.GetGuid(0), reader.GetString(1), reader.GetFieldValue<string[]>(2));
     }
 
     /// <summary>The claim's model proposals in the order they were made.</summary>

@@ -15,6 +15,7 @@ using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
 using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
 using Warranty.UnitTests.Domain;
 
 namespace Warranty.UnitTests.Application;
@@ -598,7 +599,8 @@ public sealed class RecordReplacementEventTests
 
     private RecordReplacementEvent UseCase()
         => new(
-            _tenant, _claims, _catalog, _remedies, _replacements, _serials, _policies, _network, _notifications, _trail,
+            _tenant, _claims, _catalog, _remedies, _replacements, _serials, _policies, _network, new RemedyPolicyEvaluator(),
+                new ReplacementPolicy(), _notifications, _trail,
             _securityEvents, _unitOfWork, _time);
 
     private void UseRole(string role) => _tenant.Roles.Returns(new HashSet<string>(StringComparer.Ordinal) { role });

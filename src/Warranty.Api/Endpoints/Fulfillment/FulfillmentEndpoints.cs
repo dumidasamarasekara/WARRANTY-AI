@@ -69,6 +69,14 @@ public static class FulfillmentEndpoints
             .Produces<IReadOnlyList<RepairCentreView>>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        // GET /api/claims/{claimId}/replacement-models: models that may be proposed as an equivalent (003 FR-002, FR-023).
+        group.MapGet("/{claimId:guid}/replacement-models", GetReplacementModelsAsync)
+            .WithName("ListReplacementModels")
+            .WithSummary("Models that may be proposed as an equivalent (003 FR-002, FR-023)")
+            .RequireAuthorization(AuthPolicies.AnyStaff)
+            .Produces<IReadOnlyList<ReplacementModelView>>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         // POST /api/claims/{claimId}/replacement/events: one replacement update reported to staff (003 FR-009 – FR-028).
         group.MapPost("/{claimId:guid}/replacement/events", RecordReplacementEventAsync)
             .WithName("RecordReplacementEvent")
@@ -234,6 +242,9 @@ public static class FulfillmentEndpoints
 
     private static async Task<IResult> GetReplacementLocationsAsync(Guid claimId, ReplacementQueries query, CancellationToken ct)
         => await query.GetReplacementLocationsAsync(claimId, ct) is { } locations ? Results.Ok(locations) : CrossTenantGuard.NotFound();
+
+    private static async Task<IResult> GetReplacementModelsAsync(Guid claimId, ReplacementModelQuery query, CancellationToken ct)
+        => await query.ListAsync(claimId, ct) is { } models ? Results.Ok(models) : CrossTenantGuard.NotFound();
 
     /// <summary>
     /// <c>POST /api/claims/{claimId}/replacement/events</c>: claims agents and reviewers; which events a role may record

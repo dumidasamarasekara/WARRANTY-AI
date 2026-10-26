@@ -60,10 +60,11 @@ public enum ReplacementCheckReason
 /// <summary>
 /// The review queue of the reviewer's tenant (FR-032): every claim in <c>UnderReview</c> with the
 /// latest run's recommendation, risk level and escalation reasons, and (002) every approved claim whose remedy
-/// awaits a reviewer and (003) every open replacement whose returned product does not match the claim, oldest first. The
-/// escalation time of a claim item is the claim's last transition — the move to <c>UnderReview</c>; that of a remedy
-/// item is the remedy's last change — the move to <c>AwaitingDecision</c>; that of a return mismatch is the time the
-/// return was recorded.
+/// awaits a reviewer and (003) every open replacement whose returned product does not match the claim and every
+/// replacement awaiting a unit whose model proposal awaits a reviewer, oldest first. The escalation time of a claim item
+/// is the claim's last transition — the move to <c>UnderReview</c>; that of a remedy item is the remedy's last change —
+/// the move to <c>AwaitingDecision</c>; that of a return mismatch is the time the return was recorded; that of a model
+/// approval is the time the model was proposed.
 /// </summary>
 public sealed class ReviewQueueQuery(
     ITenantContext tenant,
@@ -121,6 +122,18 @@ public sealed class ReviewQueueQuery(
             {
                 items.Add(await ToReplacementItemAsync(
                     claim, ReplacementCheckReason.ReturnMismatch, replacement.Return?.RecordedAt ?? replacement.UpdatedAt, ct));
+            }
+        }
+
+        foreach (var replacement in await replacements.ListPendingProposalsAsync(ct))
+        {
+            if (replacement.TenantId == tenant.TenantId
+                && replacement.Status == ReplacementStatus.AwaitingUnit
+                && replacement.PendingProposal is { } proposal
+                && await claims.GetAsync(replacement.ClaimId, ct) is { } claim
+                && claim.TenantId == tenant.TenantId)
+            {
+                items.Add(await ToReplacementItemAsync(claim, ReplacementCheckReason.ModelApproval, proposal.ProposedAt, ct));
             }
         }
 
@@ -204,7 +217,7 @@ public sealed class ReviewQueueQuery(
         RemedyPendingReason.NoRemedyRule => "No remedy rule applies",
         RemedyPendingReason.RepairFailedLimit => "Repair attempts limit reached",
         RemedyPendingReason.RepairNotEconomical => "Repair is not economical",
-        RemedyPendingReason.ReplacementNotAvailable => "Replacement not available",
+        RemedyPendingReason.ReplacementNotAvailable => "No replacement available; the policy recommends Refund.",
         _ => reason.ToString(),
     };
 }

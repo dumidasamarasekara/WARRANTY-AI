@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Warranty.Application.Abstractions;
 using Warranty.Application.Abstractions.Audit;
 using Warranty.Application.Abstractions.Integrations;
@@ -7,6 +8,8 @@ using Warranty.Domain.Catalog;
 using Warranty.Domain.Claims;
 using Warranty.Domain.Common;
 using Warranty.Domain.Fulfillment;
+using Warranty.Domain.Policies;
+using Warranty.Guardrails.Remedies;
 using Warranty.Guardrails.Rules;
 
 namespace Warranty.Application.Fulfillment;
@@ -74,21 +77,26 @@ public abstract record RecordReplacementEventResult
 /// <summary>
 /// Records a staff update of a replacement (003 FR-009 – FR-028, research R4 – R7, R10, R12). In order: the caller must
 /// be a claims agent or reviewer (403); the claim must be visible in the tenant (404) and have a replacement (409); a
-/// reviewer-only event (<c>ReturnAccepted</c>) needs a claims reviewer (403) who did not submit the claim (403 and a
-/// <c>SELF_REVIEW_REFUSED</c> security event, 002 research R4); the request fields must be valid for the event type and
-/// <c>reportedAt</c> neither in the future nor before the replacement was set up or the latest entry it follows (400); <c>If-Match</c> must equal the replacement's row version (412); a
-/// location must be an eligible replacement location of the tenant (<see cref="ServiceCenterPurpose.Replacement"/>, 404 +
-/// <c>ACCESS_DENIED</c>); the event must be allowed from the current status for the caller's role (409 naming the status
-/// and the allowed events); a reserved unit's serial must follow FR-022 (400) and a hand-over under
-/// <see cref="ReplacementReturnRule.AtCollection"/> needs the return confirmed (400, FR-021). One transaction then writes
-/// the replacement, its <c>audit.replacement_events</c> row and a trail entry; <c>UnitReserved</c> queues the
-/// <see cref="ReadyTemplate"/> notification with the dedupe key <c>replacement-ready:{unitId}</c>, and
+/// reviewer-only event (<c>ReturnAccepted</c>, <c>ModelApproved</c>, <c>ModelDeclined</c>) needs a claims reviewer (403)
+/// who did not submit the claim (403 and a <c>SELF_REVIEW_REFUSED</c> security event, 002 research R4); the request fields
+/// must be valid for the event type and <c>reportedAt</c> neither in the future nor before the replacement was set up or
+/// the latest entry it follows (400); <c>If-Match</c> must equal the replacement's row version (412); a location must be an
+/// eligible replacement location of the tenant (<see cref="ServiceCenterPurpose.Replacement"/>, 404 + <c>ACCESS_DENIED</c>);
+/// a proposed model must be a model of the tenant's catalog (404 + <c>ACCESS_DENIED</c>) that the replacement's product
+/// rule allows (<see cref="ReplacementPolicy.CheckModel"/>, 400 naming the rule, checked before the status so that a
+/// company allowing the same model only refuses by its rule, FR-023); the event must be allowed from the current status
+/// for the caller's role (409 naming the status and the allowed events); a reserved unit's serial must follow FR-022 (400)
+/// and a hand-over under <see cref="ReplacementReturnRule.AtCollection"/> needs the return confirmed (400, FR-021). One
+/// transaction then writes the replacement, its <c>audit.replacement_events</c> row and a trail entry; <c>UnitReserved</c>
+/// queues the <see cref="ReadyTemplate"/> notification with the dedupe key <c>replacement-ready:{unitId}</c>, and
 /// <c>HandedToCustomer</c> completes the remedy and registers the handed-out serial in <c>catalog.replacement_serials</c>
 /// (and <c>catalog.product_serials</c> when absent) with its cover end. A <c>ReturnRecorded</c> serial is compared with the
 /// claim's (<see cref="EvidenceMatchRules.IdentifiersMatch"/>); a mismatch is recorded, queues no notification and blocks
-/// the reservation and the hand-over until a reviewer records <c>ReturnAccepted</c>. A concurrent change detected on save
-/// is a 409. The events of later stories (model proposals, refusals, moves, unavailability, corrections) are not recorded
-/// yet: a 400 on <c>type</c>.
+/// the reservation and the hand-over until a reviewer records <c>ReturnAccepted</c>. <c>NotAvailable</c> evaluates the
+/// remedy's policy version again with its <c>replacementNotAvailable</c> row (<see cref="RemedyPolicyEvaluator"/>, an
+/// <c>Evaluated</c> remedy decision) and sends the remedy back to a reviewer (<c>AwaitingDecision</c>,
+/// <c>REPLACEMENT_NOT_AVAILABLE</c>; FR-026, even for a single remedy). A concurrent change detected on save is a 409.
+/// The events of later stories (refusals, moves, corrections) are not recorded yet: a 400 on <c>type</c>.
 /// </summary>
 public sealed class RecordReplacementEvent(
     ITenantContext tenant,
@@ -99,6 +107,8 @@ public sealed class RecordReplacementEvent(
     IReplacementSerialRegistry serials,
     IPolicyRepository policies,
     IServiceNetwork network,
+    RemedyPolicyEvaluator evaluator,
+    ReplacementPolicy replacementPolicy,
     INotificationService notifications,
     IDecisionTrailWriter trail,
     ISecurityEventWriter securityEvents,
@@ -129,18 +139,28 @@ public sealed class RecordReplacementEvent(
     public const string RemedyNotInProgressDetail =
         "The claim's remedy is not a replacement in progress, so the replacement cannot be handed to the customer.";
 
+    public const string NotAvailableRemedyDetail =
+        "The claim's remedy is not a replacement in progress, so it cannot be sent back to a reviewer as not available.";
+
     public const string ReviewerOnlyDetail = "Only claims reviewers accept a returned product or decide a model proposal.";
 
     public const string SelfReviewDetail = "You submitted this claim; another reviewer must record this decision.";
 
-    /// <summary>The event types this use case records (User Stories 1 and 2); the others come with later stories.</summary>
+    /// <summary>The equivalent-model rule as named in a refusal.</summary>
+    private const string EquivalentRule = $"rule {nameof(ReplacementProductRule.SameCategoryAtLeastClaimValue)}";
+
+    /// <summary>The event types this use case records (User Stories 1 – 3); the others come with later stories.</summary>
     private static readonly HashSet<ReplacementEventType> Supported =
     [
         ReplacementEventType.LocationChanged,
         ReplacementEventType.ReturnRecorded,
         ReplacementEventType.ReturnAccepted,
+        ReplacementEventType.ModelProposed,
+        ReplacementEventType.ModelApproved,
+        ReplacementEventType.ModelDeclined,
         ReplacementEventType.UnitReserved,
         ReplacementEventType.HandedToCustomer,
+        ReplacementEventType.NotAvailable,
     ];
 
     /// <summary>The dedupe key of the ready notification of the reserved unit <paramref name="unitId"/> (research R7).</summary>
@@ -226,6 +246,25 @@ public sealed class RecordReplacementEvent(
             return new RecordReplacementEventResult.NotFound();
         }
 
+        // A proposed model is checked against the replacement's product rule before the status: a company that allows the
+        // same model only offers no proposal, and a proposal sent anyway is refused naming that rule (FR-023).
+        if (type == ReplacementEventType.ModelProposed)
+        {
+            var proposed = await catalog.GetProductAsync(command.ProductId!.Value, ct);
+            if (proposed is null || proposed.TenantId != tenant.TenantId)
+            {
+                await securityEvents.RecordAsync(
+                    SecurityEventKind.AccessDenied, tenant.PrincipalName, command.ProductId.Value.ToString(),
+                    new { claimId = claim.Id, field = "productId" }, ct);
+                return new RecordReplacementEventResult.NotFound();
+            }
+
+            if (WhyNotProposable(replacement, product, proposed) is { } refusal)
+            {
+                return Invalid("productId", refusal);
+            }
+        }
+
         if (!replacement.AllowedEvents(role).Contains(type))
         {
             return NotAllowed(replacement, role, type);
@@ -265,6 +304,17 @@ public sealed class RecordReplacementEvent(
             handOver = await HandOverBasisAsync(claim, replacement, command.HandedOverOn!.Value, ct);
         }
 
+        RemedyBasis? basis = null;
+        if (type == ReplacementEventType.NotAvailable)
+        {
+            if (remedy is not { State: RemedyState.InProgress, Remedy: RemedyType.Replacement })
+            {
+                return new RecordReplacementEventResult.Conflict(NotAvailableRemedyDetail, replacement.Status, replacement.AllowedEvents(role));
+            }
+
+            basis = await RemedyBasisAsync(remedy, ct);
+        }
+
         var report = new ReplacementReport(
             command.ReportedAt!.Value, command.Source!.Value, tenant.PrincipalId, role, Trimmed(command.Note), now, tenant.PrincipalName);
         try
@@ -274,7 +324,14 @@ public sealed class RecordReplacementEvent(
                 {
                     var recorded = Apply(replacement, type, command, report, unitProductId, serialMatches);
                     replacements.AddEvent(recorded);
-                    await AppendTrailAsync(claim.Id, replacement, recorded, Trimmed(command.Reason), token);
+                    RemedyEvaluation? evaluation = null;
+                    if (type == ReplacementEventType.NotAvailable)
+                    {
+                        // The replacement ended without a unit: the remedy goes back to a reviewer with the re-evaluation (FR-026).
+                        evaluation = await ReEvaluateAsync(claim.Id, remedy!, basis!, now, token);
+                    }
+
+                    await AppendTrailAsync(claim.Id, replacement, recorded, Trimmed(command.Reason), evaluation, basis, token);
 
                     if (type == ReplacementEventType.UnitReserved && replacement.CurrentUnitId is { } unitId)
                     {
@@ -329,6 +386,10 @@ public sealed class RecordReplacementEvent(
             ReplacementEventType.ReturnRecorded => replacement.RecordReturn(
                 command.ReturnedOn!.Value, command.SerialSeen!.Trim(), serialMatches, report),
             ReplacementEventType.ReturnAccepted => replacement.AcceptReturn(command.Reason!.Trim(), report),
+            ReplacementEventType.ModelProposed => replacement.ProposeModel(command.ProductId!.Value, command.Reason!.Trim(), report),
+            ReplacementEventType.ModelApproved => replacement.ApproveModel(report),
+            ReplacementEventType.ModelDeclined => replacement.DeclineModel(command.Reason!.Trim(), report),
+            ReplacementEventType.NotAvailable => replacement.MarkNotAvailable(command.Reason!.Trim(), report),
             ReplacementEventType.UnitReserved => replacement.ReserveUnit(unitProductId!.Value, command.SerialNumber!, report),
             ReplacementEventType.HandedToCustomer => replacement.HandToCustomer(
                 command.HandedOverOn!.Value, command.ReturnConfirmed == true, report),
@@ -376,6 +437,68 @@ public sealed class RecordReplacementEvent(
         await trail.AppendAsync(
             claim.Id, TrailStep.RemedyCompleted, tenant.PrincipalId, "Replacement remedy completed: the unit was handed to the customer.",
             new { remedy = nameof(RemedyType.Replacement), replacementEventSeq = recorded.Seq, recordedAt = now }, ct);
+    }
+
+    /// <summary>
+    /// Writes the <see cref="RemedyDecisionKind.Evaluated"/> row of the <c>replacementNotAvailable</c> row of the remedy's
+    /// policy version and returns the remedy to a reviewer with its allowed remedies and pending reason: a single remedy is
+    /// the recommendation, never set automatically (FR-026). The failed repair attempts carry over from the latest decision.
+    /// </summary>
+    private async Task<RemedyEvaluation> ReEvaluateAsync(
+        Guid claimId, ClaimRemedy remedy, RemedyBasis basis, DateTimeOffset now, CancellationToken ct)
+    {
+        var decisions = await remedies.GetDecisionsAsync(claimId, ct);
+        var latest = decisions.MaxBy(d => d.Seq);
+        var seq = latest is null ? 1 : latest.Seq + 1;
+        var failedAttempts = latest?.FailedAttempts ?? 0;
+        var evaluation = evaluator.Evaluate(basis.Rules, RemedyScenario.ReplacementNotAvailable, failedAttempts);
+        remedies.AddDecision(RemedyDecision.Evaluated(
+            Guid.CreateVersion7(now), tenant.TenantId, claimId, seq, evaluation.Scenario, basis.PolicyVersionId, evaluation.TableRow,
+            evaluation.AllowedRemedies, failedAttempts, estimateAmount: null, now));
+        remedy.ReturnToDecision(
+            basis.PolicyVersionId, evaluation.Scenario, evaluation.AllowedRemedies,
+            evaluation.PendingReason ?? RemedyPendingReason.ReplacementNotAvailable, now);
+        return evaluation;
+    }
+
+    /// <summary>The remedy's policy version (its rules are evaluated again) and its policy code and version for the trail.</summary>
+    private async Task<RemedyBasis> RemedyBasisAsync(ClaimRemedy remedy, CancellationToken ct)
+    {
+        var version = await policies.GetVersionAsync(remedy.PolicyVersionId, ct);
+        var policy = version is null ? null : await policies.GetPolicyAsync(version.PolicyId, ct);
+        return new RemedyBasis(remedy.PolicyVersionId, version?.RemedyRules, policy?.Code, version?.Version);
+    }
+
+    /// <summary>
+    /// Why <paramref name="proposed"/> may not be proposed instead of the claimed model, naming the replacement's product
+    /// rule (<see cref="ReplacementPolicy.CheckModel"/> with the rules copied onto the replacement, FR-023); null when a
+    /// reviewer may approve it.
+    /// </summary>
+    private string? WhyNotProposable(Replacement replacement, Product? claimed, Product proposed)
+    {
+        if (claimed is null)
+        {
+            return "The claimed product is not in the catalog, so no other model can be compared with it.";
+        }
+
+        var check = replacementPolicy.CheckModel(
+            ReplacementModelQuery.RulesOf(replacement), ReplacementModelQuery.ModelOf(claimed), ReplacementModelQuery.ModelOf(proposed));
+        return (check.Verdict, check.Refusal) switch
+        {
+            (ReplacementModelVerdict.NeedsReviewerApproval, _) => null,
+            (ReplacementModelVerdict.SameModel, _)
+                => $"{proposed.ModelCode} is the claimed model; it needs no proposal and a unit of it can be reserved.",
+            (_, ReplacementModelRefusal.SameModelOnly)
+                => $"The policy allows the same model only (rule {nameof(ReplacementProductRule.SameModel)}): "
+                    + $"{claimed.ModelCode} cannot be replaced by {proposed.ModelCode}.",
+            (_, ReplacementModelRefusal.OtherCategory)
+                => $"The policy allows another model of the same category only ({EquivalentRule}): "
+                    + $"{proposed.ModelCode} is in category {proposed.Category}, the claimed {claimed.ModelCode} in {claimed.Category}.",
+            (_, ReplacementModelRefusal.LowerClaimValue)
+                => $"The policy allows another model only with a claim value of at least the claimed model's ({EquivalentRule}): "
+                    + $"{proposed.ModelCode} has {proposed.ClaimValue}, {claimed.ModelCode} {claimed.ClaimValue}.",
+            _ => $"The claim values of {proposed.ModelCode} and {claimed.ModelCode} cannot be compared ({EquivalentRule}).",
+        };
     }
 
     /// <summary>
@@ -429,10 +552,25 @@ public sealed class RecordReplacementEvent(
         return null;
     }
 
-    private Task AppendTrailAsync(Guid claimId, Replacement replacement, ReplacementEvent recorded, string? reason, CancellationToken ct)
+    private Task AppendTrailAsync(
+        Guid claimId,
+        Replacement replacement,
+        ReplacementEvent recorded,
+        string? reason,
+        RemedyEvaluation? evaluation,
+        RemedyBasis? basis,
+        CancellationToken ct)
     {
         var (step, summary) = recorded.Type switch
         {
+            ReplacementEventType.ModelProposed
+                => (TrailStep.ReplacementModelProposed, "Another model proposed as the replacement; a reviewer must approve it."),
+            ReplacementEventType.ModelApproved
+                => (TrailStep.ReplacementModelDecided, "Proposed replacement model approved by a reviewer."),
+            ReplacementEventType.ModelDeclined
+                => (TrailStep.ReplacementModelDecided, "Proposed replacement model declined by a reviewer; the claimed model remains."),
+            ReplacementEventType.NotAvailable
+                => (TrailStep.ReplacementStatusUpdated, "No replacement available; the policy was evaluated again and the remedy goes to a reviewer."),
             ReplacementEventType.LocationChanged => (TrailStep.ReplacementLocationAssigned, "Replacement location changed by staff."),
             ReplacementEventType.ReturnRecorded when replacement.ReturnState == ReturnState.Mismatch
                 => (TrailStep.FaultyProductReturned, "Faulty product returned to the replacement location; its serial does not match the claim."),
@@ -473,6 +611,20 @@ public sealed class RecordReplacementEvent(
             case ReplacementEventType.ReturnAccepted:
                 payload["reason"] = reason;
                 break;
+            case ReplacementEventType.ModelProposed:
+            case ReplacementEventType.ModelApproved:
+            case ReplacementEventType.ModelDeclined:
+                var proposalId = ProposalIdOf(recorded);
+                var proposal = replacement.Proposals.SingleOrDefault(p => p.Id == proposalId);
+                payload["proposalId"] = proposal?.Id;
+                payload["productId"] = proposal?.ProductId;
+                payload["proposalState"] = proposal?.State.ToString();
+                payload["approvedProductId"] = replacement.ApprovedProductId;
+                payload["reason"] = reason;
+                break;
+            case ReplacementEventType.NotAvailable:
+                payload["reason"] = reason;
+                break;
             case ReplacementEventType.UnitReserved:
             case ReplacementEventType.HandedToCustomer:
                 payload["unitId"] = unit?.Id;
@@ -482,7 +634,30 @@ public sealed class RecordReplacementEvent(
                 break;
         }
 
+        if (evaluation is not null && basis is not null)
+        {
+            payload["policyCode"] = basis.PolicyCode;
+            payload["policyVersion"] = basis.Version;
+            payload["policyVersionId"] = basis.PolicyVersionId;
+            payload["scenario"] = evaluation.Scenario.ToString();
+            payload["tableRow"] = evaluation.TableRow;
+            payload["allowedRemedies"] = evaluation.AllowedRemedies.Select(r => r.ToString()).ToArray();
+            payload["recommendedRemedy"] = evaluation.SingleRemedy?.ToString();
+            payload["pendingReason"] = (evaluation.PendingReason ?? RemedyPendingReason.ReplacementNotAvailable).ToString();
+        }
+
         return trail.AppendAsync(claimId, step, tenant.PrincipalId, summary, payload, ct);
+    }
+
+    /// <summary>The proposal a model event refers to (its payload's <c>proposalId</c>).</summary>
+    private static Guid? ProposalIdOf(ReplacementEvent modelEvent)
+    {
+        using var payload = JsonDocument.Parse(modelEvent.PayloadJson);
+        return payload.RootElement.ValueKind == JsonValueKind.Object
+            && payload.RootElement.TryGetProperty("proposalId", out var id)
+            && id.TryGetGuid(out var proposalId)
+                ? proposalId
+                : null;
     }
 
     private async Task<bool> IsEligibleLocationAsync(Claim claim, Product? product, Guid locationId, CancellationToken ct)
@@ -562,6 +737,17 @@ public sealed class RecordReplacementEvent(
                 break;
 
             case ReplacementEventType.ReturnAccepted:
+            case ReplacementEventType.ModelDeclined:
+            case ReplacementEventType.NotAvailable:
+                ValidateReason(command.Reason, Add);
+                break;
+
+            case ReplacementEventType.ModelProposed:
+                if (command.ProductId is null || command.ProductId == Guid.Empty)
+                {
+                    Add("productId", "The proposed model is required.");
+                }
+
                 ValidateReason(command.Reason, Add);
                 break;
 
@@ -643,4 +829,7 @@ public sealed class RecordReplacementEvent(
     /// <summary>What a hand-over registers (research R10) and the catalog entry of the handed-out serial, if any.</summary>
     private sealed record HandOver(
         DateOnly HandedOverOn, DateOnly OriginalPurchaseDate, DateOnly OriginalCoverageEnd, DateOnly CoverEndDate, ProductSerial? CatalogSerial);
+
+    /// <summary>The remedy's policy version and rules (null when the version has none) evaluated after <c>NotAvailable</c>.</summary>
+    private sealed record RemedyBasis(Guid PolicyVersionId, RemedyRules? Rules, string? PolicyCode, int? Version);
 }

@@ -22,6 +22,13 @@ internal sealed class CatalogRepository(WarrantyDbContext db) : ICatalogReposito
         return db.ProductSerials.SingleOrDefaultAsync(s => s.SerialNumber == serial, ct);
     }
 
+    public async Task<IReadOnlyList<Product>> ListProductsAsync(string category, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(category);
+        var normalized = category.Trim().ToLowerInvariant();
+        return await db.Products.Where(p => p.Category == normalized).OrderBy(p => p.ModelCode).ToListAsync(ct);
+    }
+
     public void AddSerial(ProductSerial serial)
     {
         ArgumentNullException.ThrowIfNull(serial);
