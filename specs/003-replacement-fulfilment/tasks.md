@@ -132,7 +132,7 @@ to [quickstart.md §2](./quickstart.md). Research decisions R1–R15 are written
 ### Tests for User Story 2 ⚠️ write first, ensure they fail
 
 - [X] T334 [P] [US2] Write `tests/Warranty.UnitTests/Fulfillment/ReplacementReturnTests.cs` (return before reservation; serial match with 001 FR-016 normalisation; mismatch blocks reservation and hand-over; `ReturnAccepted` reviewer-only and not by the submitter; held-by-repair-centre detection from a 002 `Repair` per research R9) and unskip the US2 cases of `ReplacementStateMachineTests.cs`; add the X6–X9 claims to `seed/tenants/*/replacement-scenarios.json`
-- [ ] T335 [P] [US2] Write `tests/Warranty.IntegrationTests/Fulfillment/US2_FaultyProductReturnTests.cs` for X6–X9
+- [X] T335 [P] [US2] Write `tests/Warranty.IntegrationTests/Fulfillment/US2_FaultyProductReturnTests.cs` for X6–X9
 
 ### Implementation for User Story 2
 
