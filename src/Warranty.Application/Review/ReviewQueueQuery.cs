@@ -7,11 +7,13 @@ using Warranty.Domain.Fulfillment;
 namespace Warranty.Application.Review;
 
 /// <summary>
-/// <c>ReviewQueueItem</c> (contracts/rest-api.openapi.yaml): one escalated claim (<see cref="ReviewQueueItemKind.ClaimDecision"/>)
-/// or one approved claim whose remedy awaits a reviewer (<see cref="ReviewQueueItemKind.RemedyDecision"/>, 002). The AI
-/// decision and confidence come from a valid recommendation only; claim value and risk level are omitted when the
-/// latest run did not determine them (e.g. a product missing from the catalog). A remedy item carries no AI or risk
-/// data: its <see cref="RemedyPendingReason"/> says why the remedy waits, and its escalation reasons are that reason's label.
+/// <c>ReviewQueueItem</c> (contracts/rest-api.openapi.yaml): one escalated claim (<see cref="ReviewQueueItemKind.ClaimDecision"/>),
+/// one approved claim whose remedy awaits a reviewer (<see cref="ReviewQueueItemKind.RemedyDecision"/>, 002) or one
+/// replacement waiting for a reviewer (<see cref="ReviewQueueItemKind.ReplacementCheck"/>, 003). The AI decision and
+/// confidence come from a valid recommendation only; claim value and risk level are omitted when the latest run did not
+/// determine them (e.g. a product missing from the catalog). A remedy or replacement item carries no AI or risk data: its
+/// <see cref="RemedyPendingReason"/> or <see cref="ReplacementCheckReason"/> says why it waits, and its escalation reasons
+/// are that reason's label.
 /// </summary>
 /// <param name="SubmittedByMe">The caller submitted this claim and may not decide it (separation of duties, research R29).</param>
 /// <param name="EscalationReasons">Readable labels of the guardrail reason codes (data-model.md).</param>
@@ -27,7 +29,8 @@ public sealed record ReviewQueueItem(
     bool SubmittedByMe,
     IReadOnlyList<string> EscalationReasons,
     ReviewQueueItemKind Kind = ReviewQueueItemKind.ClaimDecision,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPendingReason? RemedyPendingReason = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RemedyPendingReason? RemedyPendingReason = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ReplacementCheckReason? ReplacementCheckReason = null);
 
 /// <summary>What a review queue item asks the reviewer to decide.</summary>
 public enum ReviewQueueItemKind
@@ -37,20 +40,38 @@ public enum ReviewQueueItemKind
 
     /// <summary>An approved claim whose remedy is <see cref="RemedyState.AwaitingDecision"/> (002 FR-011, FR-031, FR-032).</summary>
     RemedyDecision,
+
+    /// <summary>A replacement waiting for a reviewer (003 research R5): see <see cref="ReplacementCheckReason"/>.</summary>
+    ReplacementCheck,
+}
+
+/// <summary>Why a replacement waits for a reviewer (<c>ReviewQueueItem.replacementCheckReason</c>, 003 research R5).</summary>
+public enum ReplacementCheckReason
+{
+    /// <summary>A proposed equivalent model awaits approval (<c>ModelApproved</c> or <c>ModelDeclined</c>).</summary>
+    [JsonStringEnumMemberName("MODEL_APPROVAL")]
+    ModelApproval,
+
+    /// <summary>The returned product's serial does not match the claim's (<see cref="ReturnState.Mismatch"/>; <c>ReturnAccepted</c>).</summary>
+    [JsonStringEnumMemberName("RETURN_MISMATCH")]
+    ReturnMismatch,
 }
 
 /// <summary>
 /// The review queue of the reviewer's tenant (FR-032): every claim in <c>UnderReview</c> with the
 /// latest run's recommendation, risk level and escalation reasons, and (002) every approved claim whose remedy
-/// awaits a reviewer, oldest first. The escalation time of a claim item is the claim's last transition — the move to
-/// <c>UnderReview</c>; that of a remedy item is the remedy's last change — the move to <c>AwaitingDecision</c>.
+/// awaits a reviewer and (003) every open replacement whose returned product does not match the claim, oldest first. The
+/// escalation time of a claim item is the claim's last transition — the move to <c>UnderReview</c>; that of a remedy
+/// item is the remedy's last change — the move to <c>AwaitingDecision</c>; that of a return mismatch is the time the
+/// return was recorded.
 /// </summary>
 public sealed class ReviewQueueQuery(
     ITenantContext tenant,
     IClaimRepository claims,
     ICatalogRepository catalog,
     IAdjudicationRepository adjudication,
-    IRemedyRepository remedies)
+    IRemedyRepository remedies,
+    IReplacementRepository replacements)
 {
     private const int PageSize = 100;
 
@@ -88,6 +109,18 @@ public sealed class ReviewQueueQuery(
                 && claim.TenantId == tenant.TenantId)
             {
                 items.Add(await ToRemedyItemAsync(claim, remedy, ct));
+            }
+        }
+
+        foreach (var replacement in await replacements.ListReturnMismatchesAsync(ct))
+        {
+            if (replacement.TenantId == tenant.TenantId
+                && replacement.ReturnState == ReturnState.Mismatch
+                && await claims.GetAsync(replacement.ClaimId, ct) is { } claim
+                && claim.TenantId == tenant.TenantId)
+            {
+                items.Add(await ToReplacementItemAsync(
+                    claim, ReplacementCheckReason.ReturnMismatch, replacement.Return?.RecordedAt ?? replacement.UpdatedAt, ct));
             }
         }
 
@@ -136,6 +169,33 @@ public sealed class ReviewQueueQuery(
             ReviewQueueItemKind.RemedyDecision,
             reason);
     }
+
+    private async Task<ReviewQueueItem> ToReplacementItemAsync(
+        Claim claim, ReplacementCheckReason reason, DateTimeOffset escalatedAt, CancellationToken ct)
+    {
+        var product = claim.ProductId is { } productId ? await catalog.GetProductAsync(productId, ct) : null;
+        return new ReviewQueueItem(
+            claim.Id,
+            claim.Reference,
+            product?.Name ?? claim.ProductModelCode,
+            product?.ClaimValue,
+            AiDecision: null,
+            Confidence: null,
+            RiskLevel: null,
+            escalatedAt,
+            claim.WasSubmittedBy(tenant.PrincipalId),
+            [Label(reason)],
+            ReviewQueueItemKind.ReplacementCheck,
+            ReplacementCheckReason: reason);
+    }
+
+    /// <summary>The readable label of a replacement check reason (003 research R5).</summary>
+    public static string Label(ReplacementCheckReason reason) => reason switch
+    {
+        ReplacementCheckReason.ModelApproval => "Equivalent model awaits approval",
+        ReplacementCheckReason.ReturnMismatch => "Returned product does not match the claim's serial",
+        _ => reason.ToString(),
+    };
 
     /// <summary>The readable label of a remedy pending reason (002 data-model.md <c>pending_reason</c>).</summary>
     public static string Label(RemedyPendingReason reason) => reason switch
