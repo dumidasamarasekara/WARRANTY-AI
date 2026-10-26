@@ -82,7 +82,7 @@ public sealed class US4_ReplacementWarrantyTests(WarrantyAppFixture fixture)
         run.Risk.Signals.Select(s => s.Code).ShouldNotContain(RiskSignalCode.ProductReturnedAndReplaced);
     }
 
-    [Fact(Skip = "Pending T349")]
+    [Fact]
     public async Task X13_the_claim_for_a_handed_out_unit_carries_the_cover_of_the_original_purchase()
     {
         var unit = await HandedOutAuroraUnitAsync();
