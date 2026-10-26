@@ -438,25 +438,87 @@ public sealed class Replacement
     /// <see cref="ReplacementEventType.ModelProposed"/>: <see cref="ReplacementStatus.AwaitingUnit"/> stays; adds a pending
     /// proposal of <paramref name="productId"/> (reason required). Needs the
     /// <see cref="ReplacementProductRule.SameCategoryAtLeastClaimValue"/> rule and no pending proposal; the model check
-    /// (<c>ReplacementPolicy.CheckModel</c>) is done by the use case. Pending T343.
+    /// (<c>ReplacementPolicy.CheckModel</c>) is done by the use case.
     /// </summary>
     public ReplacementEvent ProposeModel(Guid productId, string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T343 ({productId}, {reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (productId == Guid.Empty)
+        {
+            throw new ArgumentException("The proposed model is required.", nameof(productId));
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to propose another model.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.ModelProposed, report);
+
+        var proposal = AddProposal(productId, reason.Trim(), report.Actor, report.RecordedAt);
+        return Append(
+            ReplacementEventType.ModelProposed,
+            Status,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["proposalId"] = proposal.Id,
+                ["productId"] = proposal.ProductId,
+                ["reason"] = proposal.Reason,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ModelApproved"/> (claims reviewer only): <see cref="ReplacementStatus.AwaitingUnit"/> stays;
     /// the pending proposal is approved and its model becomes <see cref="ApprovedProductId"/>. That the reviewer did not submit
-    /// the claim is checked by the use case. Pending T343.
+    /// the claim is checked by the use case.
     /// </summary>
     public ReplacementEvent ApproveModel(ReplacementReport report)
-        => throw new NotImplementedException($"Pending T343 ({report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        Require(ReplacementEventType.ModelApproved, report);
+
+        var proposal = DecidePendingProposal(ModelProposalState.Approved, report.Actor, decisionReason: null, report.RecordedAt);
+        return Append(
+            ReplacementEventType.ModelApproved,
+            Status,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["proposalId"] = proposal.Id,
+                ["productId"] = proposal.ProductId,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.ModelDeclined"/> (claims reviewer only): <see cref="ReplacementStatus.AwaitingUnit"/> stays;
-    /// the pending proposal is declined (reason required). Pending T343.
+    /// the pending proposal is declined (reason required) and the claimed model (or an earlier approved one) remains.
     /// </summary>
     public ReplacementEvent DeclineModel(string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T343 ({reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to decline the proposed model.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.ModelDeclined, report);
+
+        var proposal = DecidePendingProposal(ModelProposalState.Declined, report.Actor, reason, report.RecordedAt);
+        return Append(
+            ReplacementEventType.ModelDeclined,
+            Status,
+            Status,
+            report,
+            new Dictionary<string, object?>
+            {
+                ["proposalId"] = proposal.Id,
+                ["productId"] = proposal.ProductId,
+                ["reason"] = proposal.DecisionReason,
+            });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.UnitReserved"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
@@ -571,10 +633,26 @@ public sealed class Replacement
     /// <summary>
     /// <see cref="ReplacementEventType.NotAvailable"/>: <see cref="ReplacementStatus.AwaitingUnit"/> →
     /// <see cref="ReplacementStatus.NotAvailable"/> (final for the replacement; reason required). The use case evaluates the
-    /// <c>ReplacementNotAvailable</c> row and moves the remedy to <c>AwaitingDecision</c>. Pending T343.
+    /// <c>ReplacementNotAvailable</c> row and moves the remedy to <c>AwaitingDecision</c>.
     /// </summary>
     public ReplacementEvent MarkNotAvailable(string reason, ReplacementReport report)
-        => throw new NotImplementedException($"Pending T343 ({reason}, {report}).");
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A reason is required to record that no replacement is available.", nameof(reason));
+        }
+
+        Require(ReplacementEventType.NotAvailable, report);
+
+        SetStatus(ReplacementStatus.NotAvailable, report.RecordedAt);
+        return Append(
+            ReplacementEventType.NotAvailable,
+            ReplacementStatus.AwaitingUnit,
+            ReplacementStatus.NotAvailable,
+            report,
+            new Dictionary<string, object?> { ["reason"] = reason.Trim() });
+    }
 
     /// <summary>
     /// <see cref="ReplacementEventType.Cancelled"/> (system only, from a reviewer's remedy change, research R13): any status

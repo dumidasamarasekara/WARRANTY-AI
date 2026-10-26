@@ -464,7 +464,7 @@ public sealed class ReplacementStateMachineTests
 
     // ── Rules of the US3 transitions ───────────────────────────────────────────────────────────
 
-    [Fact(Skip = "Pending T343")]
+    [Fact]
     public void Another_model_can_be_proposed_only_under_SameCategoryAtLeastClaimValue()
     {
         var replacement = Replacement.Create(
@@ -478,7 +478,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Events.Count.ShouldBe(1);
     }
 
-    [Fact(Skip = "Pending T343")]
+    [Fact]
     public void A_proposal_stays_pending_until_a_reviewer_approves_it_and_its_model_becomes_the_approved_product()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnit);
@@ -503,7 +503,7 @@ public sealed class ReplacementStateMachineTests
         replacement.AllowedEvents(StaffRole.ClaimsAgent).ShouldContain(ReplacementEventType.UnitReserved);
     }
 
-    [Fact(Skip = "Pending T343")]
+    [Fact]
     public void A_declined_proposal_keeps_the_claimed_model_and_another_model_can_be_proposed()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnitWithProposal);
@@ -519,7 +519,7 @@ public sealed class ReplacementStateMachineTests
         replacement.Events[^1].PayloadJson.ShouldContain(DeclineReason);
     }
 
-    [Theory(Skip = "Pending T343")]
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
@@ -537,7 +537,7 @@ public sealed class ReplacementStateMachineTests
         withProposal.Events.Count.ShouldBe(eventCount);
     }
 
-    [Fact(Skip = "Pending T343")]
+    [Fact]
     public void A_reviewer_cannot_approve_or_decline_without_a_pending_proposal()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnit);
@@ -548,7 +548,7 @@ public sealed class ReplacementStateMachineTests
         (replacement.ApprovedProductId, replacement.Events.Count).ShouldBe(((Guid?)null, 1));
     }
 
-    [Fact(Skip = "Pending T343")]
+    [Fact]
     public void Not_available_ends_the_replacement_and_drops_a_pending_proposal_from_the_allowed_events()
     {
         var replacement = ReplacementAt(Stage.AwaitingUnitWithProposal);
@@ -566,19 +566,15 @@ public sealed class ReplacementStateMachineTests
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325) and the US2 transitions (T336) are implemented, and
-    /// the cancellation (T345) builds on the US3 transitions (T343), so T343 is named only on its own.
+    /// The skip of a case waiting for <paramref name="tasks"/> (null when nothing is pending). US1 (T325), the US2 (T336) and
+    /// the US3 transitions (T343) are implemented.
     /// </summary>
     private static string? Pending(string?[] tasks)
     {
         var pending = tasks.OfType<string>().Distinct().ToList();
         pending.Remove(T325);
         pending.Remove(T336);
-
-        if (pending.Contains(T345))
-        {
-            pending.Remove(T343);
-        }
+        pending.Remove(T343);
 
         return pending.Count == 0 ? null : "Pending " + string.Join(" and ", pending.Order(StringComparer.Ordinal));
     }
