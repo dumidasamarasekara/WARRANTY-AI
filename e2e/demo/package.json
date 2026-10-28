@@ -1,0 +1,17 @@
+{
+  "name": "warranty-demo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Narrated Playwright walkthrough of the running app (aspire run, replay mode): one claim, two tenants, two policies.",
+  "scripts": {
+    "demo": "playwright test",
+    "reset": "pwsh -NoProfile -File reset-db.ps1",
+    "demo:fresh": "npm run reset && npm run demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  }
+}
